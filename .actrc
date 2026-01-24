@@ -1,0 +1,12 @@
+# act configuration
+# https://github.com/nektos/act
+
+# Use medium-sized image (good balance of size vs compatibility)
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P macos-latest=catthehacker/ubuntu:act-latest
+
+# Apple Silicon support
+--container-architecture linux/amd64
+
+# Reuse containers for faster subsequent runs
+--reuse

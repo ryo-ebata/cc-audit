@@ -1,0 +1,10 @@
+target/
+.git/
+.gitignore
+*.md
+!README.md
+examples/
+tests/
+.github/
+.vscode/
+*.log

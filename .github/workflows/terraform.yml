@@ -131,6 +131,7 @@ jobs:
         with:
           working_directory: ${{ matrix.directory }}
           soft_fail: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   plan:
     name: Plan

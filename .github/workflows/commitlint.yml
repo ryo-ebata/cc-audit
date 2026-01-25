@@ -30,9 +30,9 @@ jobs:
             chore
             revert
           requireScope: false
-          subjectPattern: ^[a-z].+$
+          subjectPattern: ^.+$
           subjectPatternError: |
-            Subject must start with lowercase letter.
+            Subject must not be empty.
             Example: "feat: add new feature"
 
       - name: Lint commits

@@ -55,20 +55,6 @@ if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
     exit 1
 fi
 
-# Check subject starts with lowercase
-SUBJECT=$(echo "$FIRST_LINE" | sed -E 's/^[a-z]+(\(.+\))?\!?: //')
-FIRST_CHAR=$(echo "$SUBJECT" | cut -c1)
-
-if echo "$FIRST_CHAR" | grep -qE "^[A-Z]$"; then
-    echo ""
-    echo "ERROR: Commit subject should start with lowercase letter."
-    echo ""
-    echo "Your subject: $SUBJECT"
-    echo "Should be:    $(echo "$SUBJECT" | sed 's/./\L&/')"
-    echo ""
-    exit 1
-fi
-
 # Check header length
 HEADER_LENGTH=${#FIRST_LINE}
 if [ "$HEADER_LENGTH" -gt 100 ]; then

@@ -1,0 +1,104 @@
+# cc-audit Configuration File
+# Place this file as .cc-audit.yaml in your project root
+
+# Scan configuration (CLI options can be set here as defaults)
+scan:
+  # Output format: terminal, json, sarif, html
+  # format: terminal
+
+  # Strict mode: show medium/low severity findings and treat warnings as errors
+  strict: false
+
+  # Scan type: skill, hook, mcp, command, rules, docker, dependency
+  # scan_type: skill
+
+  # Recursive scan
+  recursive: false
+
+  # CI mode: non-interactive output
+  ci: false
+
+  # Verbose output
+  verbose: false
+
+  # Minimum confidence level: tentative, firm, certain
+  # min_confidence: tentative
+
+  # Skip comment lines when scanning
+  skip_comments: false
+
+  # Show fix hints in terminal output
+  fix_hint: false
+
+  # Disable malware signature scanning
+  no_malware_scan: false
+
+# Watch mode configuration
+watch:
+  # Debounce duration in milliseconds
+  debounce_ms: 300
+
+  # Poll interval in milliseconds
+  poll_interval_ms: 500
+
+# Ignore configuration for scanning
+ignore:
+  # Directories to ignore (overwrites defaults if specified)
+  # directories:
+  #   - node_modules
+  #   - target
+  #   - .git
+  #   - dist
+  #   - build
+
+  # Glob patterns to ignore
+  # patterns:
+  #   - "*.log"
+  #   - "temp/**"
+
+  # Include test directories in scan
+  include_tests: false
+
+  # Include node_modules in scan
+  include_node_modules: false
+
+  # Include vendor directories in scan
+  include_vendor: false
+
+# Rule IDs to disable
+# disabled_rules:
+#   - "PE-001"
+#   - "EX-002"
+
+# Text file detection configuration
+# text_files:
+#   # Additional file extensions to treat as text
+#   extensions:
+#     - custom
+#     - special
+#
+#   # Additional special file names
+#   special_names:
+#     - CUSTOMFILE
+
+# Custom rules (YAML format)
+# rules:
+#   - id: "CUSTOM-001"
+#     name: "Custom Rule Name"
+#     severity: "high"  # critical, high, medium, low, info
+#     category: "exfiltration"  # exfiltration, privilege_escalation, persistence, etc.
+#     patterns:
+#       - 'pattern_to_match'
+#     message: "Description of the issue"
+#     confidence: "firm"  # tentative, firm, certain
+#     fix_hint: "How to fix this issue"
+
+# Custom malware signatures
+# malware_signatures:
+#   - id: "MW-CUSTOM-001"
+#     name: "Custom Malware Signature"
+#     description: "Description of what this detects"
+#     pattern: "malware_pattern"
+#     severity: "critical"
+#     category: "exfiltration"
+#     confidence: "firm"

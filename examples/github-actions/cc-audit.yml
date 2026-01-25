@@ -1,0 +1,63 @@
+# cc-audit CI Workflow
+# このワークフローをプロジェクトの .github/workflows/ にコピーして使用してください
+
+name: CC Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  cc-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Option 1: Install via cargo (recommended for Rust projects)
+      - name: Install cc-audit (cargo)
+        run: cargo install cc-audit
+
+      # Option 2: Install via npm (for Node.js projects)
+      # - name: Install cc-audit (npm)
+      #   run: npm install -g @anthropic/cc-audit
+
+      # Option 3: Download from GitHub Releases
+      # - name: Install cc-audit (binary)
+      #   run: |
+      #     curl -fsSL https://github.com/ryo-ebata/cc-audit/releases/latest/download/cc-audit-x86_64-unknown-linux-gnu.tar.gz | tar xz
+      #     sudo mv cc-audit /usr/local/bin/
+
+      - name: Audit Claude Code Skills
+        run: cc-audit --type skill --ci .
+
+      - name: Audit Hooks
+        run: cc-audit --type hook --ci .
+
+      - name: Audit MCP Configurations
+        run: cc-audit --type mcp --ci .
+
+      - name: Audit Custom Commands
+        run: cc-audit --type command --ci .
+
+      - name: Audit Dockerfiles
+        run: cc-audit --type docker --ci .
+
+      - name: Audit Dependencies
+        run: cc-audit --type dependency --ci .
+
+      # Strict mode: fail on any finding
+      # - name: Strict Audit
+      #   run: cc-audit --type skill --strict --ci .
+
+      # Generate SARIF report for GitHub Security tab
+      # - name: Generate SARIF Report
+      #   run: cc-audit --type skill --format sarif -o results.sarif .
+      #   continue-on-error: true
+
+      # - name: Upload SARIF to GitHub Security
+      #   uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: results.sarif

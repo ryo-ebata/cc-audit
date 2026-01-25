@@ -1,0 +1,54 @@
+# cc-audit with SARIF Integration
+# GitHub Security tabに結果を表示するワークフロー
+
+name: CC Audit (SARIF)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # 毎週月曜日の朝9時(JST)に実行
+    - cron: '0 0 * * 1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  cc-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cc-audit
+        run: cargo install cc-audit
+
+      - name: Run cc-audit (Skills)
+        run: cc-audit --type skill --format sarif -o skill-results.sarif . || true
+
+      - name: Run cc-audit (Hooks)
+        run: cc-audit --type hook --format sarif -o hook-results.sarif . || true
+
+      - name: Run cc-audit (MCP)
+        run: cc-audit --type mcp --format sarif -o mcp-results.sarif . || true
+
+      - name: Run cc-audit (Dependencies)
+        run: cc-audit --type dependency --format sarif -o dependency-results.sarif . || true
+
+      - name: Merge SARIF files
+        run: |
+          # jqで複数のSARIFファイルをマージ
+          jq -s '{
+            "$schema": .[0]["$schema"],
+            version: .[0].version,
+            runs: [.[].runs[]]
+          }' skill-results.sarif hook-results.sarif mcp-results.sarif dependency-results.sarif > results.sarif
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: cc-audit

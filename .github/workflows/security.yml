@@ -17,7 +17,7 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -29,7 +29,7 @@ jobs:
     name: Dependency Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
@@ -39,7 +39,7 @@ jobs:
     name: Supply Chain Security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -53,7 +53,7 @@ jobs:
     name: Advisory Database
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: rustsec/audit-check@v2
         with:
@@ -63,7 +63,7 @@ jobs:
     name: Outdated Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 

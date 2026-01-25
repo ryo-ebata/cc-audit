@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -52,12 +54,16 @@ jobs:
       - name: Compare benchmarks (PR only)
         if: github.event_name == 'pull_request'
         run: |
-          # Save current commit hash for later checkout
-          CURRENT_SHA="${{ github.event.pull_request.head.sha }}"
-          git fetch origin main
-          git checkout origin/main -- . || true
+          # Save criterion results from PR
+          cp -r target/criterion /tmp/criterion-pr
+
+          # Checkout main branch and run benchmarks
+          git checkout origin/main
           cargo bench --bench scan_benchmark -- --noplot --save-baseline main || echo "No baseline on main"
-          git checkout "$CURRENT_SHA" -- .
+
+          # Restore PR criterion results and run comparison
+          cp -r /tmp/criterion-pr/* target/criterion/ 2>/dev/null || true
+          git checkout ${{ github.event.pull_request.head.sha }}
           cargo bench --bench scan_benchmark -- --noplot --baseline main || echo "Comparison skipped"
 
   binary-size:

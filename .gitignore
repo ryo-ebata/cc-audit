@@ -71,3 +71,15 @@ test-output/
 id_rsa*
 *.secret
 node_modules
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json

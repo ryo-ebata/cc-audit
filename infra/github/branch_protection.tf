@@ -19,8 +19,8 @@ resource "github_repository_ruleset" "protect_main" {
     }
 
     # Prevent force push and deletion
-    deletion                = false
-    non_fast_forward        = false
+    deletion         = false
+    non_fast_forward = false
 
     # Required status checks
     required_status_checks {

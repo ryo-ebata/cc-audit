@@ -1,0 +1,13 @@
+# PE-001: Sudo execution
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+sudo apt-get update
+sudo rm -rf /tmp/cache
+sudo systemctl restart nginx
+sudo chmod 755 /var/www
+
+# === Cases that should NOT be detected ===
+echo "sudo is dangerous"
+apt-get update
+rm -rf /tmp/cache

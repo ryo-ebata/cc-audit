@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/docker.rs
+expression: findings
+---
+[
+  {
+    "id": "DK-003",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution in RUN",
+    "line": 5,
+    "code": "RUN curl -fsSL https://get.docker.com | bash",
+    "message": "Remote script execution in Dockerfile RUN instruction. This is a supply chain attack vector.",
+    "recommendation": "Download scripts first, verify checksums, then execute. Better: use package managers."
+  },
+  {
+    "id": "DK-003",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution in RUN",
+    "line": 6,
+    "code": "RUN wget -qO- https://install.example.com | sh",
+    "message": "Remote script execution in Dockerfile RUN instruction. This is a supply chain attack vector.",
+    "recommendation": "Download scripts first, verify checksums, then execute. Better: use package managers."
+  },
+  {
+    "id": "DK-003",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution in RUN",
+    "line": 7,
+    "code": "curl -sSL https://example.com/install.sh | bash",
+    "message": "Remote script execution in Dockerfile RUN instruction. This is a supply chain attack vector.",
+    "recommendation": "Download scripts first, verify checksums, then execute. Better: use package managers."
+  }
+]

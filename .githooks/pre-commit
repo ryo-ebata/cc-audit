@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+echo "Running pre-commit checks..."
+
+# Format check (same as CI)
+echo "Checking formatting..."
+cargo fmt --all --check
+
+# Clippy (same as CI)
+echo "Running clippy..."
+cargo clippy --all-targets --all-features -- -D warnings
+
+echo "Pre-commit checks passed!"

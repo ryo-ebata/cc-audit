@@ -1,8 +1,8 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![ps_001(), ps_003(), ps_004(), ps_005()]
+    vec![ps_001(), ps_003(), ps_004(), ps_005(), ps_006(), ps_007()]
 }
 
 fn ps_001() -> Rule {
@@ -12,16 +12,21 @@ fn ps_001() -> Rule {
         description: "Detects crontab commands which could be used to establish persistence",
         severity: Severity::Critical,
         category: Category::Persistence,
+        confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"\bcrontab\s+").unwrap(),
-            Regex::new(r"/etc/cron").unwrap(),
-            Regex::new(r"/var/spool/cron").unwrap(),
+            Regex::new(r"\bcrontab\s+").expect("PS-001: invalid regex"),
+            Regex::new(r"/etc/cron").expect("PS-001: invalid regex"),
+            Regex::new(r"/var/spool/cron").expect("PS-001: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"crontab\s+-l\b").unwrap(), // listing is less dangerous
+            Regex::new(r"crontab\s+-l\b").expect("PS-001: invalid regex"), // listing is less dangerous
         ],
         message: "Persistence mechanism: crontab manipulation detected",
         recommendation: "Skills should not modify scheduled tasks. Review the necessity of cron access",
+        fix_hint: Some(
+            "Remove crontab commands. Use explicit user interaction for scheduled tasks",
+        ),
+        cwe_ids: &["CWE-912"],
     }
 }
 
@@ -32,15 +37,24 @@ fn ps_003() -> Rule {
         description: "Detects modifications to shell profiles (.bashrc, .zshrc, etc.) for persistence",
         severity: Severity::Critical,
         category: Category::Persistence,
+        confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r">>\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r">\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r"echo\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r"tee\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
+            Regex::new(r">>\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r">\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r"echo\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r"tee\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Persistence mechanism: shell profile modification detected",
         recommendation: "Skills should not modify shell startup files",
+        fix_hint: Some(
+            "Remove shell profile modifications. Document required env vars for manual setup",
+        ),
+        cwe_ids: &["CWE-912"],
     }
 }
 
@@ -51,23 +65,28 @@ fn ps_004() -> Rule {
         description: "Detects registration of system services (systemd, launchd) for persistence",
         severity: Severity::Critical,
         category: Category::Persistence,
+        confidence: Confidence::Tentative,
         patterns: vec![
             // systemd
-            Regex::new(r"systemctl\s+(enable|start|daemon-reload)").unwrap(),
-            Regex::new(r"/etc/systemd/system/").unwrap(),
-            Regex::new(r"\.service\b").unwrap(),
+            Regex::new(r"systemctl\s+(enable|start|daemon-reload)").expect("PS-004: invalid regex"),
+            Regex::new(r"/etc/systemd/system/").expect("PS-004: invalid regex"),
+            Regex::new(r"\.service\b").expect("PS-004: invalid regex"),
             // launchd (macOS)
-            Regex::new(r"launchctl\s+(load|bootstrap|enable)").unwrap(),
-            Regex::new(r"~/Library/LaunchAgents/").unwrap(),
-            Regex::new(r"/Library/Launch(Agents|Daemons)/").unwrap(),
-            Regex::new(r"\.plist\b").unwrap(),
+            Regex::new(r"launchctl\s+(load|bootstrap|enable)").expect("PS-004: invalid regex"),
+            Regex::new(r"~/Library/LaunchAgents/").expect("PS-004: invalid regex"),
+            Regex::new(r"/Library/Launch(Agents|Daemons)/").expect("PS-004: invalid regex"),
+            Regex::new(r"\.plist\b").expect("PS-004: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"systemctl\s+status").unwrap(),
-            Regex::new(r"launchctl\s+list").unwrap(),
+            Regex::new(r"systemctl\s+status").expect("PS-004: invalid regex"),
+            Regex::new(r"launchctl\s+list").expect("PS-004: invalid regex"),
         ],
         message: "Persistence mechanism: system service registration detected",
         recommendation: "Skills should not register system services without explicit approval",
+        fix_hint: Some(
+            "Remove service registration. Provide manual installation instructions instead",
+        ),
+        cwe_ids: &["CWE-912"],
     }
 }
 
@@ -78,16 +97,91 @@ fn ps_005() -> Rule {
         description: "Detects modifications to authorized_keys which could grant persistent SSH access",
         severity: Severity::Critical,
         category: Category::Persistence,
+        confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r">>\s*.*authorized_keys").unwrap(),
-            Regex::new(r">\s*.*authorized_keys").unwrap(),
-            Regex::new(r"echo\s+.*authorized_keys").unwrap(),
-            Regex::new(r"tee\s+.*authorized_keys").unwrap(),
-            Regex::new(r"cat\s+.*>\s*.*authorized_keys").unwrap(),
+            Regex::new(r">>\s*.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r">\s*.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"echo\s+.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"tee\s+.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"cat\s+.*>\s*.*authorized_keys").expect("PS-005: invalid regex"),
         ],
         exclusions: vec![],
         message: "Persistence mechanism: authorized_keys modification detected",
         recommendation: "Skills should never modify SSH authorized_keys",
+        fix_hint: Some("Remove authorized_keys modification. Never automate SSH key management"),
+        cwe_ids: &["CWE-912", "CWE-522"],
+    }
+}
+
+fn ps_006() -> Rule {
+    Rule {
+        id: "PS-006",
+        name: "Delayed/background execution",
+        description: "Detects commands that schedule delayed or background execution to evade detection",
+        severity: Severity::High,
+        category: Category::Persistence,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // at command for delayed execution
+            Regex::new(r"\bat\s+(now|midnight|noon|\d)").expect("PS-006: invalid regex"),
+            Regex::new(r"\|\s*at\s+(now|midnight|\d)").expect("PS-006: invalid regex"),
+            // batch command
+            Regex::new(r"\bbatch\b").expect("PS-006: invalid regex"),
+            // screen/tmux hidden sessions
+            Regex::new(r"screen\s+-[dDmS]+.*(-c|bash|sh|curl|wget|nc)")
+                .expect("PS-006: invalid regex"),
+            Regex::new(r"tmux\s+(new-session|new)\s+-d").expect("PS-006: invalid regex"),
+            // nohup with suspicious commands
+            Regex::new(r"nohup\s+.*\b(curl|wget|nc|netcat|bash|sh)\b")
+                .expect("PS-006: invalid regex"),
+            // disown to hide background processes
+            Regex::new(r"&\s*;\s*disown").expect("PS-006: invalid regex"),
+            Regex::new(r"disown\s+-h").expect("PS-006: invalid regex"),
+            // setsid for new session
+            Regex::new(r"setsid\s+.*\b(curl|wget|nc|bash|sh)\b").expect("PS-006: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("PS-006: invalid regex"),
+            // Legitimate screen/tmux usage
+            Regex::new(r"screen\s+-r").expect("PS-006: invalid regex"),
+            Regex::new(r"tmux\s+attach").expect("PS-006: invalid regex"),
+        ],
+        message: "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+        recommendation: "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe.",
+        fix_hint: Some("Remove delayed execution. Execute commands directly in the foreground."),
+        cwe_ids: &["CWE-912"],
+    }
+}
+
+fn ps_007() -> Rule {
+    Rule {
+        id: "PS-007",
+        name: "Init system manipulation",
+        description: "Detects manipulation of init systems and startup scripts for persistence",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // rc.local modification
+            Regex::new(r">\s*/etc/rc\.local").expect("PS-007: invalid regex"),
+            Regex::new(r">>\s*/etc/rc\.local").expect("PS-007: invalid regex"),
+            // init.d scripts
+            Regex::new(r">\s*/etc/init\.d/").expect("PS-007: invalid regex"),
+            Regex::new(r"update-rc\.d").expect("PS-007: invalid regex"),
+            Regex::new(r"chkconfig\s+--add").expect("PS-007: invalid regex"),
+            // XDG autostart
+            Regex::new(r"\.config/autostart/.*\.desktop").expect("PS-007: invalid regex"),
+            Regex::new(r"/etc/xdg/autostart/").expect("PS-007: invalid regex"),
+            // Windows-style (for WSL awareness)
+            Regex::new(r"HKEY.*\\Run").expect("PS-007: invalid regex"),
+            // Login hooks (macOS)
+            Regex::new(r"defaults\s+write.*LoginHook").expect("PS-007: invalid regex"),
+        ],
+        exclusions: vec![Regex::new(r"^\s*#").expect("PS-007: invalid regex")],
+        message: "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
+        recommendation: "Skills should not modify system startup scripts or init configurations.",
+        fix_hint: Some("Remove init system modifications. Provide manual setup instructions."),
+        cwe_ids: &["CWE-912"],
     }
 }
 
@@ -165,5 +259,54 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             assert_eq!(matched, should_match, "Failed for input: {}", input);
         }
+    }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_ps_001() {
+        let rule = ps_001();
+        let content = include_str!("../../../tests/fixtures/rules/ps_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_001", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_003() {
+        let rule = ps_003();
+        let content = include_str!("../../../tests/fixtures/rules/ps_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_003", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_004() {
+        let rule = ps_004();
+        let content = include_str!("../../../tests/fixtures/rules/ps_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_004", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_005() {
+        let rule = ps_005();
+        let content = include_str!("../../../tests/fixtures/rules/ps_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_005", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_006() {
+        let rule = ps_006();
+        let content = include_str!("../../../tests/fixtures/rules/ps_006.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_006", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_007() {
+        let rule = ps_007();
+        let content = include_str!("../../../tests/fixtures/rules/ps_007.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_007", findings);
     }
 }

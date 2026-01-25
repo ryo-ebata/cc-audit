@@ -1,70 +1,118 @@
 use cc_audit::{
-    Cli, HookScanner, JsonReporter, OutputFormat, Reporter, SarifReporter, ScanResult, ScanType,
-    Scanner, SkillScanner, Summary, TerminalReporter,
+    Cli, HookInstaller, WatchModeResult, format_result, run_scan, setup_watch_mode, watch_iteration,
 };
-use chrono::Utc;
 use clap::Parser;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    let mut all_findings = Vec::new();
-    let mut targets = Vec::new();
+    // Handle hook installation/removal
+    if cli.init_hook {
+        return handle_init_hook(&cli);
+    }
 
-    for path in &cli.paths {
-        let result = match cli.scan_type {
-            ScanType::Skill => {
-                let scanner = SkillScanner::new();
-                scanner.scan_path(path)
-            }
-            ScanType::Hook => {
-                let scanner = HookScanner::new();
-                scanner.scan_path(path)
-            }
-        };
+    if cli.remove_hook {
+        return handle_remove_hook(&cli);
+    }
 
-        match result {
-            Ok(findings) => {
-                all_findings.extend(findings);
-                targets.push(path.display().to_string());
+    if cli.watch {
+        return run_watch_mode(&cli);
+    }
+
+    // Normal mode
+    run_normal_mode(&cli)
+}
+
+fn handle_init_hook(cli: &Cli) -> ExitCode {
+    let path = cli
+        .paths
+        .first()
+        .map(|p| p.as_path())
+        .unwrap_or_else(|| std::path::Path::new("."));
+    match HookInstaller::install(path) {
+        Ok(()) => {
+            println!("Pre-commit hook installed successfully.");
+            println!("cc-audit will now run automatically before each commit.");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("Failed to install hook: {}", e);
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn handle_remove_hook(cli: &Cli) -> ExitCode {
+    let path = cli
+        .paths
+        .first()
+        .map(|p| p.as_path())
+        .unwrap_or_else(|| std::path::Path::new("."));
+    match HookInstaller::uninstall(path) {
+        Ok(()) => {
+            println!("Pre-commit hook removed successfully.");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("Failed to remove hook: {}", e);
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn run_watch_mode(cli: &Cli) -> ExitCode {
+    println!("Starting watch mode...");
+    println!("Press Ctrl+C to stop\n");
+
+    let watcher = match setup_watch_mode(cli) {
+        Ok(w) => w,
+        Err(WatchModeResult::WatcherCreationFailed(e)) => {
+            eprintln!("Failed to create file watcher: {}", e);
+            return ExitCode::from(2);
+        }
+        Err(WatchModeResult::WatchPathFailed(path, e)) => {
+            eprintln!("Failed to watch {}: {}", path, e);
+            return ExitCode::from(2);
+        }
+        Err(WatchModeResult::Success) => unreachable!(),
+    };
+
+    // Initial scan
+    if let Some(output) = watch_iteration(cli) {
+        println!("{}", output);
+    }
+
+    // Watch loop
+    loop {
+        if watcher.wait_for_change() {
+            // Clear screen for better readability
+            print!("\x1B[2J\x1B[1;1H");
+            println!("File change detected, re-scanning...\n");
+
+            if let Some(output) = watch_iteration(cli) {
+                println!("{}", output);
             }
-            Err(e) => {
-                eprintln!("Error scanning {}: {}", path.display(), e);
-                return ExitCode::from(2);
-            }
+        } else {
+            // Watcher disconnected
+            break;
         }
     }
 
-    let summary = Summary::from_findings(&all_findings);
-    let result = ScanResult {
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        scanned_at: Utc::now().to_rfc3339(),
-        target: targets.join(", "),
-        summary,
-        findings: all_findings,
-    };
+    ExitCode::SUCCESS
+}
 
-    let output = match cli.format {
-        OutputFormat::Terminal => {
-            let reporter = TerminalReporter::new(cli.strict, cli.verbose);
-            reporter.report(&result)
-        }
-        OutputFormat::Json => {
-            let reporter = JsonReporter::new();
-            reporter.report(&result)
-        }
-        OutputFormat::Sarif => {
-            let reporter = SarifReporter::new();
-            reporter.report(&result)
-        }
-    };
+fn run_normal_mode(cli: &Cli) -> ExitCode {
+    match run_scan(cli) {
+        Some(result) => {
+            println!("{}", format_result(cli, &result));
 
-    println!("{}", output);
-
-    if result.summary.passed {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
+            if result.summary.passed {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            }
+        }
+        None => ExitCode::from(2),
     }
 }

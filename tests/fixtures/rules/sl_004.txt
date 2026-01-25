@@ -1,0 +1,12 @@
+# SL-004: Generic secret pattern
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+api_key = "abc123def456ghi789jkl012mno"
+secret_key: "ABCDEFGHIJKLMNOPabcdefghijklmnop"
+password = "mysecretpassword123"
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+
+# === Cases that should NOT be detected ===
+api_key = "${API_KEY}"
+const apiKey = process.env.API_KEY

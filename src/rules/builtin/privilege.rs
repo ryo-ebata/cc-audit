@@ -1,4 +1,4 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
@@ -12,10 +12,13 @@ fn pe_001() -> Rule {
         description: "Detects sudo commands which could be used for privilege escalation",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
-        patterns: vec![Regex::new(r"\bsudo\s+").unwrap()],
+        confidence: Confidence::Certain,
+        patterns: vec![Regex::new(r"\bsudo\s+").expect("PE-001: invalid regex")],
         exclusions: vec![],
         message: "Privilege escalation: sudo command detected",
         recommendation: "Skills should not require sudo. Review why elevated privileges are needed",
+        fix_hint: Some("Remove sudo or run the skill with appropriate user permissions"),
+        cwe_ids: &["CWE-250"],
     }
 }
 
@@ -26,15 +29,18 @@ fn pe_002() -> Rule {
         description: "Detects rm -rf / or similar commands that could destroy the entire filesystem",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r"rm\s+(-[rfRF]+\s+)+/\s*$").unwrap(),
-            Regex::new(r"rm\s+(-[rfRF]+\s+)+/[^a-zA-Z]").unwrap(),
-            Regex::new(r"rm\s+(-[rfRF]+\s+)+\*").unwrap(),
-            Regex::new(r"rm\s+.*--no-preserve-root").unwrap(),
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+/\s*$").expect("PE-002: invalid regex"),
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+/[^a-zA-Z]").expect("PE-002: invalid regex"),
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+\*").expect("PE-002: invalid regex"),
+            Regex::new(r"rm\s+.*--no-preserve-root").expect("PE-002: invalid regex"),
         ],
         exclusions: vec![],
         message: "Destructive command: potential filesystem destruction detected",
         recommendation: "Never use rm -rf on root or with wildcards in skills",
+        fix_hint: Some("Specify exact paths instead of wildcards: rm -rf /tmp/specific-dir"),
+        cwe_ids: &["CWE-250", "CWE-73"],
     }
 }
 
@@ -45,15 +51,18 @@ fn pe_003() -> Rule {
         description: "Detects chmod 777 which makes files world-writable, a security risk",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r"chmod\s+777\b").unwrap(),
-            Regex::new(r"chmod\s+[0-7]?777\b").unwrap(),
-            Regex::new(r"chmod\s+-R\s+777\b").unwrap(),
-            Regex::new(r"chmod\s+a\+rwx\b").unwrap(),
+            Regex::new(r"chmod\s+777\b").expect("PE-003: invalid regex"),
+            Regex::new(r"chmod\s+[0-7]?777\b").expect("PE-003: invalid regex"),
+            Regex::new(r"chmod\s+-R\s+777\b").expect("PE-003: invalid regex"),
+            Regex::new(r"chmod\s+a\+rwx\b").expect("PE-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Insecure permissions: chmod 777 makes files world-writable",
         recommendation: "Use more restrictive permissions (e.g., 755 for directories, 644 for files)",
+        fix_hint: Some("chmod 755 for directories, chmod 644 for files"),
+        cwe_ids: &["CWE-732"],
     }
 }
 
@@ -64,16 +73,19 @@ fn pe_004() -> Rule {
         description: "Detects access to /etc/passwd, /etc/shadow, or other sensitive system files",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"/etc/passwd\b").unwrap(),
-            Regex::new(r"/etc/shadow\b").unwrap(),
-            Regex::new(r"/etc/sudoers").unwrap(),
-            Regex::new(r"/etc/gshadow").unwrap(),
-            Regex::new(r"/etc/master\.passwd").unwrap(),
+            Regex::new(r"/etc/passwd\b").expect("PE-004: invalid regex"),
+            Regex::new(r"/etc/shadow\b").expect("PE-004: invalid regex"),
+            Regex::new(r"/etc/sudoers").expect("PE-004: invalid regex"),
+            Regex::new(r"/etc/gshadow").expect("PE-004: invalid regex"),
+            Regex::new(r"/etc/master\.passwd").expect("PE-004: invalid regex"),
         ],
         exclusions: vec![],
         message: "Sensitive file access: system password file access detected",
         recommendation: "Skills should never access system authentication files",
+        fix_hint: Some("Remove any references to /etc/passwd, /etc/shadow, or /etc/sudoers"),
+        cwe_ids: &["CWE-200", "CWE-522"],
     }
 }
 
@@ -84,17 +96,20 @@ fn pe_005() -> Rule {
         description: "Detects access to ~/.ssh/ directory which contains sensitive authentication keys",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"~/\.ssh/").unwrap(),
-            Regex::new(r"\$HOME/\.ssh/").unwrap(),
-            Regex::new(r"/home/[^/]+/\.ssh/").unwrap(),
-            Regex::new(r"\.ssh/id_").unwrap(),
-            Regex::new(r"\.ssh/authorized_keys").unwrap(),
-            Regex::new(r"\.ssh/known_hosts").unwrap(),
+            Regex::new(r"~/\.ssh/").expect("PE-005: invalid regex"),
+            Regex::new(r"\$HOME/\.ssh/").expect("PE-005: invalid regex"),
+            Regex::new(r"/home/[^/]+/\.ssh/").expect("PE-005: invalid regex"),
+            Regex::new(r"\.ssh/id_").expect("PE-005: invalid regex"),
+            Regex::new(r"\.ssh/authorized_keys").expect("PE-005: invalid regex"),
+            Regex::new(r"\.ssh/known_hosts").expect("PE-005: invalid regex"),
         ],
         exclusions: vec![],
         message: "Sensitive file access: SSH directory access detected",
         recommendation: "Skills should never access SSH keys or configuration",
+        fix_hint: Some("Remove any references to ~/.ssh/ or SSH key files"),
+        cwe_ids: &["CWE-200", "CWE-522"],
     }
 }
 
@@ -187,4 +202,44 @@ mod tests {
         }
     }
 
+    // Snapshot tests
+    #[test]
+    fn snapshot_pe_001() {
+        let rule = pe_001();
+        let content = include_str!("../../../tests/fixtures/rules/pe_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_001", findings);
+    }
+
+    #[test]
+    fn snapshot_pe_002() {
+        let rule = pe_002();
+        let content = include_str!("../../../tests/fixtures/rules/pe_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_002", findings);
+    }
+
+    #[test]
+    fn snapshot_pe_003() {
+        let rule = pe_003();
+        let content = include_str!("../../../tests/fixtures/rules/pe_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_003", findings);
+    }
+
+    #[test]
+    fn snapshot_pe_004() {
+        let rule = pe_004();
+        let content = include_str!("../../../tests/fixtures/rules/pe_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_004", findings);
+    }
+
+    #[test]
+    fn snapshot_pe_005() {
+        let rule = pe_005();
+        let content = include_str!("../../../tests/fixtures/rules/pe_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_005", findings);
+    }
 }

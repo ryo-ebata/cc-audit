@@ -1,0 +1,10 @@
+# DEP-004: HTTP dependency URL
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+: "http://example.com/package.tar.gz"
+registry = "http://insecure-registry.com"
+
+# === Cases that should NOT be detected ===
+: "https://example.com/package.tar.gz"
+registry = "https://registry.npmjs.org"

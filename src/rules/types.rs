@@ -9,6 +9,47 @@ pub enum Severity {
     Critical,
 }
 
+/// Confidence level for findings. Higher confidence means less likely to be a false positive.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    clap::ValueEnum,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum Confidence {
+    /// Tentative: May be a false positive, requires review
+    Tentative,
+    /// Firm: Likely a real issue, but context-dependent
+    #[default]
+    Firm,
+    /// Certain: Very high confidence, unlikely to be a false positive
+    Certain,
+}
+
+impl Confidence {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Confidence::Tentative => "tentative",
+            Confidence::Firm => "firm",
+            Confidence::Certain => "certain",
+        }
+    }
+}
+
+impl std::fmt::Display for Confidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl Severity {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -36,6 +77,7 @@ pub enum Category {
     Overpermission,
     Obfuscation,
     SupplyChain,
+    SecretLeak,
 }
 
 impl Category {
@@ -48,6 +90,7 @@ impl Category {
             Category::Overpermission => "overpermission",
             Category::Obfuscation => "obfuscation",
             Category::SupplyChain => "supply_chain",
+            Category::SecretLeak => "secret_leak",
         }
     }
 }
@@ -59,10 +102,15 @@ pub struct Rule {
     pub description: &'static str,
     pub severity: Severity,
     pub category: Category,
+    pub confidence: Confidence,
     pub patterns: Vec<regex::Regex>,
     pub exclusions: Vec<regex::Regex>,
     pub message: &'static str,
     pub recommendation: &'static str,
+    /// Optional concrete fix hint (e.g., command to run, code pattern to use)
+    pub fix_hint: Option<&'static str>,
+    /// CWE IDs associated with this rule (e.g., ["CWE-200", "CWE-78"])
+    pub cwe_ids: &'static [&'static str],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,11 +126,17 @@ pub struct Finding {
     pub id: String,
     pub severity: Severity,
     pub category: Category,
+    pub confidence: Confidence,
     pub name: String,
     pub location: Location,
     pub code: String,
     pub message: String,
     pub recommendation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fix_hint: Option<String>,
+    /// CWE IDs associated with this finding
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cwe_ids: Vec<String>,
 }
 
 impl Finding {
@@ -91,11 +145,14 @@ impl Finding {
             id: rule.id.to_string(),
             severity: rule.severity,
             category: rule.category,
+            confidence: rule.confidence,
             name: rule.name.to_string(),
             location,
             code,
             message: rule.message.to_string(),
             recommendation: rule.recommendation.to_string(),
+            fix_hint: rule.fix_hint.map(|s| s.to_string()),
+            cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
         }
     }
 }
@@ -179,6 +236,7 @@ mod tests {
         assert_eq!(Category::Overpermission.as_str(), "overpermission");
         assert_eq!(Category::Obfuscation.as_str(), "obfuscation");
         assert_eq!(Category::SupplyChain.as_str(), "supply_chain");
+        assert_eq!(Category::SecretLeak.as_str(), "secret_leak");
     }
 
     #[test]
@@ -198,6 +256,7 @@ mod tests {
             id: "EX-001".to_string(),
             severity: Severity::Critical,
             category: Category::Exfiltration,
+            confidence: Confidence::Certain,
             name: "Test".to_string(),
             location: Location {
                 file: "test.sh".to_string(),
@@ -207,6 +266,8 @@ mod tests {
             code: "test".to_string(),
             message: "test".to_string(),
             recommendation: "test".to_string(),
+            fix_hint: None,
+            cwe_ids: vec![],
         }];
         let summary = Summary::from_findings(&findings);
         assert_eq!(summary.critical, 1);
@@ -220,6 +281,7 @@ mod tests {
                 id: "C-001".to_string(),
                 severity: Severity::Critical,
                 category: Category::Exfiltration,
+                confidence: Confidence::Certain,
                 name: "Critical".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -229,11 +291,14 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
             Finding {
                 id: "H-001".to_string(),
                 severity: Severity::High,
                 category: Category::PrivilegeEscalation,
+                confidence: Confidence::Firm,
                 name: "High".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -243,11 +308,14 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
             Finding {
                 id: "M-001".to_string(),
                 severity: Severity::Medium,
                 category: Category::Persistence,
+                confidence: Confidence::Tentative,
                 name: "Medium".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -257,11 +325,14 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
             Finding {
                 id: "L-001".to_string(),
                 severity: Severity::Low,
                 category: Category::Overpermission,
+                confidence: Confidence::Firm,
                 name: "Low".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -271,6 +342,8 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -288,6 +361,7 @@ mod tests {
                 id: "M-001".to_string(),
                 severity: Severity::Medium,
                 category: Category::Persistence,
+                confidence: Confidence::Firm,
                 name: "Medium".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -297,11 +371,14 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
             Finding {
                 id: "L-001".to_string(),
                 severity: Severity::Low,
                 category: Category::Overpermission,
+                confidence: Confidence::Firm,
                 name: "Low".to_string(),
                 location: Location {
                     file: "test.sh".to_string(),
@@ -311,6 +388,8 @@ mod tests {
                 code: "test".to_string(),
                 message: "test".to_string(),
                 recommendation: "test".to_string(),
+                fix_hint: None,
+                cwe_ids: vec![],
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -325,10 +404,13 @@ mod tests {
             description: "A test rule",
             severity: Severity::High,
             category: Category::Exfiltration,
+            confidence: Confidence::Certain,
             patterns: vec![],
             exclusions: vec![],
             message: "Test message",
             recommendation: "Test recommendation",
+            fix_hint: Some("Test fix hint"),
+            cwe_ids: &["CWE-200", "CWE-78"],
         };
         let location = Location {
             file: "test.sh".to_string(),
@@ -341,12 +423,49 @@ mod tests {
         assert_eq!(finding.name, "Test Rule");
         assert_eq!(finding.severity, Severity::High);
         assert_eq!(finding.category, Category::Exfiltration);
+        assert_eq!(finding.confidence, Confidence::Certain);
         assert_eq!(finding.location.file, "test.sh");
         assert_eq!(finding.location.line, 42);
         assert_eq!(finding.location.column, Some(10));
         assert_eq!(finding.code, "test code");
         assert_eq!(finding.message, "Test message");
         assert_eq!(finding.recommendation, "Test recommendation");
+        assert_eq!(finding.cwe_ids, vec!["CWE-200", "CWE-78"]);
+    }
+
+    #[test]
+    fn test_confidence_as_str() {
+        assert_eq!(Confidence::Tentative.as_str(), "tentative");
+        assert_eq!(Confidence::Firm.as_str(), "firm");
+        assert_eq!(Confidence::Certain.as_str(), "certain");
+    }
+
+    #[test]
+    fn test_confidence_display() {
+        assert_eq!(format!("{}", Confidence::Tentative), "tentative");
+        assert_eq!(format!("{}", Confidence::Firm), "firm");
+        assert_eq!(format!("{}", Confidence::Certain), "certain");
+    }
+
+    #[test]
+    fn test_confidence_ordering() {
+        assert!(Confidence::Tentative < Confidence::Firm);
+        assert!(Confidence::Firm < Confidence::Certain);
+    }
+
+    #[test]
+    fn test_confidence_default() {
+        assert_eq!(Confidence::default(), Confidence::Firm);
+    }
+
+    #[test]
+    fn test_confidence_serialization() {
+        let confidence = Confidence::Certain;
+        let json = serde_json::to_string(&confidence).unwrap();
+        assert_eq!(json, "\"certain\"");
+
+        let deserialized: Confidence = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, Confidence::Certain);
     }
 
     #[test]

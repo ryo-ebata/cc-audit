@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+echo "Running pre-push checks..."
+
+# Run tests (same as CI)
+echo "Running tests..."
+cargo test --all-features
+
+echo "Pre-push checks passed!"

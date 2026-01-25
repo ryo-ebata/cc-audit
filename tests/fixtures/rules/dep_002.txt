@@ -1,0 +1,12 @@
+# DEP-002: Git URL dependency
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+: "git://github.com/user/repo"
+: "git+https://github.com/user/repo"
+: "github:user/repo"
+git = "https://github.com/user/repo"
+
+# === Cases that should NOT be detected ===
+: "^1.0.0"
+: "1.2.3"

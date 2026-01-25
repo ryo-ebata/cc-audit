@@ -1,0 +1,250 @@
+name: 'cc-audit'
+description: 'Security auditor for Claude Code skills, hooks, and MCP servers'
+author: 'cc-audit contributors'
+branding:
+  icon: 'shield'
+  color: 'orange'
+
+inputs:
+  paths:
+    description: 'Paths to scan (space-separated)'
+    default: '.claude/'
+    required: false
+  scan-type:
+    description: 'Type of scan: skill, hook, mcp, command, rules, docker, dependency'
+    default: 'skill'
+    required: false
+  format:
+    description: 'Output format: terminal, json, sarif'
+    default: 'sarif'
+    required: false
+  strict:
+    description: 'Enable strict mode (treat warnings as errors)'
+    default: 'false'
+    required: false
+  recursive:
+    description: 'Scan directories recursively'
+    default: 'true'
+    required: false
+  custom-rules:
+    description: 'Path to custom rules file (YAML format)'
+    required: false
+  min-confidence:
+    description: 'Minimum confidence level: tentative, firm, certain'
+    default: 'tentative'
+    required: false
+  skip-comments:
+    description: 'Skip comment lines when scanning'
+    default: 'false'
+    required: false
+  diff-only:
+    description: 'Scan only changed files in pull request'
+    default: 'false'
+    required: false
+  upload-sarif:
+    description: 'Upload SARIF results to GitHub Security tab'
+    default: 'true'
+    required: false
+  fail-on-findings:
+    description: 'Fail the action if high/critical findings are detected'
+    default: 'true'
+    required: false
+  version:
+    description: 'Version of cc-audit to use (latest, specific version, or "local" for local build)'
+    default: 'latest'
+    required: false
+
+outputs:
+  findings-count:
+    description: 'Total number of security findings'
+    value: ${{ steps.scan.outputs.findings-count }}
+  critical-count:
+    description: 'Number of critical severity findings'
+    value: ${{ steps.scan.outputs.critical-count }}
+  high-count:
+    description: 'Number of high severity findings'
+    value: ${{ steps.scan.outputs.high-count }}
+  sarif-file:
+    description: 'Path to the generated SARIF file'
+    value: ${{ steps.scan.outputs.sarif-file }}
+  passed:
+    description: 'Whether the scan passed (no high/critical findings)'
+    value: ${{ steps.scan.outputs.passed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Rust toolchain
+      if: inputs.version == 'local'
+      uses: dtolnay/rust-toolchain@stable
+      shell: bash
+
+    - name: Build cc-audit from source
+      if: inputs.version == 'local'
+      shell: bash
+      run: |
+        cargo build --release
+        echo "${{ github.workspace }}/target/release" >> $GITHUB_PATH
+
+    - name: Install cc-audit (latest)
+      if: inputs.version == 'latest'
+      shell: bash
+      run: |
+        # Install from crates.io or GitHub releases
+        if command -v cargo &> /dev/null; then
+          cargo install cc-audit
+        else
+          # Download from GitHub releases
+          curl -sSL https://github.com/ryo-ebata/cc-audit/releases/latest/download/cc-audit-$(uname -s)-$(uname -m).tar.gz | tar xz -C /usr/local/bin
+        fi
+
+    - name: Install cc-audit (specific version)
+      if: inputs.version != 'latest' && inputs.version != 'local'
+      shell: bash
+      run: |
+        cargo install cc-audit --version ${{ inputs.version }}
+
+    - name: Get changed files (PR only)
+      if: inputs.diff-only == 'true' && github.event_name == 'pull_request'
+      id: changed-files
+      shell: bash
+      run: |
+        # Get list of changed files
+        CHANGED_FILES=$(gh pr diff ${{ github.event.pull_request.number }} --name-only | grep -E '\.(md|json|ya?ml|sh|bash|py|js|ts|toml)$' || true)
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGED_FILES" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Run cc-audit scan
+      id: scan
+      shell: bash
+      run: |
+        # Build arguments
+        ARGS=""
+
+        # Add scan type
+        ARGS="$ARGS --type ${{ inputs.scan-type }}"
+
+        # Add format
+        ARGS="$ARGS --format ${{ inputs.format }}"
+
+        # Add strict mode
+        if [ "${{ inputs.strict }}" == "true" ]; then
+          ARGS="$ARGS --strict"
+        fi
+
+        # Add recursive flag
+        if [ "${{ inputs.recursive }}" == "true" ]; then
+          ARGS="$ARGS --recursive"
+        fi
+
+        # Add custom rules if specified
+        if [ -n "${{ inputs.custom-rules }}" ]; then
+          ARGS="$ARGS --custom-rules ${{ inputs.custom-rules }}"
+        fi
+
+        # Add min confidence
+        ARGS="$ARGS --min-confidence ${{ inputs.min-confidence }}"
+
+        # Add skip comments flag
+        if [ "${{ inputs.skip-comments }}" == "true" ]; then
+          ARGS="$ARGS --skip-comments"
+        fi
+
+        # Determine paths to scan
+        if [ "${{ inputs.diff-only }}" == "true" ] && [ "${{ github.event_name }}" == "pull_request" ]; then
+          PATHS="${{ steps.changed-files.outputs.files }}"
+          if [ -z "$PATHS" ]; then
+            echo "No relevant files changed, skipping scan"
+            echo "findings-count=0" >> $GITHUB_OUTPUT
+            echo "critical-count=0" >> $GITHUB_OUTPUT
+            echo "high-count=0" >> $GITHUB_OUTPUT
+            echo "passed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+        else
+          PATHS="${{ inputs.paths }}"
+        fi
+
+        # Create output directory
+        mkdir -p ${{ github.workspace }}/.cc-audit
+        SARIF_FILE="${{ github.workspace }}/.cc-audit/results.sarif"
+
+        # Run scan
+        echo "Running: cc-audit $ARGS $PATHS"
+
+        # Save SARIF output to file
+        if [ "${{ inputs.format }}" == "sarif" ]; then
+          if cc-audit $ARGS $PATHS > "$SARIF_FILE" 2>&1; then
+            SCAN_EXIT_CODE=0
+          else
+            SCAN_EXIT_CODE=$?
+          fi
+
+          # Parse results from SARIF
+          if [ -f "$SARIF_FILE" ] && [ -s "$SARIF_FILE" ]; then
+            FINDINGS_COUNT=$(jq -r '.runs[0].results | length // 0' "$SARIF_FILE" 2>/dev/null || echo "0")
+            CRITICAL_COUNT=$(jq -r '[.runs[0].results[]? | select(.level == "error" and .properties.severity == "critical")] | length // 0' "$SARIF_FILE" 2>/dev/null || echo "0")
+            HIGH_COUNT=$(jq -r '[.runs[0].results[]? | select(.level == "error" and .properties.severity == "high")] | length // 0' "$SARIF_FILE" 2>/dev/null || echo "0")
+          else
+            FINDINGS_COUNT=0
+            CRITICAL_COUNT=0
+            HIGH_COUNT=0
+          fi
+        else
+          # For non-SARIF formats, just run the scan
+          if cc-audit $ARGS $PATHS; then
+            SCAN_EXIT_CODE=0
+          else
+            SCAN_EXIT_CODE=$?
+          fi
+          FINDINGS_COUNT="unknown"
+          CRITICAL_COUNT="unknown"
+          HIGH_COUNT="unknown"
+          SARIF_FILE=""
+        fi
+
+        # Set outputs
+        echo "findings-count=$FINDINGS_COUNT" >> $GITHUB_OUTPUT
+        echo "critical-count=$CRITICAL_COUNT" >> $GITHUB_OUTPUT
+        echo "high-count=$HIGH_COUNT" >> $GITHUB_OUTPUT
+        echo "sarif-file=$SARIF_FILE" >> $GITHUB_OUTPUT
+
+        # Determine pass/fail
+        if [ "$SCAN_EXIT_CODE" -eq 0 ]; then
+          echo "passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "passed=false" >> $GITHUB_OUTPUT
+          if [ "${{ inputs.fail-on-findings }}" == "true" ]; then
+            echo "::error::Security findings detected"
+            exit 1
+          fi
+        fi
+
+    - name: Upload SARIF to GitHub Security
+      if: inputs.upload-sarif == 'true' && inputs.format == 'sarif' && steps.scan.outputs.sarif-file != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif-file }}
+        category: cc-audit
+
+    - name: Create summary
+      shell: bash
+      run: |
+        echo "## cc-audit Security Scan Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Total Findings | ${{ steps.scan.outputs.findings-count }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Critical | ${{ steps.scan.outputs.critical-count }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| High | ${{ steps.scan.outputs.high-count }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Passed | ${{ steps.scan.outputs.passed }} |" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.scan.outputs.passed }}" == "false" ]; then
+          echo "> **Warning**: Security issues were detected. Please review the findings." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "> **Success**: No high or critical security issues detected." >> $GITHUB_STEP_SUMMARY
+        fi

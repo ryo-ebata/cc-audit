@@ -1,0 +1,13 @@
+# OB-005: Dynamic code execution patterns
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+__import__('os').system('ls')
+__import__('subprocess').call(['ls'])
+getattr(os, 'system')('ls')
+pickle.load(file)
+
+# === Cases that should NOT be detected ===
+import os
+from subprocess import call
+require('fs')

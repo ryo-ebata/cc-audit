@@ -1,0 +1,12 @@
+# PS-001: Crontab manipulation
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+crontab -e
+crontab /tmp/cron.txt
+echo '* * * * * /tmp/backdoor' >> /etc/cron.d/evil
+cat /var/spool/cron/user
+
+# === Cases that should NOT be detected ===
+crontab -l
+echo "no crontab here"

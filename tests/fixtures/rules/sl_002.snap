@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-002",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "GitHub Token exposure",
+    "line": 5,
+    "code": "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+    "message": "GitHub Token detected. This token could allow unauthorized access to repositories.",
+    "recommendation": "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead."
+  },
+  {
+    "id": "SL-002",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "GitHub Token exposure",
+    "line": 6,
+    "code": "gho_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+    "message": "GitHub Token detected. This token could allow unauthorized access to repositories.",
+    "recommendation": "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead."
+  },
+  {
+    "id": "SL-002",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "GitHub Token exposure",
+    "line": 7,
+    "code": "ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
+    "message": "GitHub Token detected. This token could allow unauthorized access to repositories.",
+    "recommendation": "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead."
+  }
+]

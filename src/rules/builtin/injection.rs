@@ -1,4 +1,4 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
@@ -12,18 +12,33 @@ fn pi_001() -> Rule {
         description: "Detects prompt injection attempts using 'ignore previous instructions' patterns",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"(?i)ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
-            Regex::new(r"(?i)disregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
-            Regex::new(r"(?i)forget\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
-            Regex::new(r"(?i)override\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
-            Regex::new(r"(?i)you\s+are\s+now\s+(a|an)\s+").unwrap(),
-            Regex::new(r"(?i)new\s+instructions?:").unwrap(),
-            Regex::new(r"(?i)system\s*:\s*you\s+are").unwrap(),
+            Regex::new(
+                r"(?i)ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)",
+            )
+            .expect("PI-001: invalid regex"),
+            Regex::new(
+                r"(?i)disregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)",
+            )
+            .expect("PI-001: invalid regex"),
+            Regex::new(
+                r"(?i)forget\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)",
+            )
+            .expect("PI-001: invalid regex"),
+            Regex::new(
+                r"(?i)override\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)",
+            )
+            .expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)you\s+are\s+now\s+(a|an)\s+").expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)new\s+instructions?:").expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)system\s*:\s*you\s+are").expect("PI-001: invalid regex"),
         ],
         exclusions: vec![],
         message: "Potential prompt injection: instruction override pattern detected",
         recommendation: "Remove or escape prompt injection patterns from skill content",
+        fix_hint: Some("Remove phrases like 'ignore previous instructions'. Use clear, direct instructions"),
+        cwe_ids: &["CWE-94"],
     }
 }
 
@@ -34,17 +49,26 @@ fn pi_002() -> Rule {
         description: "Detects potential prompt injection hidden in HTML/XML comments",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Tentative,
         patterns: vec![
             Regex::new(
                 r"<!--\s*[^>]*\b(ignore|execute|run|do|perform|must|should|always|never)\b[^>]*-->",
             )
-            .unwrap(),
-            Regex::new(r"<!--\s*[^>]*\b(instruction|command|directive|order)\b[^>]*-->").unwrap(),
-            Regex::new(r"<!--\s*[^>]*\b(secretly|hidden|covert|bypass)\b[^>]*-->").unwrap(),
+            .expect("PI-002: invalid regex"),
+            Regex::new(r"<!--\s*[^>]*\b(instruction|command|directive|order)\b[^>]*-->")
+                .expect("PI-002: invalid regex"),
+            Regex::new(r"<!--\s*[^>]*\b(secretly|hidden|covert|bypass)\b[^>]*-->")
+                .expect("PI-002: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"<!--\s*(TODO|FIXME|NOTE|HACK|XXX):?").unwrap()],
+        exclusions: vec![
+            Regex::new(r"<!--\s*(TODO|FIXME|NOTE|HACK|XXX):?").expect("PI-002: invalid regex"),
+        ],
         message: "Potential prompt injection: suspicious content in HTML comment",
         recommendation: "Review HTML comments for hidden instructions",
+        fix_hint: Some(
+            "Remove suspicious HTML comments or move legitimate comments to visible text",
+        ),
+        cwe_ids: &["CWE-94"],
     }
 }
 
@@ -55,17 +79,21 @@ fn pi_003() -> Rule {
         description: "Detects invisible Unicode characters that could hide malicious content",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Firm,
         patterns: vec![
             // Zero-width characters
-            Regex::new(r"[\u200B\u200C\u200D\u2060\uFEFF]").unwrap(),
+            Regex::new(r"[\u200B\u200C\u200D\u2060\uFEFF]").expect("PI-003: invalid regex"),
             // Right-to-left override and other directional overrides
-            Regex::new(r"[\u202A-\u202E\u2066-\u2069]").unwrap(),
+            Regex::new(r"[\u202A-\u202E\u2066-\u2069]").expect("PI-003: invalid regex"),
             // Homoglyph attacks using confusable characters
-            Regex::new(r"[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]").unwrap(),
+            Regex::new(r"[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]")
+                .expect("PI-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Potential prompt injection: invisible Unicode characters detected",
         recommendation: "Remove invisible Unicode characters and verify content integrity",
+        fix_hint: Some("Use: cat -v file.md to reveal invisible chars, then remove them"),
+        cwe_ids: &["CWE-94"],
     }
 }
 
@@ -134,5 +162,30 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             assert_eq!(matched, should_match, "Failed for input: {:?}", input);
         }
+    }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_pi_001() {
+        let rule = pi_001();
+        let content = include_str!("../../../tests/fixtures/rules/pi_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_001", findings);
+    }
+
+    #[test]
+    fn snapshot_pi_002() {
+        let rule = pi_002();
+        let content = include_str!("../../../tests/fixtures/rules/pi_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_002", findings);
+    }
+
+    #[test]
+    fn snapshot_pi_003() {
+        let rule = pi_003();
+        let content = include_str!("../../../tests/fixtures/rules/pi_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_003", findings);
     }
 }

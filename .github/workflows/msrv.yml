@@ -1,0 +1,63 @@
+name: MSRV
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  msrv-check:
+    name: MSRV Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-msrv
+        run: cargo install cargo-msrv --locked
+
+      - name: Find MSRV
+        id: msrv
+        run: |
+          MSRV=$(cargo msrv find --min 1.75.0 2>&1 | grep -oP 'Minimum Supported Rust Version \(MSRV\): \K[0-9.]+' || echo "unknown")
+          echo "msrv=$MSRV" >> $GITHUB_OUTPUT
+          echo "MSRV: $MSRV"
+
+      - name: Report MSRV
+        run: |
+          echo "## MSRV Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Minimum Supported Rust Version: **${{ steps.msrv.outputs.msrv }}**" >> $GITHUB_STEP_SUMMARY
+
+  msrv-verify:
+    name: Verify MSRV (${{ matrix.rust }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - "1.85.0"  # Current MSRV (edition 2024)
+          - stable
+          - beta
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.rust }}
+
+      - name: Check
+        run: cargo check --all-features
+
+      - name: Build
+        run: cargo build --all-features
+
+      - name: Test
+        run: cargo test --all-features

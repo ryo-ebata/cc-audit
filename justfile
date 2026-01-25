@@ -124,6 +124,20 @@ ci-clippy:
 ci-test:
     act -j test --workflows .github/workflows/ci.yml
 
+# === Snapshot Testing ===
+
+# Run snapshot tests
+test-snapshot:
+    cargo test snapshot_ -- --nocapture
+
+# Review pending snapshot changes
+snapshot-review:
+    cargo insta review
+
+# Accept all pending snapshots
+snapshot-accept:
+    cargo insta accept
+
 # === Code Generation (xtask) ===
 
 # Create a new security rule

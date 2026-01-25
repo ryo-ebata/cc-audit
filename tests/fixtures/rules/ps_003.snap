@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-003",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Shell profile modification",
+    "line": 5,
+    "code": "echo 'export PATH=...' >> ~/.bashrc",
+    "message": "Persistence mechanism: shell profile modification detected",
+    "recommendation": "Skills should not modify shell startup files"
+  },
+  {
+    "id": "PS-003",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Shell profile modification",
+    "line": 6,
+    "code": "echo 'alias ll=ls' >> ~/.zshrc",
+    "message": "Persistence mechanism: shell profile modification detected",
+    "recommendation": "Skills should not modify shell startup files"
+  },
+  {
+    "id": "PS-003",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Shell profile modification",
+    "line": 7,
+    "code": "tee -a ~/.bash_profile",
+    "message": "Persistence mechanism: shell profile modification detected",
+    "recommendation": "Skills should not modify shell startup files"
+  },
+  {
+    "id": "PS-003",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Shell profile modification",
+    "line": 8,
+    "code": "echo 'source evil' > .profile",
+    "message": "Persistence mechanism: shell profile modification detected",
+    "recommendation": "Skills should not modify shell startup files"
+  }
+]

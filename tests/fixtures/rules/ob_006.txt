@@ -1,0 +1,13 @@
+# OB-006: Alternative encoding execution
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+base32 -d payload.txt | bash
+gunzip payload.gz | sh
+bzip2 -d payload.bz2 | eval
+openssl base64 -d | bash
+
+# === Cases that should NOT be detected ===
+base32 -d file.txt
+gunzip archive.gz
+gzip -d data.gz

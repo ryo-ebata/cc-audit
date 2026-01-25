@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/docker.rs
+expression: findings
+---
+[
+  {
+    "id": "DK-002",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Running as root user",
+    "line": 5,
+    "code": "USER root",
+    "message": "Container running as root user detected. This increases the attack surface if container is compromised.",
+    "recommendation": "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000"
+  },
+  {
+    "id": "DK-002",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Running as root user",
+    "line": 6,
+    "code": "USER 0",
+    "message": "Container running as root user detected. This increases the attack surface if container is compromised.",
+    "recommendation": "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000"
+  },
+  {
+    "id": "DK-002",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Running as root user",
+    "line": 7,
+    "code": "user: root",
+    "message": "Container running as root user detected. This increases the attack surface if container is compromised.",
+    "recommendation": "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000"
+  },
+  {
+    "id": "DK-002",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Running as root user",
+    "line": 8,
+    "code": "user: \"root\"",
+    "message": "Container running as root user detected. This increases the attack surface if container is compromised.",
+    "recommendation": "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000"
+  },
+  {
+    "id": "DK-002",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Running as root user",
+    "line": 9,
+    "code": "user: 0",
+    "message": "Container running as root user detected. This increases the attack surface if container is compromised.",
+    "recommendation": "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000"
+  }
+]

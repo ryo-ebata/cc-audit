@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-004",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "tentative",
+    "name": "System service registration",
+    "line": 5,
+    "code": "systemctl enable myservice",
+    "message": "Persistence mechanism: system service registration detected",
+    "recommendation": "Skills should not register system services without explicit approval"
+  },
+  {
+    "id": "PS-004",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "tentative",
+    "name": "System service registration",
+    "line": 6,
+    "code": "systemctl start backdoor.service",
+    "message": "Persistence mechanism: system service registration detected",
+    "recommendation": "Skills should not register system services without explicit approval"
+  },
+  {
+    "id": "PS-004",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "tentative",
+    "name": "System service registration",
+    "line": 7,
+    "code": "cp evil.service /etc/systemd/system/",
+    "message": "Persistence mechanism: system service registration detected",
+    "recommendation": "Skills should not register system services without explicit approval"
+  },
+  {
+    "id": "PS-004",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "tentative",
+    "name": "System service registration",
+    "line": 8,
+    "code": "launchctl load ~/Library/LaunchAgents/com.evil.plist",
+    "message": "Persistence mechanism: system service registration detected",
+    "recommendation": "Skills should not register system services without explicit approval"
+  },
+  {
+    "id": "PS-004",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "tentative",
+    "name": "System service registration",
+    "line": 9,
+    "code": "cp agent.plist ~/Library/LaunchAgents/",
+    "message": "Persistence mechanism: system service registration detected",
+    "recommendation": "Skills should not register system services without explicit approval"
+  }
+]

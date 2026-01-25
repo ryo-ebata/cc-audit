@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/dependency.rs
+expression: findings
+---
+[
+  {
+    "id": "DEP-003",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Wildcard version dependency",
+    "line": 5,
+    "code": ": \"*\"",
+    "message": "Wildcard version dependency detected: any version can be installed",
+    "recommendation": "Pin dependencies to specific versions or version ranges"
+  },
+  {
+    "id": "DEP-003",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Wildcard version dependency",
+    "line": 6,
+    "code": ": \"latest\"",
+    "message": "Wildcard version dependency detected: any version can be installed",
+    "recommendation": "Pin dependencies to specific versions or version ranges"
+  },
+  {
+    "id": "DEP-003",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Wildcard version dependency",
+    "line": 7,
+    "code": "version = \"*\"",
+    "message": "Wildcard version dependency detected: any version can be installed",
+    "recommendation": "Pin dependencies to specific versions or version ranges"
+  }
+]

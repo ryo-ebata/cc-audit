@@ -1,0 +1,11 @@
+# OB-004: String manipulation obfuscation
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+$(echo 'hsab' | rev)
+tr 'abc' 'xyz' | bash
+sed 's/x/y/' | eval
+
+# === Cases that should NOT be detected ===
+rev < file.txt
+echo 'hello'

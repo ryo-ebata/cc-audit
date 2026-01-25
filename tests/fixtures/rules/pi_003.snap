@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/injection.rs
+expression: findings
+---
+[
+  {
+    "id": "PI-003",
+    "severity": "high",
+    "category": "prompt_injection",
+    "confidence": "firm",
+    "name": "Invisible Unicode characters",
+    "line": 5,
+    "code": "Hello​World",
+    "message": "Potential prompt injection: invisible Unicode characters detected",
+    "recommendation": "Remove invisible Unicode characters and verify content integrity"
+  },
+  {
+    "id": "PI-003",
+    "severity": "high",
+    "category": "prompt_injection",
+    "confidence": "firm",
+    "name": "Invisible Unicode characters",
+    "line": 6,
+    "code": "test‌string",
+    "message": "Potential prompt injection: invisible Unicode characters detected",
+    "recommendation": "Remove invisible Unicode characters and verify content integrity"
+  },
+  {
+    "id": "PI-003",
+    "severity": "high",
+    "category": "prompt_injection",
+    "confidence": "firm",
+    "name": "Invisible Unicode characters",
+    "line": 7,
+    "code": "normal‮text",
+    "message": "Potential prompt injection: invisible Unicode characters detected",
+    "recommendation": "Remove invisible Unicode characters and verify content integrity"
+  }
+]

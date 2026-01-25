@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/dependency.rs
+expression: findings
+---
+[
+  {
+    "id": "DEP-002",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Git URL dependency",
+    "line": 5,
+    "code": ": \"git://github.com/user/repo\"",
+    "message": "Git URL dependency detected: version is not pinned to a specific commit or tag",
+    "recommendation": "Pin the dependency to a specific commit hash or tag for reproducibility"
+  },
+  {
+    "id": "DEP-002",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Git URL dependency",
+    "line": 6,
+    "code": ": \"git+https://github.com/user/repo\"",
+    "message": "Git URL dependency detected: version is not pinned to a specific commit or tag",
+    "recommendation": "Pin the dependency to a specific commit hash or tag for reproducibility"
+  },
+  {
+    "id": "DEP-002",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Git URL dependency",
+    "line": 7,
+    "code": ": \"github:user/repo\"",
+    "message": "Git URL dependency detected: version is not pinned to a specific commit or tag",
+    "recommendation": "Pin the dependency to a specific commit hash or tag for reproducibility"
+  },
+  {
+    "id": "DEP-002",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Git URL dependency",
+    "line": 8,
+    "code": "git = \"https://github.com/user/repo\"",
+    "message": "Git URL dependency detected: version is not pinned to a specific commit or tag",
+    "recommendation": "Pin the dependency to a specific commit hash or tag for reproducibility"
+  }
+]

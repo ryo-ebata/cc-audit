@@ -1,0 +1,14 @@
+# DK-002: Running as root user
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+USER root
+USER 0
+user: root
+user: "root"
+user: 0
+
+# === Cases that should NOT be detected ===
+USER nobody
+USER 1000
+user: app

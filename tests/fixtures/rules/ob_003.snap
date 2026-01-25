@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-003",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Hex/Octal encoded execution",
+    "line": 5,
+    "code": "echo -e '\\x63\\x61\\x74' | bash",
+    "message": "Potential obfuscation: hex/octal encoded command execution detected. This technique is commonly used to hide malicious commands.",
+    "recommendation": "Decode the hex/octal content to inspect the actual command. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-003",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Hex/Octal encoded execution",
+    "line": 6,
+    "code": "bash -c '\\x63\\x61\\x74 /etc/passwd'",
+    "message": "Potential obfuscation: hex/octal encoded command execution detected. This technique is commonly used to hide malicious commands.",
+    "recommendation": "Decode the hex/octal content to inspect the actual command. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-003",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Hex/Octal encoded execution",
+    "line": 7,
+    "code": "$'\\x63\\x61\\x74 /etc/passwd'",
+    "message": "Potential obfuscation: hex/octal encoded command execution detected. This technique is commonly used to hide malicious commands.",
+    "recommendation": "Decode the hex/octal content to inspect the actual command. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-003",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Hex/Octal encoded execution",
+    "line": 8,
+    "code": "xxd -r payload | bash",
+    "message": "Potential obfuscation: hex/octal encoded command execution detected. This technique is commonly used to hide malicious commands.",
+    "recommendation": "Decode the hex/octal content to inspect the actual command. Avoid executing encoded content."
+  }
+]

@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-004",
+    "severity": "medium",
+    "category": "obfuscation",
+    "confidence": "tentative",
+    "name": "String manipulation obfuscation",
+    "line": 5,
+    "code": "$(echo 'hsab' | rev)",
+    "message": "Potential obfuscation: command construction via string manipulation detected. This technique can hide the actual command being executed.",
+    "recommendation": "Review the string manipulation to understand what command is being constructed."
+  },
+  {
+    "id": "OB-004",
+    "severity": "medium",
+    "category": "obfuscation",
+    "confidence": "tentative",
+    "name": "String manipulation obfuscation",
+    "line": 6,
+    "code": "tr 'abc' 'xyz' | bash",
+    "message": "Potential obfuscation: command construction via string manipulation detected. This technique can hide the actual command being executed.",
+    "recommendation": "Review the string manipulation to understand what command is being constructed."
+  },
+  {
+    "id": "OB-004",
+    "severity": "medium",
+    "category": "obfuscation",
+    "confidence": "tentative",
+    "name": "String manipulation obfuscation",
+    "line": 7,
+    "code": "sed 's/x/y/' | eval",
+    "message": "Potential obfuscation: command construction via string manipulation detected. This technique can hide the actual command being executed.",
+    "recommendation": "Review the string manipulation to understand what command is being constructed."
+  }
+]

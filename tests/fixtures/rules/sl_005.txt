@@ -1,0 +1,12 @@
+# SL-005: Private key exposure
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+-----BEGIN RSA PRIVATE KEY-----
+-----BEGIN EC PRIVATE KEY-----
+-----BEGIN OPENSSH PRIVATE KEY-----
+-----BEGIN PRIVATE KEY-----
+
+# === Cases that should NOT be detected ===
+-----BEGIN PUBLIC KEY-----
+-----BEGIN CERTIFICATE-----

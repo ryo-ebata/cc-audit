@@ -1,8 +1,7 @@
 use crate::error::{AuditError, Result};
-use crate::rules::{Finding, RuleEngine};
-use crate::scanner::Scanner;
+use crate::rules::{DynamicRule, Finding};
+use crate::scanner::{Scanner, ScannerConfig};
 use serde::Deserialize;
-use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
@@ -38,14 +37,24 @@ pub enum Hook {
 }
 
 pub struct HookScanner {
-    engine: RuleEngine,
+    config: ScannerConfig,
 }
 
 impl HookScanner {
     pub fn new() -> Self {
         Self {
-            engine: RuleEngine::new(),
+            config: ScannerConfig::new(),
         }
+    }
+
+    pub fn with_skip_comments(mut self, skip: bool) -> Self {
+        self.config = self.config.with_skip_comments(skip);
+        self
+    }
+
+    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
+        self.config = self.config.with_dynamic_rules(rules);
+        self
     }
 
     pub fn scan_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
@@ -96,7 +105,7 @@ impl HookScanner {
                 match hook {
                     Hook::Command { command } => {
                         let context = format!("{}:{}", file_path, hook_type);
-                        findings.extend(self.engine.check_content(command, &context));
+                        findings.extend(self.config.check_content(command, &context));
                     }
                 }
             }
@@ -108,11 +117,7 @@ impl HookScanner {
 
 impl Scanner for HookScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
-        let content = fs::read_to_string(path).map_err(|e| AuditError::ReadError {
-            path: path.display().to_string(),
-            source: e,
-        })?;
-
+        let content = self.config.read_file(path)?;
         self.scan_content(&content, &path.display().to_string())
     }
 
@@ -144,6 +149,7 @@ impl Default for HookScanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::fs::File;
     use std::io::Write;
     use tempfile::TempDir;

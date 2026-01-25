@@ -1,0 +1,9 @@
+# SL-001: AWS Access Key exposure
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+AKIAIOSFODNN7ABCDEFG
+aws_access_key_id = "AKIAIOSFODNN7ABCDEFG"
+
+# === Cases that should NOT be detected ===
+AKIAIOSFODNN7EXAMPLE

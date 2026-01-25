@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-006",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Alternative encoding execution",
+    "line": 5,
+    "code": "base32 -d payload.txt | bash",
+    "message": "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",
+    "recommendation": "Decode the content first and review before execution. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-006",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Alternative encoding execution",
+    "line": 6,
+    "code": "gunzip payload.gz | sh",
+    "message": "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",
+    "recommendation": "Decode the content first and review before execution. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-006",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Alternative encoding execution",
+    "line": 7,
+    "code": "bzip2 -d payload.bz2 | eval",
+    "message": "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",
+    "recommendation": "Decode the content first and review before execution. Avoid executing encoded content."
+  },
+  {
+    "id": "OB-006",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Alternative encoding execution",
+    "line": 8,
+    "code": "openssl base64 -d | bash",
+    "message": "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",
+    "recommendation": "Decode the content first and review before execution. Avoid executing encoded content."
+  }
+]

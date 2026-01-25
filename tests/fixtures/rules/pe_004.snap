@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-004",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "System password file access",
+    "line": 5,
+    "code": "cat /etc/passwd",
+    "message": "Sensitive file access: system password file access detected",
+    "recommendation": "Skills should never access system authentication files"
+  },
+  {
+    "id": "PE-004",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "System password file access",
+    "line": 6,
+    "code": "grep root /etc/shadow",
+    "message": "Sensitive file access: system password file access detected",
+    "recommendation": "Skills should never access system authentication files"
+  },
+  {
+    "id": "PE-004",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "System password file access",
+    "line": 7,
+    "code": "cat /etc/sudoers",
+    "message": "Sensitive file access: system password file access detected",
+    "recommendation": "Skills should never access system authentication files"
+  },
+  {
+    "id": "PE-004",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "System password file access",
+    "line": 8,
+    "code": "head /etc/gshadow",
+    "message": "Sensitive file access: system password file access detected",
+    "recommendation": "Skills should never access system authentication files"
+  }
+]

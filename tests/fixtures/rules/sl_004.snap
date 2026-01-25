@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-004",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "tentative",
+    "name": "Generic secret pattern",
+    "line": 5,
+    "code": "api_key = \"abc123def456ghi789jkl012mno\"",
+    "message": "Hardcoded secret detected. Storing credentials in code is a security risk.",
+    "recommendation": "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+  },
+  {
+    "id": "SL-004",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "tentative",
+    "name": "Generic secret pattern",
+    "line": 6,
+    "code": "secret_key: \"ABCDEFGHIJKLMNOPabcdefghijklmnop\"",
+    "message": "Hardcoded secret detected. Storing credentials in code is a security risk.",
+    "recommendation": "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+  },
+  {
+    "id": "SL-004",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "tentative",
+    "name": "Generic secret pattern",
+    "line": 7,
+    "code": "password = \"mysecretpassword123\"",
+    "message": "Hardcoded secret detected. Storing credentials in code is a security risk.",
+    "recommendation": "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+  },
+  {
+    "id": "SL-004",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "tentative",
+    "name": "Generic secret pattern",
+    "line": 8,
+    "code": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+    "message": "Hardcoded secret detected. Storing credentials in code is a security risk.",
+    "recommendation": "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control."
+  }
+]

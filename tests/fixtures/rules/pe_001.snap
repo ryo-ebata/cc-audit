@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Sudo execution",
+    "line": 5,
+    "code": "sudo apt-get update",
+    "message": "Privilege escalation: sudo command detected",
+    "recommendation": "Skills should not require sudo. Review why elevated privileges are needed"
+  },
+  {
+    "id": "PE-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Sudo execution",
+    "line": 6,
+    "code": "sudo rm -rf /tmp/cache",
+    "message": "Privilege escalation: sudo command detected",
+    "recommendation": "Skills should not require sudo. Review why elevated privileges are needed"
+  },
+  {
+    "id": "PE-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Sudo execution",
+    "line": 7,
+    "code": "sudo systemctl restart nginx",
+    "message": "Privilege escalation: sudo command detected",
+    "recommendation": "Skills should not require sudo. Review why elevated privileges are needed"
+  },
+  {
+    "id": "PE-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Sudo execution",
+    "line": 8,
+    "code": "sudo chmod 755 /var/www",
+    "message": "Privilege escalation: sudo command detected",
+    "recommendation": "Skills should not require sudo. Review why elevated privileges are needed"
+  },
+  {
+    "id": "PE-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Sudo execution",
+    "line": 11,
+    "code": "echo \"sudo is dangerous\"",
+    "message": "Privilege escalation: sudo command detected",
+    "recommendation": "Skills should not require sudo. Review why elevated privileges are needed"
+  }
+]

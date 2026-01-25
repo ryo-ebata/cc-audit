@@ -1,0 +1,14 @@
+# DK-001: Privileged container
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+docker run --privileged nginx
+privileged: true
+cap_add: [SYS_ADMIN]
+--cap-add=SYS_ADMIN
+cap_add: [ALL]
+--cap-add ALL
+
+# === Cases that should NOT be detected ===
+docker run nginx
+privileged: false

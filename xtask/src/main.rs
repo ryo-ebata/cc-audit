@@ -27,6 +27,8 @@ enum Commands {
         #[arg(short, long)]
         name: String,
     },
+    /// Set up git hooks for development
+    SetupHooks,
 }
 
 fn main() -> Result<()> {
@@ -34,7 +36,35 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::NewRule { category, id, name } => new_rule(&category, &id, &name),
+        Commands::SetupHooks => setup_hooks(),
     }
+}
+
+fn setup_hooks() -> Result<()> {
+    let project_root = find_project_root()?;
+    let hooks_path = project_root.join(".githooks");
+
+    if !hooks_path.exists() {
+        bail!(".githooks directory not found at {:?}", hooks_path);
+    }
+
+    // Set git config to use .githooks directory
+    let status = std::process::Command::new("git")
+        .args(["config", "core.hooksPath", ".githooks"])
+        .current_dir(&project_root)
+        .status()?;
+
+    if !status.success() {
+        bail!("Failed to set git config core.hooksPath");
+    }
+
+    println!("Git hooks configured successfully!");
+    println!();
+    println!("Hooks enabled:");
+    println!("  - pre-commit: cargo fmt --check, cargo clippy");
+    println!("  - pre-push: cargo test");
+
+    Ok(())
 }
 
 fn new_rule(category: &str, id: &str, name: &str) -> Result<()> {
@@ -45,8 +75,12 @@ fn new_rule(category: &str, id: &str, name: &str) -> Result<()> {
         "injection" | "pi" => ("injection", "PromptInjection"),
         "permission" | "op" => ("permission", "Overpermission"),
         "obfuscation" | "ob" => ("obfuscation", "Obfuscation"),
+        "secrets" | "sl" => ("secrets", "SecretLeak"),
+        "docker" | "dk" => ("docker", "PrivilegeEscalation"),
+        "supplychain" | "sc" => ("supplychain", "SupplyChain"),
+        "dependency" | "dep" => ("dependency", "SupplyChain"),
         _ => bail!(
-            "Unknown category: {}. Valid: exfiltration, privilege, persistence, injection, permission, obfuscation",
+            "Unknown category: {}. Valid: exfiltration, privilege, persistence, injection, permission, obfuscation, secrets, docker, supplychain, dependency",
             category
         ),
     };
@@ -84,11 +118,29 @@ fn new_rule(category: &str, id: &str, name: &str) -> Result<()> {
     // Generate new rule function
     let rule_template = generate_rule_template(&fn_name, &id_upper, name, category_enum);
     let test_template = generate_test_template(&fn_name, &id_upper);
+    let snapshot_test_template = generate_snapshot_test_template(&fn_name);
 
     // Find insertion points and modify content
-    let new_content = insert_rule(&content, &fn_name, &rule_template, &test_template)?;
+    let new_content = insert_rule(
+        &content,
+        &fn_name,
+        &rule_template,
+        &test_template,
+        &snapshot_test_template,
+    )?;
 
     fs::write(&file_path, new_content)?;
+
+    // Create test case file for snapshot testing
+    let fixture_path = project_root
+        .join("tests/fixtures/rules")
+        .join(format!("{}.txt", fn_name));
+
+    if !fixture_path.exists() {
+        let fixture_content = generate_fixture_template(&id_upper, name);
+        fs::write(&fixture_path, fixture_content)?;
+        println!("Created test fixture: tests/fixtures/rules/{}.txt", fn_name);
+    }
 
     println!(
         "Created rule {} in src/rules/builtin/{}.rs",
@@ -98,7 +150,12 @@ fn new_rule(category: &str, id: &str, name: &str) -> Result<()> {
     println!("Next steps:");
     println!("  1. Edit the patterns in fn {}()", fn_name);
     println!("  2. Update the test cases in test_{}()", fn_name);
-    println!("  3. Run: just test");
+    println!(
+        "  3. Edit tests/fixtures/rules/{}.txt with test cases",
+        fn_name
+    );
+    println!("  4. Run: just test");
+    println!("  5. Run: just snapshot-review to accept new snapshots");
 
     Ok(())
 }
@@ -124,12 +181,15 @@ fn generate_rule_template(fn_name: &str, id: &str, name: &str, category: &str) -
         description: "TODO: Add description",
         severity: Severity::High,
         category: Category::{category},
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"TODO_PATTERN").unwrap(),
         ],
         exclusions: vec![],
         message: "TODO: Add user-facing message",
         recommendation: "TODO: Add recommendation",
+        fix_hint: Some("TODO: Add fix hint"),
+        cwe_ids: &["CWE-XXX"],
     }}
 }}
 "#,
@@ -160,11 +220,43 @@ fn generate_test_template(fn_name: &str, id: &str) -> String {
     )
 }
 
+fn generate_snapshot_test_template(fn_name: &str) -> String {
+    format!(
+        r#"    #[test]
+    fn snapshot_{fn_name}() {{
+        let rule = {fn_name}();
+        let content = include_str!("../../../tests/fixtures/rules/{fn_name}.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("{fn_name}", findings);
+    }}"#,
+        fn_name = fn_name
+    )
+}
+
+fn generate_fixture_template(id: &str, name: &str) -> String {
+    format!(
+        r#"# {id}: {name}
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+TODO: Add matching test case 1
+TODO: Add matching test case 2
+
+# === Cases that should NOT be detected ===
+TODO: Add non-matching test case 1
+TODO: Add non-matching test case 2
+"#,
+        id = id,
+        name = name
+    )
+}
+
 fn insert_rule(
     content: &str,
     fn_name: &str,
     rule_template: &str,
     test_template: &str,
+    snapshot_test_template: &str,
 ) -> Result<String> {
     let mut lines: Vec<String> = content.lines().map(String::from).collect();
 
@@ -181,7 +273,7 @@ fn insert_rule(
         lines.insert(rule_insert_idx + i, line);
     }
 
-    // 3. Find the tests module and insert test at the end
+    // 3. Find the tests module and insert unit test
     let test_insert_idx = find_test_insert_position(&lines)?;
 
     // Insert empty line before test
@@ -190,6 +282,17 @@ fn insert_rule(
     let test_lines: Vec<String> = test_template.lines().map(String::from).collect();
     for (i, line) in test_lines.into_iter().enumerate() {
         lines.insert(test_insert_idx + 1 + i, line);
+    }
+
+    // 4. Insert snapshot test after the unit test
+    let snapshot_insert_idx = test_insert_idx + 1 + test_template.lines().count();
+
+    // Insert empty line before snapshot test
+    lines.insert(snapshot_insert_idx, String::new());
+
+    let snapshot_lines: Vec<String> = snapshot_test_template.lines().map(String::from).collect();
+    for (i, line) in snapshot_lines.into_iter().enumerate() {
+        lines.insert(snapshot_insert_idx + 1 + i, line);
     }
 
     Ok(lines.join("\n"))

@@ -1,15 +1,25 @@
 use crate::reporter::Reporter;
-use crate::rules::{ScanResult, Severity};
+use crate::rules::{Confidence, ScanResult, Severity};
 use colored::Colorize;
 
 pub struct TerminalReporter {
     strict: bool,
     verbose: bool,
+    show_fix_hint: bool,
 }
 
 impl TerminalReporter {
     pub fn new(strict: bool, verbose: bool) -> Self {
-        Self { strict, verbose }
+        Self {
+            strict,
+            verbose,
+            show_fix_hint: false,
+        }
+    }
+
+    pub fn with_fix_hints(mut self, show: bool) -> Self {
+        self.show_fix_hint = show;
+        self
     }
 
     fn severity_color(&self, severity: &Severity) -> colored::ColoredString {
@@ -19,6 +29,14 @@ impl TerminalReporter {
             Severity::High => label.yellow().bold(),
             Severity::Medium => label.cyan(),
             Severity::Low => label.white(),
+        }
+    }
+
+    fn confidence_label(&self, confidence: &Confidence) -> colored::ColoredString {
+        match confidence {
+            Confidence::Certain => "certain".green(),
+            Confidence::Firm => "firm".cyan(),
+            Confidence::Tentative => "tentative".yellow(),
         }
     }
 }
@@ -63,8 +81,24 @@ impl Reporter for TerminalReporter {
                 output.push_str(&format!("  Code: {}\n", finding.code.dimmed()));
 
                 if self.verbose {
+                    output.push_str(&format!(
+                        "  Confidence: {}\n",
+                        self.confidence_label(&finding.confidence)
+                    ));
+                    if !finding.cwe_ids.is_empty() {
+                        output.push_str(&format!(
+                            "  CWE: {}\n",
+                            finding.cwe_ids.join(", ").bright_blue()
+                        ));
+                    }
                     output.push_str(&format!("  Message: {}\n", finding.message));
                     output.push_str(&format!("  Recommendation: {}\n", finding.recommendation));
+                }
+
+                if self.show_fix_hint
+                    && let Some(ref hint) = finding.fix_hint
+                {
+                    output.push_str(&format!("  Fix: {}\n", hint.bright_green()));
                 }
                 output.push('\n');
             }
@@ -97,7 +131,7 @@ impl Reporter for TerminalReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rules::Category;
+    use crate::rules::{Category, Confidence, Finding, Location, Severity};
     use crate::test_utils::fixtures::{create_finding, create_test_result};
 
     #[test]
@@ -222,5 +256,132 @@ mod tests {
         assert!(output.contains("HIGH-001"));
         assert!(output.contains("HIGH"));
         assert!(output.contains("FAIL"));
+    }
+
+    #[test]
+    fn test_report_verbose_shows_confidence() {
+        let reporter = TerminalReporter::new(false, true);
+        let finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(output.contains("Confidence:"));
+        assert!(output.contains("firm"));
+    }
+
+    #[test]
+    fn test_report_shows_fix_hint() {
+        let reporter = TerminalReporter::new(false, false).with_fix_hints(true);
+        let mut finding = create_finding(
+            "PE-001",
+            Severity::Critical,
+            Category::PrivilegeEscalation,
+            "Sudo execution",
+            "test.sh",
+            1,
+        );
+        finding.fix_hint = Some("Remove sudo or run with appropriate user permissions".to_string());
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(output.contains("Fix:"));
+        assert!(output.contains("Remove sudo"));
+    }
+
+    #[test]
+    fn test_report_no_fix_hint_when_disabled() {
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "PE-001",
+            Severity::Critical,
+            Category::PrivilegeEscalation,
+            "Sudo execution",
+            "test.sh",
+            1,
+        );
+        finding.fix_hint = Some("Remove sudo".to_string());
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(!output.contains("Fix:"));
+    }
+
+    #[test]
+    fn test_report_no_fix_hint_when_none() {
+        let reporter = TerminalReporter::new(false, false).with_fix_hints(true);
+        let finding = create_finding(
+            "PE-001",
+            Severity::Critical,
+            Category::PrivilegeEscalation,
+            "Sudo execution",
+            "test.sh",
+            1,
+        );
+        // fix_hint is None by default from create_finding
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(!output.contains("Fix:"));
+    }
+
+    #[test]
+    fn test_report_verbose_shows_confidence_tentative() {
+        let reporter = TerminalReporter::new(false, true);
+        let finding = Finding {
+            id: "EX-001".to_string(),
+            severity: Severity::Critical,
+            category: Category::Exfiltration,
+            confidence: Confidence::Tentative,
+            name: "Test".to_string(),
+            location: Location {
+                file: "test.sh".to_string(),
+                line: 1,
+                column: None,
+            },
+            code: "curl $SECRET".to_string(),
+            message: "Test message".to_string(),
+            recommendation: "Test recommendation".to_string(),
+            fix_hint: None,
+            cwe_ids: vec![],
+        };
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(output.contains("Confidence:"));
+        assert!(output.contains("tentative"));
+    }
+
+    #[test]
+    fn test_report_verbose_shows_confidence_certain() {
+        let reporter = TerminalReporter::new(false, true);
+        let finding = Finding {
+            id: "EX-001".to_string(),
+            severity: Severity::Critical,
+            category: Category::Exfiltration,
+            confidence: Confidence::Certain,
+            name: "Test".to_string(),
+            location: Location {
+                file: "test.sh".to_string(),
+                line: 1,
+                column: None,
+            },
+            code: "curl $SECRET".to_string(),
+            message: "Test message".to_string(),
+            recommendation: "Test recommendation".to_string(),
+            fix_hint: None,
+            cwe_ids: vec![],
+        };
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(output.contains("Confidence:"));
+        assert!(output.contains("certain"));
     }
 }

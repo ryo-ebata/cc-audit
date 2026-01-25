@@ -1,0 +1,94 @@
+name: Mutation Testing
+
+on:
+  schedule:
+    # Run weekly on Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mutation-test:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    # Only run on schedule or manual trigger for full mutation testing
+    # For PRs, only run if explicitly requested via label
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mutation-test')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants --locked
+
+      - name: Run mutation testing
+        id: mutants
+        run: |
+          # Run with timeout and limited mutants for CI
+          cargo mutants --timeout 60 --jobs 2 2>&1 | tee mutation-results.txt || true
+
+      - name: Parse results
+        run: |
+          echo "## Mutation Testing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f mutants.out/caught.txt ]; then
+            CAUGHT=$(wc -l < mutants.out/caught.txt | tr -d ' ')
+          else
+            CAUGHT=0
+          fi
+
+          if [ -f mutants.out/missed.txt ]; then
+            MISSED=$(wc -l < mutants.out/missed.txt | tr -d ' ')
+          else
+            MISSED=0
+          fi
+
+          if [ -f mutants.out/timeout.txt ]; then
+            TIMEOUT=$(wc -l < mutants.out/timeout.txt | tr -d ' ')
+          else
+            TIMEOUT=0
+          fi
+
+          TOTAL=$((CAUGHT + MISSED))
+          if [ $TOTAL -gt 0 ]; then
+            SCORE=$(echo "scale=1; $CAUGHT * 100 / $TOTAL" | bc)
+          else
+            SCORE="N/A"
+          fi
+
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Caught | $CAUGHT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Missed | $MISSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| Timeout | $TIMEOUT |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Score** | **${SCORE}%** |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$MISSED" -gt 0 ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Missed Mutants" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -20 mutants.out/missed.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No missed mutants file"
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload mutation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-results
+          path: |
+            mutants.out/
+            mutation-results.txt
+          retention-days: 30

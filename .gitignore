@@ -1,1 +1,73 @@
+# Rust/Cargo
 /target
+**/*.rs.bk
+*.rlib
+
+# Coverage (cargo-llvm-cov)
+*.profraw
+*.profdata
+/coverage/
+lcov.info
+tarpaulin-report.html
+
+# Benchmarks
+/criterion/
+
+# IDE/Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Test outputs
+test-results/
+test-output/
+
+# Local configuration
+.cc-audit-ignore
+*.local.yaml
+*.local.toml
+
+# Generated documentation (keep docs/ but ignore generated)
+/target/doc/
+
+# Secrets (prevent accidental commits)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+*.secret
+node_modules

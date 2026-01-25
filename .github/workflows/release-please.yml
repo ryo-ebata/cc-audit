@@ -21,6 +21,9 @@ jobs:
         id: release
         with:
           release-type: rust
+          # PAT を使用してPR作成権限の制限を回避
+          # GITHUB_TOKENではリポジトリ設定で許可されていない場合にPR作成が失敗する
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
   # CI が全てパスしたら Release PR を自動マージ
   auto-merge:
@@ -30,7 +33,7 @@ jobs:
     steps:
       - name: Enable auto-merge for Release PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           PR_NUMBER: ${{ fromJson(needs.release-please.outputs.pr).number }}
         run: |
           gh pr merge $PR_NUMBER --repo ${{ github.repository }} --auto --squash

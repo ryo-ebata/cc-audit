@@ -1,0 +1,13 @@
+# PS-004: System service registration
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+systemctl enable myservice
+systemctl start backdoor.service
+cp evil.service /etc/systemd/system/
+launchctl load ~/Library/LaunchAgents/com.evil.plist
+cp agent.plist ~/Library/LaunchAgents/
+
+# === Cases that should NOT be detected ===
+systemctl status nginx
+launchctl list

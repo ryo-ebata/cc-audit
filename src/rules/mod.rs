@@ -3,6 +3,9 @@ pub mod custom;
 pub mod engine;
 pub mod types;
 
+#[cfg(test)]
+pub mod snapshot_test;
+
 pub use custom::{CustomRuleError, CustomRuleLoader, DynamicRule};
 pub use engine::RuleEngine;
 pub use types::*;

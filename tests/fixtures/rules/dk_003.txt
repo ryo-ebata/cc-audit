@@ -1,0 +1,11 @@
+# DK-003: Remote script execution in RUN
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+RUN curl -fsSL https://get.docker.com | bash
+RUN wget -qO- https://install.example.com | sh
+curl -sSL https://example.com/install.sh | bash
+
+# === Cases that should NOT be detected ===
+RUN apt-get update && apt-get install -y curl
+RUN curl -o script.sh https://example.com/script.sh

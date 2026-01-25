@@ -1357,7 +1357,7 @@ mod sarif_output_detailed {
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
         let tool = &json["runs"][0]["tool"]["driver"];
         assert_eq!(tool["name"], "cc-audit");
-        assert!(tool["rules"].as_array().unwrap().len() > 0);
+        assert!(!tool["rules"].as_array().unwrap().is_empty());
     }
 
     #[test]

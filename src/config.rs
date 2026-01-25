@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 /// Main configuration structure for cc-audit
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
     /// Watch mode configuration
@@ -14,20 +14,11 @@ pub struct Config {
     /// Text file detection configuration
     pub text_files: TextFilesConfig,
     /// Custom rules defined in config file
+    #[serde(default)]
     pub rules: Vec<YamlRule>,
     /// Custom malware signatures defined in config file
+    #[serde(default)]
     pub malware_signatures: Vec<MalwareSignature>,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            watch: WatchConfig::default(),
-            text_files: TextFilesConfig::default(),
-            rules: Vec::new(),
-            malware_signatures: Vec::new(),
-        }
-    }
 }
 
 impl Config {
@@ -82,10 +73,10 @@ impl Config {
                 ".cc-audit.toml",
             ] {
                 let path = root.join(filename);
-                if path.exists() {
-                    if let Ok(config) = Self::from_file(&path) {
-                        return config;
-                    }
+                if path.exists()
+                    && let Ok(config) = Self::from_file(&path)
+                {
+                    return config;
                 }
             }
         }
@@ -93,10 +84,10 @@ impl Config {
         // Try global config
         if let Some(config_dir) = dirs::config_dir() {
             let global_config = config_dir.join("cc-audit").join("config.yaml");
-            if global_config.exists() {
-                if let Ok(config) = Self::from_file(&global_config) {
-                    return config;
-                }
+            if global_config.exists()
+                && let Ok(config) = Self::from_file(&global_config)
+            {
+                return config;
             }
         }
 
@@ -248,10 +239,10 @@ impl TextFilesConfig {
     /// Check if a path should be treated as a text file
     pub fn is_text_file(&self, path: &Path) -> bool {
         // Check by extension
-        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            if self.extensions.contains(&ext.to_lowercase()) {
-                return true;
-            }
+        if let Some(ext) = path.extension().and_then(|e| e.to_str())
+            && self.extensions.contains(&ext.to_lowercase())
+        {
+            return true;
         }
 
         // Check by filename (case-insensitive for special names)

@@ -1,0 +1,28 @@
+---
+source: src/rules/builtin/dependency.rs
+expression: findings
+---
+[
+  {
+    "id": "DEP-004",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "HTTP dependency URL",
+    "line": 5,
+    "code": ": \"http://example.com/package.tar.gz\"",
+    "message": "Insecure HTTP dependency URL detected: vulnerable to MITM attacks",
+    "recommendation": "Use HTTPS URLs for all dependencies"
+  },
+  {
+    "id": "DEP-004",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "HTTP dependency URL",
+    "line": 6,
+    "code": "registry = \"http://insecure-registry.com\"",
+    "message": "Insecure HTTP dependency URL detected: vulnerable to MITM attacks",
+    "recommendation": "Use HTTPS URLs for all dependencies"
+  }
+]

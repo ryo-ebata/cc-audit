@@ -81,10 +81,11 @@ impl Scanner for DockerScanner {
 
         for name in &dockerfile_names {
             let docker_file = dir.join(name);
-            if docker_file.exists() && !self.config.is_ignored(&docker_file) {
-                if let Ok(file_findings) = self.scan_file(&docker_file) {
-                    findings.extend(file_findings);
-                }
+            if docker_file.exists()
+                && !self.config.is_ignored(&docker_file)
+                && let Ok(file_findings) = self.scan_file(&docker_file)
+            {
+                findings.extend(file_findings);
             }
         }
 
@@ -100,14 +101,13 @@ impl Scanner for DockerScanner {
                 let is_common_name = dockerfile_names.iter().any(|n| {
                     path.file_name()
                         .and_then(|f| f.to_str())
-                        .map(|f| f == *n)
-                        .unwrap_or(false)
+                        .is_some_and(|f| f == *n)
                 });
 
-                if !is_common_name || path.parent() != Some(dir) {
-                    if let Ok(file_findings) = self.scan_file(path) {
-                        findings.extend(file_findings);
-                    }
+                if (!is_common_name || path.parent() != Some(dir))
+                    && let Ok(file_findings) = self.scan_file(path)
+                {
+                    findings.extend(file_findings);
                 }
             }
         }

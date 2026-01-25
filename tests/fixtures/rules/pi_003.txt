@@ -1,0 +1,11 @@
+# PI-003: Invisible Unicode characters
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+Hello​World
+test‌string
+normal‮text
+
+# === Cases that should NOT be detected ===
+Hello World
+Normal text with spaces

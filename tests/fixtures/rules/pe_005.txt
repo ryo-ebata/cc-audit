@@ -1,0 +1,14 @@
+# PE-005: SSH directory access
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+cat ~/.ssh/id_rsa
+cat $HOME/.ssh/id_ed25519
+ls /home/user/.ssh/
+cat .ssh/authorized_keys
+cat .ssh/known_hosts
+
+# === Cases that should NOT be detected ===
+cat ~/.bashrc
+ls /home/user/
+mkdir .ssh

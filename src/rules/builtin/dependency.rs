@@ -240,4 +240,45 @@ mod tests {
             );
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_dep_001() {
+        let rule = dep_001();
+        let content = include_str!("../../../tests/fixtures/rules/dep_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_001", findings);
+    }
+
+    #[test]
+    fn snapshot_dep_002() {
+        let rule = dep_002();
+        let content = include_str!("../../../tests/fixtures/rules/dep_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_002", findings);
+    }
+
+    #[test]
+    fn snapshot_dep_003() {
+        let rule = dep_003();
+        let content = include_str!("../../../tests/fixtures/rules/dep_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_003", findings);
+    }
+
+    #[test]
+    fn snapshot_dep_004() {
+        let rule = dep_004();
+        let content = include_str!("../../../tests/fixtures/rules/dep_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_004", findings);
+    }
+
+    #[test]
+    fn snapshot_dep_005() {
+        let rule = dep_005();
+        let content = include_str!("../../../tests/fixtures/rules/dep_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_005", findings);
+    }
 }

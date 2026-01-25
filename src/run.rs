@@ -197,10 +197,10 @@ pub fn scan_path_with_malware_db(path: &Path, db: &MalwareDatabase) -> Vec<Findi
 
     if path.is_file() {
         // Skip config files
-        if !is_config_file(path) {
-            if let Ok(content) = fs::read_to_string(path) {
-                findings.extend(db.scan_content(&content, &path.display().to_string()));
-            }
+        if !is_config_file(path)
+            && let Ok(content) = fs::read_to_string(path)
+        {
+            findings.extend(db.scan_content(&content, &path.display().to_string()));
         }
     } else if path.is_dir() {
         for entry in WalkDir::new(path)
@@ -210,10 +210,11 @@ pub fn scan_path_with_malware_db(path: &Path, db: &MalwareDatabase) -> Vec<Findi
         {
             let file_path = entry.path();
             // Skip config files and binary files
-            if !is_config_file(file_path) && is_text_file(file_path) {
-                if let Ok(content) = fs::read_to_string(file_path) {
-                    findings.extend(db.scan_content(&content, &file_path.display().to_string()));
-                }
+            if !is_config_file(file_path)
+                && is_text_file(file_path)
+                && let Ok(content) = fs::read_to_string(file_path)
+            {
+                findings.extend(db.scan_content(&content, &file_path.display().to_string()));
             }
         }
     }

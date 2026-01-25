@@ -254,4 +254,53 @@ mod tests {
             assert_eq!(matched, should_match, "Failed for input: {}", input);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_ps_001() {
+        let rule = ps_001();
+        let content = include_str!("../../../tests/fixtures/rules/ps_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_001", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_003() {
+        let rule = ps_003();
+        let content = include_str!("../../../tests/fixtures/rules/ps_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_003", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_004() {
+        let rule = ps_004();
+        let content = include_str!("../../../tests/fixtures/rules/ps_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_004", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_005() {
+        let rule = ps_005();
+        let content = include_str!("../../../tests/fixtures/rules/ps_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_005", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_006() {
+        let rule = ps_006();
+        let content = include_str!("../../../tests/fixtures/rules/ps_006.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_006", findings);
+    }
+
+    #[test]
+    fn snapshot_ps_007() {
+        let rule = ps_007();
+        let content = include_str!("../../../tests/fixtures/rules/ps_007.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_007", findings);
+    }
 }

@@ -1,0 +1,17 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-003",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "AI API Key exposure",
+    "line": 5,
+    "code": "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv",
+    "message": "AI API Key detected. This key could allow unauthorized API usage and incur costs.",
+    "recommendation": "Remove the key, rotate it in the respective service dashboard, and use environment variables instead."
+  }
+]

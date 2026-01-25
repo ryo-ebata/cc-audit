@@ -1,0 +1,9 @@
+# SL-003: AI API Key exposure
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv
+
+# === Cases that should NOT be detected ===
+sk-
+not an api key

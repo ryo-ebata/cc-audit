@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-007",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Init system manipulation",
+    "line": 5,
+    "code": "echo 'evil' >> /etc/rc.local",
+    "message": "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
+    "recommendation": "Skills should not modify system startup scripts or init configurations."
+  },
+  {
+    "id": "PS-007",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Init system manipulation",
+    "line": 6,
+    "code": "cp script > /etc/init.d/backdoor",
+    "message": "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
+    "recommendation": "Skills should not modify system startup scripts or init configurations."
+  },
+  {
+    "id": "PS-007",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Init system manipulation",
+    "line": 7,
+    "code": "update-rc.d malicious defaults",
+    "message": "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
+    "recommendation": "Skills should not modify system startup scripts or init configurations."
+  },
+  {
+    "id": "PS-007",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Init system manipulation",
+    "line": 8,
+    "code": "chkconfig --add evil",
+    "message": "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
+    "recommendation": "Skills should not modify system startup scripts or init configurations."
+  }
+]

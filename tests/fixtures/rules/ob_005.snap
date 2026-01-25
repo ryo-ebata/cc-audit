@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-005",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Dynamic code execution patterns",
+    "line": 5,
+    "code": "__import__('os').system('ls')",
+    "message": "Dynamic code execution pattern detected. This can be used to hide malicious intent or execute arbitrary code.",
+    "recommendation": "Avoid dynamic code execution. Use explicit imports and direct function calls instead."
+  },
+  {
+    "id": "OB-005",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Dynamic code execution patterns",
+    "line": 6,
+    "code": "__import__('subprocess').call(['ls'])",
+    "message": "Dynamic code execution pattern detected. This can be used to hide malicious intent or execute arbitrary code.",
+    "recommendation": "Avoid dynamic code execution. Use explicit imports and direct function calls instead."
+  },
+  {
+    "id": "OB-005",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Dynamic code execution patterns",
+    "line": 7,
+    "code": "getattr(os, 'system')('ls')",
+    "message": "Dynamic code execution pattern detected. This can be used to hide malicious intent or execute arbitrary code.",
+    "recommendation": "Avoid dynamic code execution. Use explicit imports and direct function calls instead."
+  },
+  {
+    "id": "OB-005",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Dynamic code execution patterns",
+    "line": 8,
+    "code": "pickle.load(file)",
+    "message": "Dynamic code execution pattern detected. This can be used to hide malicious intent or execute arbitrary code.",
+    "recommendation": "Avoid dynamic code execution. Use explicit imports and direct function calls instead."
+  }
+]

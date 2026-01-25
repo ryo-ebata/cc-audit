@@ -1,0 +1,39 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-002",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Destructive root deletion",
+    "line": 5,
+    "code": "rm -rf /",
+    "message": "Destructive command: potential filesystem destruction detected",
+    "recommendation": "Never use rm -rf on root or with wildcards in skills"
+  },
+  {
+    "id": "PE-002",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Destructive root deletion",
+    "line": 6,
+    "code": "rm -rf /*",
+    "message": "Destructive command: potential filesystem destruction detected",
+    "recommendation": "Never use rm -rf on root or with wildcards in skills"
+  },
+  {
+    "id": "PE-002",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Destructive root deletion",
+    "line": 7,
+    "code": "rm -rf --no-preserve-root /",
+    "message": "Destructive command: potential filesystem destruction detected",
+    "recommendation": "Never use rm -rf on root or with wildcards in skills"
+  }
+]

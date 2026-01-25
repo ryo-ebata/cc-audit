@@ -307,4 +307,45 @@ mod tests {
             assert!(!result, "Should NOT detect env var reference: {}", pattern);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_sl_001() {
+        let rule = sl_001();
+        let content = include_str!("../../../tests/fixtures/rules/sl_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_001", findings);
+    }
+
+    #[test]
+    fn snapshot_sl_002() {
+        let rule = sl_002();
+        let content = include_str!("../../../tests/fixtures/rules/sl_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_002", findings);
+    }
+
+    #[test]
+    fn snapshot_sl_003() {
+        let rule = sl_003();
+        let content = include_str!("../../../tests/fixtures/rules/sl_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_003", findings);
+    }
+
+    #[test]
+    fn snapshot_sl_004() {
+        let rule = sl_004();
+        let content = include_str!("../../../tests/fixtures/rules/sl_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_004", findings);
+    }
+
+    #[test]
+    fn snapshot_sl_005() {
+        let rule = sl_005();
+        let content = include_str!("../../../tests/fixtures/rules/sl_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_005", findings);
+    }
 }

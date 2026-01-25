@@ -1,0 +1,11 @@
+# DEP-005: Tarball/file URL dependency
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+: "https://example.com/package.tar.gz"
+: "https://example.com/package.tgz"
+: "file:///home/user/package"
+
+# === Cases that should NOT be detected ===
+: "^1.0.0"
+: "express"

@@ -607,6 +607,7 @@ rules:
     }
 
     #[test]
+    #[allow(clippy::invalid_regex)]
     fn test_invalid_pattern_error_display() {
         let regex_err = Regex::new("[invalid(").unwrap_err();
         let err = CustomRuleError::InvalidPattern {

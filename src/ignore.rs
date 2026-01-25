@@ -43,18 +43,14 @@ impl IgnoreFilter {
         // Load .gitignore first (if it exists and there's a .git directory)
         let git_dir = root.join(".git");
         let gitignore_file = root.join(".gitignore");
-        if git_dir.exists() && gitignore_file.exists() {
-            if builder.add(&gitignore_file).is_none() {
-                has_patterns = true;
-            }
+        if git_dir.exists() && gitignore_file.exists() && builder.add(&gitignore_file).is_none() {
+            has_patterns = true;
         }
 
         // Load .cc-auditignore (overrides/extends .gitignore)
         let cc_audit_ignore = root.join(".cc-auditignore");
-        if cc_audit_ignore.exists() {
-            if builder.add(&cc_audit_ignore).is_none() {
-                has_patterns = true;
-            }
+        if cc_audit_ignore.exists() && builder.add(&cc_audit_ignore).is_none() {
+            has_patterns = true;
         }
 
         if has_patterns {

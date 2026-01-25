@@ -75,10 +75,10 @@ impl Scanner for DependencyScanner {
             .filter(|e| e.path().is_file())
         {
             let path = entry.path();
-            if Self::is_dependency_file(path) {
-                if let Ok(file_findings) = self.scan_file(path) {
-                    findings.extend(file_findings);
-                }
+            if Self::is_dependency_file(path)
+                && let Ok(file_findings) = self.scan_file(path)
+            {
+                findings.extend(file_findings);
             }
         }
 

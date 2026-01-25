@@ -1,0 +1,13 @@
+# PS-007: Init system manipulation
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+echo 'evil' >> /etc/rc.local
+cp script > /etc/init.d/backdoor
+update-rc.d malicious defaults
+chkconfig --add evil
+cp autostart.desktop ~/.config/autostart/
+
+# === Cases that should NOT be detected ===
+cat /etc/rc.local
+ls /etc/init.d/

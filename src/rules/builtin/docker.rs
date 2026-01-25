@@ -201,4 +201,29 @@ RUN apt-get update
         let matched = rule.patterns.iter().any(|p| p.is_match(dockerfile_content));
         assert!(matched, "Should detect USER root in Dockerfile");
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_dk_001() {
+        let rule = dk_001();
+        let content = include_str!("../../../tests/fixtures/rules/dk_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dk_001", findings);
+    }
+
+    #[test]
+    fn snapshot_dk_002() {
+        let rule = dk_002();
+        let content = include_str!("../../../tests/fixtures/rules/dk_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dk_002", findings);
+    }
+
+    #[test]
+    fn snapshot_dk_003() {
+        let rule = dk_003();
+        let content = include_str!("../../../tests/fixtures/rules/dk_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dk_003", findings);
+    }
 }

@@ -251,4 +251,53 @@ mod tests {
             assert_eq!(result, should_match, "Failed for input: {}", input);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_ob_001() {
+        let rule = ob_001();
+        let content = include_str!("../../../tests/fixtures/rules/ob_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_001", findings);
+    }
+
+    #[test]
+    fn snapshot_ob_002() {
+        let rule = ob_002();
+        let content = include_str!("../../../tests/fixtures/rules/ob_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_002", findings);
+    }
+
+    #[test]
+    fn snapshot_ob_003() {
+        let rule = ob_003();
+        let content = include_str!("../../../tests/fixtures/rules/ob_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_003", findings);
+    }
+
+    #[test]
+    fn snapshot_ob_004() {
+        let rule = ob_004();
+        let content = include_str!("../../../tests/fixtures/rules/ob_004.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_004", findings);
+    }
+
+    #[test]
+    fn snapshot_ob_005() {
+        let rule = ob_005();
+        let content = include_str!("../../../tests/fixtures/rules/ob_005.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_005", findings);
+    }
+
+    #[test]
+    fn snapshot_ob_006() {
+        let rule = ob_006();
+        let content = include_str!("../../../tests/fixtures/rules/ob_006.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_006", findings);
+    }
 }

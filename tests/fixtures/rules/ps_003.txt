@@ -1,0 +1,13 @@
+# PS-003: Shell profile modification
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+echo 'export PATH=...' >> ~/.bashrc
+echo 'alias ll=ls' >> ~/.zshrc
+tee -a ~/.bash_profile
+echo 'source evil' > .profile
+
+# === Cases that should NOT be detected ===
+cat ~/.bashrc
+source ~/.bashrc
+echo 'hello' > file.txt

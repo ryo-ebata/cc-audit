@@ -250,4 +250,29 @@ mod tests {
             assert!(!matched, "Should NOT detect HTTPS source: {}", cmd);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_sc_001() {
+        let rule = sc_001();
+        let content = include_str!("../../../tests/fixtures/rules/sc_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sc_001", findings);
+    }
+
+    #[test]
+    fn snapshot_sc_002() {
+        let rule = sc_002();
+        let content = include_str!("../../../tests/fixtures/rules/sc_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sc_002", findings);
+    }
+
+    #[test]
+    fn snapshot_sc_003() {
+        let rule = sc_003();
+        let content = include_str!("../../../tests/fixtures/rules/sc_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sc_003", findings);
+    }
 }

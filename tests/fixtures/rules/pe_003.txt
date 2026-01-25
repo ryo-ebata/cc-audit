@@ -1,0 +1,13 @@
+# PE-003: Insecure permission change
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+chmod 777 /tmp/file
+chmod -R 777 /var/www
+chmod 0777 script.sh
+chmod a+rwx config.yml
+
+# === Cases that should NOT be detected ===
+chmod 755 /tmp/dir
+chmod 644 file.txt
+chmod +x script.sh

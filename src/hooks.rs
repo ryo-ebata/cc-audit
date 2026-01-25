@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn test_hook_error_display_write_file() {
-        let io_error = std::io::Error::new(std::io::ErrorKind::Other, "disk full");
+        let io_error = std::io::Error::other("disk full");
         let error = HookError::WriteFile(io_error);
         assert!(format!("{}", error).starts_with("Failed to write hook file:"));
     }
@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_hook_error_display_remove_file() {
-        let io_error = std::io::Error::new(std::io::ErrorKind::Other, "file in use");
+        let io_error = std::io::Error::other("file in use");
         let error = HookError::RemoveFile(io_error);
         assert!(format!("{}", error).starts_with("Failed to remove hook file:"));
     }

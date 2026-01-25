@@ -49,4 +49,13 @@ mod tests {
             assert_eq!(matched, should_match, "Failed for input: {}", input);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_op_001() {
+        let rule = op_001();
+        let content = include_str!("../../../tests/fixtures/rules/op_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("op_001", findings);
+    }
 }

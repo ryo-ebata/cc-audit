@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-001",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Crontab manipulation",
+    "line": 5,
+    "code": "crontab -e",
+    "message": "Persistence mechanism: crontab manipulation detected",
+    "recommendation": "Skills should not modify scheduled tasks. Review the necessity of cron access"
+  },
+  {
+    "id": "PS-001",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Crontab manipulation",
+    "line": 6,
+    "code": "crontab /tmp/cron.txt",
+    "message": "Persistence mechanism: crontab manipulation detected",
+    "recommendation": "Skills should not modify scheduled tasks. Review the necessity of cron access"
+  },
+  {
+    "id": "PS-001",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Crontab manipulation",
+    "line": 7,
+    "code": "echo '* * * * * /tmp/backdoor' >> /etc/cron.d/evil",
+    "message": "Persistence mechanism: crontab manipulation detected",
+    "recommendation": "Skills should not modify scheduled tasks. Review the necessity of cron access"
+  },
+  {
+    "id": "PS-001",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Crontab manipulation",
+    "line": 8,
+    "code": "cat /var/spool/cron/user",
+    "message": "Persistence mechanism: crontab manipulation detected",
+    "recommendation": "Skills should not modify scheduled tasks. Review the necessity of cron access"
+  },
+  {
+    "id": "PS-001",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Crontab manipulation",
+    "line": 12,
+    "code": "echo \"no crontab here\"",
+    "message": "Persistence mechanism: crontab manipulation detected",
+    "recommendation": "Skills should not modify scheduled tasks. Review the necessity of cron access"
+  }
+]

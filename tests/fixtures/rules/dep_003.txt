@@ -1,0 +1,12 @@
+# DEP-003: Wildcard version dependency
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+: "*"
+: "latest"
+version = "*"
+
+# === Cases that should NOT be detected ===
+: "^1.0.0"
+: "~1.2.3"
+version = "1.0"

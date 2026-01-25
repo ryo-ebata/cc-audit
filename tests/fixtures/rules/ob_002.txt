@@ -1,0 +1,12 @@
+# OB-002: Base64 decode execution
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+echo 'SGVsbG8=' | base64 -d | bash
+base64 --decode payload.txt | sh
+echo 'cmd' | base64 -d | eval
+atob('SGVsbG8=')
+Buffer.from(data, 'base64')
+
+# === Cases that should NOT be detected ===
+base64 -d file.txt

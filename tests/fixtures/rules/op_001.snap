@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/permission.rs
+expression: findings
+---
+[
+  {
+    "id": "OP-001",
+    "severity": "high",
+    "category": "overpermission",
+    "confidence": "certain",
+    "name": "Wildcard tool permission",
+    "line": 5,
+    "code": "allowed-tools: *",
+    "message": "Overpermission: wildcard tool access grants unrestricted capabilities",
+    "recommendation": "Specify only required tools (e.g., \"Read, Write, Bash\")"
+  },
+  {
+    "id": "OP-001",
+    "severity": "high",
+    "category": "overpermission",
+    "confidence": "certain",
+    "name": "Wildcard tool permission",
+    "line": 6,
+    "code": "allowed-tools: \"*\"",
+    "message": "Overpermission: wildcard tool access grants unrestricted capabilities",
+    "recommendation": "Specify only required tools (e.g., \"Read, Write, Bash\")"
+  },
+  {
+    "id": "OP-001",
+    "severity": "high",
+    "category": "overpermission",
+    "confidence": "certain",
+    "name": "Wildcard tool permission",
+    "line": 7,
+    "code": "allowed-tools: '*'",
+    "message": "Overpermission: wildcard tool access grants unrestricted capabilities",
+    "recommendation": "Specify only required tools (e.g., \"Read, Write, Bash\")"
+  },
+  {
+    "id": "OP-001",
+    "severity": "high",
+    "category": "overpermission",
+    "confidence": "certain",
+    "name": "Wildcard tool permission",
+    "line": 8,
+    "code": "\"allowed-tools\": \"*\"",
+    "message": "Overpermission: wildcard tool access grants unrestricted capabilities",
+    "recommendation": "Specify only required tools (e.g., \"Read, Write, Bash\")"
+  }
+]

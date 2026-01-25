@@ -146,4 +146,29 @@ mod tests {
             assert_eq!(matched, should_match, "Failed for input: {:?}", input);
         }
     }
+
+    // Snapshot tests
+    #[test]
+    fn snapshot_pi_001() {
+        let rule = pi_001();
+        let content = include_str!("../../../tests/fixtures/rules/pi_001.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_001", findings);
+    }
+
+    #[test]
+    fn snapshot_pi_002() {
+        let rule = pi_002();
+        let content = include_str!("../../../tests/fixtures/rules/pi_002.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_002", findings);
+    }
+
+    #[test]
+    fn snapshot_pi_003() {
+        let rule = pi_003();
+        let content = include_str!("../../../tests/fixtures/rules/pi_003.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pi_003", findings);
+    }
 }

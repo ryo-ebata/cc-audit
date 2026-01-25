@@ -50,10 +50,11 @@ impl Scanner for CommandScanner {
                 .filter_map(|e| e.ok())
             {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "md") {
-                    if let Ok(file_findings) = self.scan_file(path) {
-                        findings.extend(file_findings);
-                    }
+                if path.is_file()
+                    && path.extension().is_some_and(|ext| ext == "md")
+                    && let Ok(file_findings) = self.scan_file(path)
+                {
+                    findings.extend(file_findings);
                 }
             }
         }
@@ -66,10 +67,11 @@ impl Scanner for CommandScanner {
                 .filter_map(|e| e.ok())
             {
                 let path = entry.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "md") {
-                    if let Ok(file_findings) = self.scan_file(path) {
-                        findings.extend(file_findings);
-                    }
+                if path.is_file()
+                    && path.extension().is_some_and(|ext| ext == "md")
+                    && let Ok(file_findings) = self.scan_file(path)
+                {
+                    findings.extend(file_findings);
                 }
             }
         }

@@ -1,0 +1,12 @@
+# OB-003: Hex/Octal encoded execution
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+echo -e '\x63\x61\x74' | bash
+bash -c '\x63\x61\x74 /etc/passwd'
+$'\x63\x61\x74 /etc/passwd'
+xxd -r payload | bash
+
+# === Cases that should NOT be detected ===
+echo 'hello world'
+printf '%s\n' "hello"

@@ -1,0 +1,28 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-001",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "AWS Access Key exposure",
+    "line": 5,
+    "code": "AKIAIOSFODNN7ABCDEFG",
+    "message": "AWS Access Key detected. This credential could allow unauthorized access to AWS resources.",
+    "recommendation": "Remove the key immediately, rotate it in AWS IAM console, and use environment variables or AWS Secrets Manager instead."
+  },
+  {
+    "id": "SL-001",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "AWS Access Key exposure",
+    "line": 6,
+    "code": "aws_access_key_id = \"AKIAIOSFODNN7ABCDEFG\"",
+    "message": "AWS Access Key detected. This credential could allow unauthorized access to AWS resources.",
+    "recommendation": "Remove the key immediately, rotate it in AWS IAM console, and use environment variables or AWS Secrets Manager instead."
+  }
+]

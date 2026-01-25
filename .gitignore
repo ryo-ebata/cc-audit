@@ -70,3 +70,4 @@ test-output/
 *.pfx
 id_rsa*
 *.secret
+node_modules

@@ -1,0 +1,72 @@
+---
+source: src/rules/builtin/docker.rs
+expression: findings
+---
+[
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 5,
+    "code": "docker run --privileged nginx",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  },
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 6,
+    "code": "privileged: true",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  },
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 7,
+    "code": "cap_add: [SYS_ADMIN]",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  },
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 8,
+    "code": "--cap-add=SYS_ADMIN",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  },
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 9,
+    "code": "cap_add: [ALL]",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  },
+  {
+    "id": "DK-001",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Privileged container",
+    "line": 10,
+    "code": "--cap-add ALL",
+    "message": "Privileged container detected. This grants full host access and is a major security risk.",
+    "recommendation": "Remove --privileged flag. Use specific capabilities instead of full privileges."
+  }
+]

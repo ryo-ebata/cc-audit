@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/obfuscation.rs
+expression: findings
+---
+[
+  {
+    "id": "OB-002",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Base64 decode execution",
+    "line": 5,
+    "code": "echo 'SGVsbG8=' | base64 -d | bash",
+    "message": "Potential obfuscation: base64 decode piped to execution",
+    "recommendation": "Decode and review the base64 content before execution"
+  },
+  {
+    "id": "OB-002",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Base64 decode execution",
+    "line": 6,
+    "code": "base64 --decode payload.txt | sh",
+    "message": "Potential obfuscation: base64 decode piped to execution",
+    "recommendation": "Decode and review the base64 content before execution"
+  },
+  {
+    "id": "OB-002",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Base64 decode execution",
+    "line": 7,
+    "code": "echo 'cmd' | base64 -d | eval",
+    "message": "Potential obfuscation: base64 decode piped to execution",
+    "recommendation": "Decode and review the base64 content before execution"
+  },
+  {
+    "id": "OB-002",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Base64 decode execution",
+    "line": 8,
+    "code": "atob('SGVsbG8=')",
+    "message": "Potential obfuscation: base64 decode piped to execution",
+    "recommendation": "Decode and review the base64 content before execution"
+  },
+  {
+    "id": "OB-002",
+    "severity": "high",
+    "category": "obfuscation",
+    "confidence": "firm",
+    "name": "Base64 decode execution",
+    "line": 9,
+    "code": "Buffer.from(data, 'base64')",
+    "message": "Potential obfuscation: base64 decode piped to execution",
+    "recommendation": "Decode and review the base64 content before execution"
+  }
+]

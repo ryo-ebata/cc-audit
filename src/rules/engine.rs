@@ -44,10 +44,10 @@ impl RuleEngine {
             }
 
             // Check for cc-audit-disable
-            if line.contains("cc-audit-disable") {
-                if let Some(suppression) = Self::parse_disable(line) {
-                    disabled_rules = Some(suppression);
-                }
+            if line.contains("cc-audit-disable")
+                && let Some(suppression) = Self::parse_disable(line)
+            {
+                disabled_rules = Some(suppression);
             }
 
             // Check for cc-audit-ignore-next-line
@@ -69,10 +69,10 @@ impl RuleEngine {
 
             for rule in self.rules {
                 // Check if this rule is suppressed
-                if let Some(ref suppression) = current_suppression {
-                    if suppression.is_suppressed(rule.id) {
-                        continue;
-                    }
+                if let Some(ref suppression) = current_suppression
+                    && suppression.is_suppressed(rule.id)
+                {
+                    continue;
                 }
 
                 if let Some(finding) = Self::check_line(rule, line, file_path, line_num + 1) {
@@ -83,10 +83,10 @@ impl RuleEngine {
             // Check dynamic rules
             for rule in &self.dynamic_rules {
                 // Check if this rule is suppressed
-                if let Some(ref suppression) = current_suppression {
-                    if suppression.is_suppressed(&rule.id) {
-                        continue;
-                    }
+                if let Some(ref suppression) = current_suppression
+                    && suppression.is_suppressed(&rule.id)
+                {
+                    continue;
                 }
 
                 if let Some(finding) = Self::check_dynamic_line(rule, line, file_path, line_num + 1)

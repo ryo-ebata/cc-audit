@@ -1,0 +1,11 @@
+# SL-002: GitHub Token exposure
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
+gho_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
+ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij
+
+# === Cases that should NOT be detected ===
+ghp_
+not a github token

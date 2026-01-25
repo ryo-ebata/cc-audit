@@ -1,0 +1,13 @@
+# PE-002: Destructive root deletion
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+rm -rf /
+rm -rf /*
+rm -rf --no-preserve-root /
+rm -Rf /var/
+
+# === Cases that should NOT be detected ===
+rm -rf /tmp/mydir
+rm -rf ./build
+rm file.txt

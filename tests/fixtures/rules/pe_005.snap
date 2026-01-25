@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-005",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "SSH directory access",
+    "line": 5,
+    "code": "cat ~/.ssh/id_rsa",
+    "message": "Sensitive file access: SSH directory access detected",
+    "recommendation": "Skills should never access SSH keys or configuration"
+  },
+  {
+    "id": "PE-005",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "SSH directory access",
+    "line": 6,
+    "code": "cat $HOME/.ssh/id_ed25519",
+    "message": "Sensitive file access: SSH directory access detected",
+    "recommendation": "Skills should never access SSH keys or configuration"
+  },
+  {
+    "id": "PE-005",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "SSH directory access",
+    "line": 7,
+    "code": "ls /home/user/.ssh/",
+    "message": "Sensitive file access: SSH directory access detected",
+    "recommendation": "Skills should never access SSH keys or configuration"
+  },
+  {
+    "id": "PE-005",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "SSH directory access",
+    "line": 8,
+    "code": "cat .ssh/authorized_keys",
+    "message": "Sensitive file access: SSH directory access detected",
+    "recommendation": "Skills should never access SSH keys or configuration"
+  },
+  {
+    "id": "PE-005",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "SSH directory access",
+    "line": 9,
+    "code": "cat .ssh/known_hosts",
+    "message": "Sensitive file access: SSH directory access detected",
+    "recommendation": "Skills should never access SSH keys or configuration"
+  }
+]

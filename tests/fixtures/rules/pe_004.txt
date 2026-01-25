@@ -1,0 +1,13 @@
+# PE-004: System password file access
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+cat /etc/passwd
+grep root /etc/shadow
+cat /etc/sudoers
+head /etc/gshadow
+
+# === Cases that should NOT be detected ===
+cat /etc/hostname
+grep pattern /etc/hosts
+ls /etc/

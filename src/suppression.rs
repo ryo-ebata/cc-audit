@@ -114,10 +114,10 @@ impl SuppressionManager {
     /// Check if a specific rule is suppressed for the current line
     pub fn is_rule_suppressed(&self, rule_id: &str, line: &str) -> bool {
         // Check inline ignore
-        if let Some(caps) = IGNORE_PATTERN.captures(line) {
-            if !IGNORE_NEXT_LINE_PATTERN.is_match(line) {
-                return SuppressionType::from_captures(caps.get(1)).is_suppressed(rule_id);
-            }
+        if let Some(caps) = IGNORE_PATTERN.captures(line)
+            && !IGNORE_NEXT_LINE_PATTERN.is_match(line)
+        {
+            return SuppressionType::from_captures(caps.get(1)).is_suppressed(rule_id);
         }
 
         // Check disabled block
@@ -132,10 +132,10 @@ impl SuppressionManager {
 /// Parse suppression comments from a line
 pub fn parse_inline_suppression(line: &str) -> Option<SuppressionType> {
     // Check for inline ignore (but not ignore-next-line)
-    if let Some(caps) = IGNORE_PATTERN.captures(line) {
-        if !IGNORE_NEXT_LINE_PATTERN.is_match(line) {
-            return Some(SuppressionType::from_captures(caps.get(1)));
-        }
+    if let Some(caps) = IGNORE_PATTERN.captures(line)
+        && !IGNORE_NEXT_LINE_PATTERN.is_match(line)
+    {
+        return Some(SuppressionType::from_captures(caps.get(1)));
     }
     None
 }

@@ -1,0 +1,13 @@
+# OB-001: Eval with variable expansion
+# Test cases for snapshot testing
+
+# === Cases that SHOULD be detected ===
+eval $CMD
+eval "$PAYLOAD"
+eval($variable)
+exec($code)
+Function($body)
+
+# === Cases that should NOT be detected ===
+eval 'literal string'
+echo $VAR

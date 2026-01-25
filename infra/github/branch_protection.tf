@@ -22,14 +22,17 @@ resource "github_repository_ruleset" "protect_main" {
     deletion         = false
     non_fast_forward = false
 
-    # Required status checks
-    required_status_checks {
-      strict_required_status_checks_policy = true
+    # Required status checks (only if checks are configured)
+    dynamic "required_status_checks" {
+      for_each = length(var.required_status_checks) > 0 ? [1] : []
+      content {
+        strict_required_status_checks_policy = true
 
-      dynamic "required_check" {
-        for_each = var.required_status_checks
-        content {
-          context = required_check.value
+        dynamic "required_check" {
+          for_each = var.required_status_checks
+          content {
+            context = required_check.value
+          }
         }
       }
     }

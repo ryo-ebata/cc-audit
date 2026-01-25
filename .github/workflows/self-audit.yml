@@ -76,3 +76,17 @@ jobs:
           echo "## Strict Mode Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           ./target/release/cc-audit --type skill --ci . || echo "::warning::Strict mode found issues"
+
+  self-audit-result:
+    name: Self Audit Result
+    needs: [self-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.self-audit.result }}" == "failure" ]]; then
+            echo "Self audit job failed"
+            exit 1
+          fi
+          echo "Self audit passed"

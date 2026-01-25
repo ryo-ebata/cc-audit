@@ -11,8 +11,27 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'benches/**'
+
   benchmark:
     name: Benchmark
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +60,8 @@ jobs:
 
   binary-size:
     name: Binary Size
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +107,8 @@ jobs:
 
   build-time:
     name: Build Time
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,22 +161,30 @@ jobs:
             echo "::warning::Release build time ($DURATION s) exceeds threshold ($THRESHOLD s)"
           fi
 
-  performance-summary:
-    name: Performance Summary
+  performance-result:
+    name: Performance Result
     runs-on: ubuntu-latest
-    needs: [benchmark, binary-size, build-time]
+    needs: [changes, benchmark, binary-size, build-time]
     if: always()
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts/
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
+            echo "No relevant changes detected, skipping performance checks"
+            exit 0
+          fi
+          if [[ "${{ needs.benchmark.result }}" == "failure" || \
+                "${{ needs.binary-size.result }}" == "failure" || \
+                "${{ needs.build-time.result }}" == "failure" ]]; then
+            echo "One or more performance jobs failed"
+            exit 1
+          fi
+          echo "All performance checks passed"
 
       - name: Create summary
+        if: needs.changes.outputs.rust == 'true'
         run: |
           echo "# Performance Check Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All performance checks completed." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Jobs Status" >> $GITHUB_STEP_SUMMARY
           echo "- Benchmark: ${{ needs.benchmark.result }}" >> $GITHUB_STEP_SUMMARY

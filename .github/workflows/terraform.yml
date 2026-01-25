@@ -1,0 +1,232 @@
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_LOG: INFO
+  TF_INPUT: false
+
+jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      directories: ${{ steps.find.outputs.directories }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - '.github/workflows/terraform.yml'
+
+      - name: Find Terraform directories
+        id: find
+        if: steps.filter.outputs.infra == 'true'
+        run: |
+          # Find all directories containing .tf files
+          DIRS=$(find infra -name "*.tf" -type f -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "directories=$DIRS" >> $GITHUB_OUTPUT
+          echo "Found Terraform directories: $DIRS"
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10"
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive -diff
+        working-directory: ${{ matrix.directory }}
+        continue-on-error: true
+
+      - name: Report format status
+        if: steps.fmt.outcome == 'failure'
+        run: |
+          echo "::error::Terraform files in ${{ matrix.directory }} are not properly formatted. Run 'terraform fmt -recursive' to fix."
+          exit 1
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10"
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.directory }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ matrix.directory }}
+
+  tflint:
+    name: TFLint
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint
+        run: tflint --init
+        working-directory: ${{ matrix.directory }}
+        continue-on-error: true
+
+      - name: Run TFLint
+        run: tflint --format=compact
+        working-directory: ${{ matrix.directory }}
+
+  tfsec:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: ${{ matrix.directory }}
+          soft_fail: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    needs: [changes, fmt, validate]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10"
+
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.directory }}
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -no-color -input=false 2>&1 | tee plan.txt
+        working-directory: ${{ matrix.directory }}
+        continue-on-error: true
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ matrix.directory }}/plan.txt', 'utf8');
+            const maxLength = 60000;
+            const truncatedPlan = plan.length > maxLength
+              ? plan.substring(0, maxLength) + '\n\n... (truncated)'
+              : plan;
+
+            const output = `#### Terraform Plan - \`${{ matrix.directory }}\`
+
+            <details>
+            <summary>Show Plan</summary>
+
+            \`\`\`hcl
+            ${truncatedPlan}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  terraform-result:
+    name: Terraform Result
+    runs-on: ubuntu-latest
+    needs: [changes, fmt, validate, tflint, tfsec]
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.infra }}" != "true" ]]; then
+            echo "No infrastructure changes detected, skipping Terraform checks"
+            exit 0
+          fi
+          if [[ "${{ needs.fmt.result }}" == "failure" || \
+                "${{ needs.validate.result }}" == "failure" || \
+                "${{ needs.tflint.result }}" == "failure" || \
+                "${{ needs.tfsec.result }}" == "failure" ]]; then
+            echo "One or more Terraform jobs failed"
+            exit 1
+          fi
+          echo "All Terraform checks passed"
+
+      - name: Create Summary
+        if: needs.changes.outputs.infra == 'true'
+        run: |
+          echo "## Terraform CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | ${{ needs.fmt.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TFLint | ${{ needs.tflint.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.tfsec.result }} |" >> $GITHUB_STEP_SUMMARY

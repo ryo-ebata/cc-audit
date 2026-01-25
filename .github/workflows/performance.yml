@@ -52,10 +52,12 @@ jobs:
       - name: Compare benchmarks (PR only)
         if: github.event_name == 'pull_request'
         run: |
+          # Save current commit hash for later checkout
+          CURRENT_SHA="${{ github.event.pull_request.head.sha }}"
           git fetch origin main
           git checkout origin/main -- . || true
           cargo bench --bench scan_benchmark -- --noplot --save-baseline main || echo "No baseline on main"
-          git checkout - -- .
+          git checkout "$CURRENT_SHA" -- .
           cargo bench --bench scan_benchmark -- --noplot --baseline main || echo "Comparison skipped"
 
   binary-size:

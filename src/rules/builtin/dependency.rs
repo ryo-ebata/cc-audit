@@ -18,13 +18,16 @@ fn dep_001() -> Rule {
             Regex::new(
                 r#""(post|pre)install"\s*:\s*"[^"]*\b(curl|wget)\b[^"]*\|\s*(bash|sh|node)"#,
             )
-            .unwrap(),
+            .expect("DEP-001: invalid regex"),
             // postinstall/preinstall with eval
-            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*\beval\b"#).unwrap(),
+            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*\beval\b"#)
+                .expect("DEP-001: invalid regex"),
             // postinstall/preinstall downloading and executing
-            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*&&\s*(bash|sh|node)\s"#).unwrap(),
+            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*&&\s*(bash|sh|node)\s"#)
+                .expect("DEP-001: invalid regex"),
             // npm explore combined with script execution
-            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*npm\s+explore"#).unwrap(),
+            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*npm\s+explore"#)
+                .expect("DEP-001: invalid regex"),
         ],
         exclusions: vec![],
         message: "Dangerous lifecycle script detected: may download and execute arbitrary code",
@@ -44,11 +47,12 @@ fn dep_002() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // npm: git://, git+https://, git+ssh://, github:
-            Regex::new(r#":\s*"(git://|git\+https://|git\+ssh://|github:)[^"]*"#).unwrap(),
+            Regex::new(r#":\s*"(git://|git\+https://|git\+ssh://|github:)[^"]*"#)
+                .expect("DEP-002: invalid regex"),
             // Cargo: git = "..."
-            Regex::new(r#"\bgit\s*=\s*"https?://[^"]*""#).unwrap(),
+            Regex::new(r#"\bgit\s*=\s*"https?://[^"]*""#).expect("DEP-002: invalid regex"),
             // pip: git+ in requirements
-            Regex::new(r"^git\+https?://").unwrap(),
+            Regex::new(r"^git\+https?://").expect("DEP-002: invalid regex"),
         ],
         exclusions: vec![],
         message: "Git URL dependency detected: version is not pinned to a specific commit or tag",
@@ -68,11 +72,11 @@ fn dep_003() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // npm: "package": "*"
-            Regex::new(r#":\s*"\*""#).unwrap(),
+            Regex::new(r#":\s*"\*""#).expect("DEP-003: invalid regex"),
             // npm: "package": "latest"
-            Regex::new(r#":\s*"latest""#).unwrap(),
+            Regex::new(r#":\s*"latest""#).expect("DEP-003: invalid regex"),
             // Cargo: version = "*"
-            Regex::new(r#"version\s*=\s*"\*""#).unwrap(),
+            Regex::new(r#"version\s*=\s*"\*""#).expect("DEP-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Wildcard version dependency detected: any version can be installed",
@@ -92,11 +96,13 @@ fn dep_004() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // http:// URLs in dependencies
-            Regex::new(r#":\s*"http://[^"]*""#).unwrap(),
-            Regex::new(r#"registry\s*=\s*"http://[^"]*""#).unwrap(),
-            Regex::new(r"^http://").unwrap(),
+            Regex::new(r#":\s*"http://[^"]*""#).expect("DEP-004: invalid regex"),
+            Regex::new(r#"registry\s*=\s*"http://[^"]*""#).expect("DEP-004: invalid regex"),
+            Regex::new(r"^http://").expect("DEP-004: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap()],
+        exclusions: vec![
+            Regex::new(r"localhost|127\.0\.0\.1|::1").expect("DEP-004: invalid regex"),
+        ],
         message: "Insecure HTTP dependency URL detected: vulnerable to MITM attacks",
         recommendation: "Use HTTPS URLs for all dependencies",
         fix_hint: Some("Change http:// to https://"),
@@ -114,9 +120,10 @@ fn dep_005() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // Direct tarball URLs
-            Regex::new(r#":\s*"https?://[^"]*\.(tar\.gz|tgz|tar|zip)""#).unwrap(),
+            Regex::new(r#":\s*"https?://[^"]*\.(tar\.gz|tgz|tar|zip)""#)
+                .expect("DEP-005: invalid regex"),
             // file:// URLs
-            Regex::new(r#":\s*"file://[^"]*""#).unwrap(),
+            Regex::new(r#":\s*"file://[^"]*""#).expect("DEP-005: invalid regex"),
         ],
         exclusions: vec![],
         message: "Direct file/tarball dependency detected: bypasses package registry security",

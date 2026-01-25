@@ -14,12 +14,12 @@ fn ps_001() -> Rule {
         category: Category::Persistence,
         confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"\bcrontab\s+").unwrap(),
-            Regex::new(r"/etc/cron").unwrap(),
-            Regex::new(r"/var/spool/cron").unwrap(),
+            Regex::new(r"\bcrontab\s+").expect("PS-001: invalid regex"),
+            Regex::new(r"/etc/cron").expect("PS-001: invalid regex"),
+            Regex::new(r"/var/spool/cron").expect("PS-001: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"crontab\s+-l\b").unwrap(), // listing is less dangerous
+            Regex::new(r"crontab\s+-l\b").expect("PS-001: invalid regex"), // listing is less dangerous
         ],
         message: "Persistence mechanism: crontab manipulation detected",
         recommendation: "Skills should not modify scheduled tasks. Review the necessity of cron access",
@@ -39,10 +39,14 @@ fn ps_003() -> Rule {
         category: Category::Persistence,
         confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r">>\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r">\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r"echo\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
-            Regex::new(r"tee\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)").unwrap(),
+            Regex::new(r">>\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r">\s*.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r"echo\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
+            Regex::new(r"tee\s+.*\.(bashrc|bash_profile|zshrc|profile|zprofile)")
+                .expect("PS-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Persistence mechanism: shell profile modification detected",
@@ -64,18 +68,18 @@ fn ps_004() -> Rule {
         confidence: Confidence::Tentative,
         patterns: vec![
             // systemd
-            Regex::new(r"systemctl\s+(enable|start|daemon-reload)").unwrap(),
-            Regex::new(r"/etc/systemd/system/").unwrap(),
-            Regex::new(r"\.service\b").unwrap(),
+            Regex::new(r"systemctl\s+(enable|start|daemon-reload)").expect("PS-004: invalid regex"),
+            Regex::new(r"/etc/systemd/system/").expect("PS-004: invalid regex"),
+            Regex::new(r"\.service\b").expect("PS-004: invalid regex"),
             // launchd (macOS)
-            Regex::new(r"launchctl\s+(load|bootstrap|enable)").unwrap(),
-            Regex::new(r"~/Library/LaunchAgents/").unwrap(),
-            Regex::new(r"/Library/Launch(Agents|Daemons)/").unwrap(),
-            Regex::new(r"\.plist\b").unwrap(),
+            Regex::new(r"launchctl\s+(load|bootstrap|enable)").expect("PS-004: invalid regex"),
+            Regex::new(r"~/Library/LaunchAgents/").expect("PS-004: invalid regex"),
+            Regex::new(r"/Library/Launch(Agents|Daemons)/").expect("PS-004: invalid regex"),
+            Regex::new(r"\.plist\b").expect("PS-004: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"systemctl\s+status").unwrap(),
-            Regex::new(r"launchctl\s+list").unwrap(),
+            Regex::new(r"systemctl\s+status").expect("PS-004: invalid regex"),
+            Regex::new(r"launchctl\s+list").expect("PS-004: invalid regex"),
         ],
         message: "Persistence mechanism: system service registration detected",
         recommendation: "Skills should not register system services without explicit approval",
@@ -95,11 +99,11 @@ fn ps_005() -> Rule {
         category: Category::Persistence,
         confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r">>\s*.*authorized_keys").unwrap(),
-            Regex::new(r">\s*.*authorized_keys").unwrap(),
-            Regex::new(r"echo\s+.*authorized_keys").unwrap(),
-            Regex::new(r"tee\s+.*authorized_keys").unwrap(),
-            Regex::new(r"cat\s+.*>\s*.*authorized_keys").unwrap(),
+            Regex::new(r">>\s*.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r">\s*.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"echo\s+.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"tee\s+.*authorized_keys").expect("PS-005: invalid regex"),
+            Regex::new(r"cat\s+.*>\s*.*authorized_keys").expect("PS-005: invalid regex"),
         ],
         exclusions: vec![],
         message: "Persistence mechanism: authorized_keys modification detected",
@@ -119,26 +123,28 @@ fn ps_006() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // at command for delayed execution
-            Regex::new(r"\bat\s+(now|midnight|noon|\d)").unwrap(),
-            Regex::new(r"\|\s*at\s+(now|midnight|\d)").unwrap(),
+            Regex::new(r"\bat\s+(now|midnight|noon|\d)").expect("PS-006: invalid regex"),
+            Regex::new(r"\|\s*at\s+(now|midnight|\d)").expect("PS-006: invalid regex"),
             // batch command
-            Regex::new(r"\bbatch\b").unwrap(),
+            Regex::new(r"\bbatch\b").expect("PS-006: invalid regex"),
             // screen/tmux hidden sessions
-            Regex::new(r"screen\s+-[dDmS]+.*(-c|bash|sh|curl|wget|nc)").unwrap(),
-            Regex::new(r"tmux\s+(new-session|new)\s+-d").unwrap(),
+            Regex::new(r"screen\s+-[dDmS]+.*(-c|bash|sh|curl|wget|nc)")
+                .expect("PS-006: invalid regex"),
+            Regex::new(r"tmux\s+(new-session|new)\s+-d").expect("PS-006: invalid regex"),
             // nohup with suspicious commands
-            Regex::new(r"nohup\s+.*\b(curl|wget|nc|netcat|bash|sh)\b").unwrap(),
+            Regex::new(r"nohup\s+.*\b(curl|wget|nc|netcat|bash|sh)\b")
+                .expect("PS-006: invalid regex"),
             // disown to hide background processes
-            Regex::new(r"&\s*;\s*disown").unwrap(),
-            Regex::new(r"disown\s+-h").unwrap(),
+            Regex::new(r"&\s*;\s*disown").expect("PS-006: invalid regex"),
+            Regex::new(r"disown\s+-h").expect("PS-006: invalid regex"),
             // setsid for new session
-            Regex::new(r"setsid\s+.*\b(curl|wget|nc|bash|sh)\b").unwrap(),
+            Regex::new(r"setsid\s+.*\b(curl|wget|nc|bash|sh)\b").expect("PS-006: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"^\s*#").unwrap(),
+            Regex::new(r"^\s*#").expect("PS-006: invalid regex"),
             // Legitimate screen/tmux usage
-            Regex::new(r"screen\s+-r").unwrap(),
-            Regex::new(r"tmux\s+attach").unwrap(),
+            Regex::new(r"screen\s+-r").expect("PS-006: invalid regex"),
+            Regex::new(r"tmux\s+attach").expect("PS-006: invalid regex"),
         ],
         message: "Delayed or background execution detected. This can be used to evade detection or establish persistence.",
         recommendation: "Avoid scheduling background tasks. Use explicit, foreground execution that users can observe.",
@@ -157,21 +163,21 @@ fn ps_007() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // rc.local modification
-            Regex::new(r">\s*/etc/rc\.local").unwrap(),
-            Regex::new(r">>\s*/etc/rc\.local").unwrap(),
+            Regex::new(r">\s*/etc/rc\.local").expect("PS-007: invalid regex"),
+            Regex::new(r">>\s*/etc/rc\.local").expect("PS-007: invalid regex"),
             // init.d scripts
-            Regex::new(r">\s*/etc/init\.d/").unwrap(),
-            Regex::new(r"update-rc\.d").unwrap(),
-            Regex::new(r"chkconfig\s+--add").unwrap(),
+            Regex::new(r">\s*/etc/init\.d/").expect("PS-007: invalid regex"),
+            Regex::new(r"update-rc\.d").expect("PS-007: invalid regex"),
+            Regex::new(r"chkconfig\s+--add").expect("PS-007: invalid regex"),
             // XDG autostart
-            Regex::new(r"\.config/autostart/.*\.desktop").unwrap(),
-            Regex::new(r"/etc/xdg/autostart/").unwrap(),
+            Regex::new(r"\.config/autostart/.*\.desktop").expect("PS-007: invalid regex"),
+            Regex::new(r"/etc/xdg/autostart/").expect("PS-007: invalid regex"),
             // Windows-style (for WSL awareness)
-            Regex::new(r"HKEY.*\\Run").unwrap(),
+            Regex::new(r"HKEY.*\\Run").expect("PS-007: invalid regex"),
             // Login hooks (macOS)
-            Regex::new(r"defaults\s+write.*LoginHook").unwrap(),
+            Regex::new(r"defaults\s+write.*LoginHook").expect("PS-007: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"^\s*#").unwrap()],
+        exclusions: vec![Regex::new(r"^\s*#").expect("PS-007: invalid regex")],
         message: "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
         recommendation: "Skills should not modify system startup scripts or init configurations.",
         fix_hint: Some("Remove init system modifications. Provide manual setup instructions."),

@@ -14,9 +14,9 @@ fn op_001() -> Rule {
         category: Category::Overpermission,
         confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r"allowed-tools:\s*\*").unwrap(),
-            Regex::new(r#"allowed-tools:\s*["']\*["']"#).unwrap(),
-            Regex::new(r#""allowed-tools"\s*:\s*"\*""#).unwrap(),
+            Regex::new(r"allowed-tools:\s*\*").expect("OP-001: invalid regex"),
+            Regex::new(r#"allowed-tools:\s*["']\*["']"#).expect("OP-001: invalid regex"),
+            Regex::new(r#""allowed-tools"\s*:\s*"\*""#).expect("OP-001: invalid regex"),
         ],
         exclusions: vec![],
         message: "Overpermission: wildcard tool access grants unrestricted capabilities",

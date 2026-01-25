@@ -15,18 +15,20 @@ fn sl_001() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // AWS Access Key ID format: AKIA followed by 16 alphanumeric characters
-            Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+            Regex::new(r"AKIA[0-9A-Z]{16}").expect("SL-001: invalid regex"),
             // AWS Secret Access Key assignment
-            Regex::new(r#"aws_secret_access_key\s*[=:]\s*["'][A-Za-z0-9/+=]{40}["']"#).unwrap(),
+            Regex::new(r#"aws_secret_access_key\s*[=:]\s*["'][A-Za-z0-9/+=]{40}["']"#)
+                .expect("SL-001: invalid regex"),
             // AWS Access Key ID assignment
-            Regex::new(r#"aws_access_key_id\s*[=:]\s*["']AKIA[0-9A-Z]{16}["']"#).unwrap(),
+            Regex::new(r#"aws_access_key_id\s*[=:]\s*["']AKIA[0-9A-Z]{16}["']"#)
+                .expect("SL-001: invalid regex"),
         ],
         exclusions: vec![
             // Example/placeholder keys
-            Regex::new(r"AKIAIOSFODNN7EXAMPLE").unwrap(),
-            Regex::new(r"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY").unwrap(),
+            Regex::new(r"AKIAIOSFODNN7EXAMPLE").expect("SL-001: invalid regex"),
+            Regex::new(r"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY").expect("SL-001: invalid regex"),
             // Test files
-            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-001: invalid regex"),
         ],
         message: "AWS Access Key detected. This credential could allow unauthorized access to AWS resources.",
         recommendation: "Remove the key immediately, rotate it in AWS IAM console, and use environment variables or AWS Secrets Manager instead.",
@@ -47,21 +49,22 @@ fn sl_002() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // GitHub Personal Access Token (classic)
-            Regex::new(r"ghp_[A-Za-z0-9]{36}").unwrap(),
+            Regex::new(r"ghp_[A-Za-z0-9]{36}").expect("SL-002: invalid regex"),
             // GitHub OAuth Access Token
-            Regex::new(r"gho_[A-Za-z0-9]{36}").unwrap(),
+            Regex::new(r"gho_[A-Za-z0-9]{36}").expect("SL-002: invalid regex"),
             // GitHub User-to-Server Token
-            Regex::new(r"ghu_[A-Za-z0-9]{36}").unwrap(),
+            Regex::new(r"ghu_[A-Za-z0-9]{36}").expect("SL-002: invalid regex"),
             // GitHub Server-to-Server Token
-            Regex::new(r"ghs_[A-Za-z0-9]{36}").unwrap(),
+            Regex::new(r"ghs_[A-Za-z0-9]{36}").expect("SL-002: invalid regex"),
             // GitHub Refresh Token
-            Regex::new(r"ghr_[A-Za-z0-9]{36}").unwrap(),
+            Regex::new(r"ghr_[A-Za-z0-9]{36}").expect("SL-002: invalid regex"),
             // GitHub Fine-grained Personal Access Token
-            Regex::new(r"github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}").unwrap(),
+            Regex::new(r"github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}")
+                .expect("SL-002: invalid regex"),
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-002: invalid regex"),
         ],
         message: "GitHub Token detected. This token could allow unauthorized access to repositories.",
         recommendation: "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead.",
@@ -80,21 +83,21 @@ fn sl_003() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // OpenAI API Key (starts with sk-)
-            Regex::new(r"sk-[A-Za-z0-9]{48}").unwrap(),
+            Regex::new(r"sk-[A-Za-z0-9]{48}").expect("SL-003: invalid regex"),
             // OpenAI Project API Key
-            Regex::new(r"sk-proj-[A-Za-z0-9]{48}").unwrap(),
+            Regex::new(r"sk-proj-[A-Za-z0-9]{48}").expect("SL-003: invalid regex"),
             // Anthropic API Key
-            Regex::new(r"sk-ant-api[0-9]{2}-[A-Za-z0-9-]{86}").unwrap(),
+            Regex::new(r"sk-ant-api[0-9]{2}-[A-Za-z0-9-]{86}").expect("SL-003: invalid regex"),
             // Google AI/Gemini API Key
-            Regex::new(r"AIza[A-Za-z0-9_-]{35}").unwrap(),
+            Regex::new(r"AIza[A-Za-z0-9_-]{35}").expect("SL-003: invalid regex"),
             // Cohere API Key
-            Regex::new(r"[A-Za-z0-9]{40}").unwrap(),
+            Regex::new(r"[A-Za-z0-9]{40}").expect("SL-003: invalid regex"),
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example|placeholder").unwrap(),
+            Regex::new(r"test|mock|fake|dummy|example|placeholder").expect("SL-003: invalid regex"),
             // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
-            Regex::new(r"sha1|sha256|commit").unwrap(),
+            Regex::new(r"sha1|sha256|commit").expect("SL-003: invalid regex"),
         ],
         message: "AI API Key detected. This key could allow unauthorized API usage and incur costs.",
         recommendation: "Remove the key, rotate it in the respective service dashboard, and use environment variables instead.",
@@ -113,29 +116,35 @@ fn sl_004() -> Rule {
         confidence: Confidence::Tentative,
         patterns: vec![
             // API key assignments
-            Regex::new(r#"api[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            Regex::new(r#"api[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#)
+                .expect("SL-004: invalid regex"),
             // Secret key assignments
-            Regex::new(r#"secret[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            Regex::new(r#"secret[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#)
+                .expect("SL-004: invalid regex"),
             // Password assignments (but not password prompts)
-            Regex::new(r#"password\s*[=:]\s*["'][^"']{8,}["']"#).unwrap(),
+            Regex::new(r#"password\s*[=:]\s*["'][^"']{8,}["']"#).expect("SL-004: invalid regex"),
             // Access token assignments
-            Regex::new(r#"access[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            Regex::new(r#"access[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#)
+                .expect("SL-004: invalid regex"),
             // Auth token assignments
-            Regex::new(r#"auth[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            Regex::new(r#"auth[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#)
+                .expect("SL-004: invalid regex"),
             // Bearer token in code
-            Regex::new(r#"[Bb]earer\s+[A-Za-z0-9_-]{20,}"#).unwrap(),
+            Regex::new(r#"[Bb]earer\s+[A-Za-z0-9_-]{20,}"#).expect("SL-004: invalid regex"),
             // Basic auth with credentials
-            Regex::new(r#"[Bb]asic\s+[A-Za-z0-9+/=]{20,}"#).unwrap(),
+            Regex::new(r#"[Bb]asic\s+[A-Za-z0-9+/=]{20,}"#).expect("SL-004: invalid regex"),
         ],
         exclusions: vec![
             // Environment variable references (these are fine)
-            Regex::new(r"\$\{?[A-Z_]+\}?").unwrap(),
-            Regex::new(r"process\.env\.[A-Z_]+").unwrap(),
-            Regex::new(r"os\.environ").unwrap(),
+            Regex::new(r"\$\{?[A-Z_]+\}?").expect("SL-004: invalid regex"),
+            Regex::new(r"process\.env\.[A-Z_]+").expect("SL-004: invalid regex"),
+            Regex::new(r"os\.environ").expect("SL-004: invalid regex"),
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example|placeholder|your[_-]?").unwrap(),
+            Regex::new(r"test|mock|fake|dummy|example|placeholder|your[_-]?")
+                .expect("SL-004: invalid regex"),
             // Common password prompts/labels
-            Regex::new(r"enter.*password|password.*prompt|password.*input").unwrap(),
+            Regex::new(r"enter.*password|password.*prompt|password.*input")
+                .expect("SL-004: invalid regex"),
         ],
         message: "Hardcoded secret detected. Storing credentials in code is a security risk.",
         recommendation: "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control.",
@@ -154,21 +163,21 @@ fn sl_005() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // RSA Private Key
-            Regex::new(r"-----BEGIN RSA PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN RSA PRIVATE KEY-----").expect("SL-005: invalid regex"),
             // EC Private Key
-            Regex::new(r"-----BEGIN EC PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN EC PRIVATE KEY-----").expect("SL-005: invalid regex"),
             // OpenSSH Private Key
-            Regex::new(r"-----BEGIN OPENSSH PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN OPENSSH PRIVATE KEY-----").expect("SL-005: invalid regex"),
             // Generic Private Key
-            Regex::new(r"-----BEGIN PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN PRIVATE KEY-----").expect("SL-005: invalid regex"),
             // DSA Private Key
-            Regex::new(r"-----BEGIN DSA PRIVATE KEY-----").unwrap(),
+            Regex::new(r"-----BEGIN DSA PRIVATE KEY-----").expect("SL-005: invalid regex"),
             // PGP Private Key
-            Regex::new(r"-----BEGIN PGP PRIVATE KEY BLOCK-----").unwrap(),
+            Regex::new(r"-----BEGIN PGP PRIVATE KEY BLOCK-----").expect("SL-005: invalid regex"),
         ],
         exclusions: vec![
             // Test/example files
-            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-005: invalid regex"),
         ],
         message: "Private key detected. Private keys should never be committed to version control.",
         recommendation: "Remove the key from the repository history using git filter-branch or BFG Repo-Cleaner. Store keys securely outside of version control.",

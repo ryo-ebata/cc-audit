@@ -15,18 +15,18 @@ fn dk_001() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // --privileged flag
-            Regex::new(r"--privileged").unwrap(),
+            Regex::new(r"--privileged").expect("DK-001: invalid regex"),
             // privileged: true in compose
-            Regex::new(r"privileged:\s*true").unwrap(),
+            Regex::new(r"privileged:\s*true").expect("DK-001: invalid regex"),
             // CAP_SYS_ADMIN capability (multiline support with (?s))
-            Regex::new(r"(?s)cap_add:.*SYS_ADMIN").unwrap(),
-            Regex::new(r"--cap-add\s*=?\s*SYS_ADMIN").unwrap(),
+            Regex::new(r"(?s)cap_add:.*SYS_ADMIN").expect("DK-001: invalid regex"),
+            Regex::new(r"--cap-add\s*=?\s*SYS_ADMIN").expect("DK-001: invalid regex"),
             // All capabilities (multiline support)
-            Regex::new(r"(?s)cap_add:.*ALL\b").unwrap(),
-            Regex::new(r"--cap-add\s*=?\s*ALL").unwrap(),
+            Regex::new(r"(?s)cap_add:.*ALL\b").expect("DK-001: invalid regex"),
+            Regex::new(r"--cap-add\s*=?\s*ALL").expect("DK-001: invalid regex"),
             // Individual line match for YAML lists
-            Regex::new(r"-\s*SYS_ADMIN\s*$").unwrap(),
-            Regex::new(r"-\s*ALL\s*$").unwrap(),
+            Regex::new(r"-\s*SYS_ADMIN\s*$").expect("DK-001: invalid regex"),
+            Regex::new(r"-\s*ALL\s*$").expect("DK-001: invalid regex"),
         ],
         exclusions: vec![],
         message: "Privileged container detected. This grants full host access and is a major security risk.",
@@ -46,16 +46,16 @@ fn dk_002() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // USER root (multiline mode with (?m))
-            Regex::new(r"(?im)^USER\s+root\s*$").unwrap(),
+            Regex::new(r"(?im)^USER\s+root\s*$").expect("DK-002: invalid regex"),
             // USER 0
-            Regex::new(r"(?m)^USER\s+0\s*$").unwrap(),
+            Regex::new(r"(?m)^USER\s+0\s*$").expect("DK-002: invalid regex"),
             // user: root in compose
-            Regex::new(r#"user:\s*["']?root["']?"#).unwrap(),
-            Regex::new(r#"user:\s*["']?0["']?"#).unwrap(),
+            Regex::new(r#"user:\s*["']?root["']?"#).expect("DK-002: invalid regex"),
+            Regex::new(r#"user:\s*["']?0["']?"#).expect("DK-002: invalid regex"),
         ],
         exclusions: vec![
             // Comment lines
-            Regex::new(r"^\s*#").unwrap(),
+            Regex::new(r"^\s*#").expect("DK-002: invalid regex"),
         ],
         message: "Container running as root user detected. This increases the attack surface if container is compromised.",
         recommendation: "Add a USER instruction to run as a non-root user. Example: USER nobody or USER 1000:1000",
@@ -74,20 +74,24 @@ fn dk_003() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // curl | bash/sh in RUN
-            Regex::new(r"RUN\s+.*curl\s+[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"RUN\s+.*curl\s+[^|]*\|\s*(bash|sh|zsh)").expect("DK-003: invalid regex"),
             // wget with output to stdout piped to shell (various formats)
-            Regex::new(r"RUN\s+.*wget\s+[^|]*-[a-zA-Z]*O-[^|]*\|\s*(bash|sh|zsh)").unwrap(),
-            Regex::new(r"RUN\s+.*wget\s+[^|]*-O\s*-[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"RUN\s+.*wget\s+[^|]*-[a-zA-Z]*O-[^|]*\|\s*(bash|sh|zsh)")
+                .expect("DK-003: invalid regex"),
+            Regex::new(r"RUN\s+.*wget\s+[^|]*-O\s*-[^|]*\|\s*(bash|sh|zsh)")
+                .expect("DK-003: invalid regex"),
             // wget -qO- pattern (common)
-            Regex::new(r"wget\s+-[a-zA-Z]*O-\s+[^|]*\|\s*(bash|sh)").unwrap(),
+            Regex::new(r"wget\s+-[a-zA-Z]*O-\s+[^|]*\|\s*(bash|sh)")
+                .expect("DK-003: invalid regex"),
             // curl ... && bash
-            Regex::new(r"RUN\s+.*curl.*&&\s*(bash|sh)\s").unwrap(),
+            Regex::new(r"RUN\s+.*curl.*&&\s*(bash|sh)\s").expect("DK-003: invalid regex"),
             // Multi-line RUN with pipe to shell (common pattern)
-            Regex::new(r"curl\s+-[a-zA-Z]*[sS][a-zA-Z]*\s+[^|]*\|\s*(bash|sh)").unwrap(),
+            Regex::new(r"curl\s+-[a-zA-Z]*[sS][a-zA-Z]*\s+[^|]*\|\s*(bash|sh)")
+                .expect("DK-003: invalid regex"),
         ],
         exclusions: vec![
             // localhost is generally safe
-            Regex::new(r"localhost|127\.0\.0\.1").unwrap(),
+            Regex::new(r"localhost|127\.0\.0\.1").expect("DK-003: invalid regex"),
         ],
         message: "Remote script execution in Dockerfile RUN instruction. This is a supply chain attack vector.",
         recommendation: "Download scripts first, verify checksums, then execute. Better: use package managers.",

@@ -220,6 +220,372 @@ cc-audit ./skill/ --format json
 }
 ```
 
+## Custom Rules
+
+You can define your own detection rules using a YAML configuration file.
+
+### YAML Format
+
+```yaml
+version: "1"
+rules:
+  - id: "CUSTOM-001"
+    name: "Internal API endpoint access"
+    description: "Detects access to internal API endpoints"
+    severity: "high"            # critical, high, medium, low
+    category: "exfiltration"    # See categories below
+    confidence: "firm"          # certain, firm, tentative (default: firm)
+    patterns:
+      - 'https?://internal\.company\.com'
+      - 'api\.internal\.'
+    exclusions:                 # Optional: patterns to exclude
+      - 'localhost'
+      - '127\.0\.0\.1'
+    message: "Access to internal API endpoint detected"
+    recommendation: "Ensure this access is authorized and necessary"
+    fix_hint: "Remove or replace with public API endpoint"  # Optional
+    cwe:                        # Optional: CWE IDs
+      - "CWE-200"
+```
+
+### Available Categories
+
+| Category | Aliases |
+|----------|---------|
+| `exfiltration` | `data-exfiltration` |
+| `privilege-escalation` | `privilege` |
+| `persistence` | — |
+| `prompt-injection` | `injection` |
+| `overpermission` | `permission` |
+| `obfuscation` | — |
+| `supply-chain` | `supplychain` |
+| `secret-leak` | `secrets`, `secretleak` |
+
+### Usage
+
+```bash
+cc-audit ./my-skill/ --custom-rules ./my-rules.yaml
+```
+
+## Malware Signatures Database
+
+cc-audit includes a built-in malware signature database. You can also provide your own.
+
+### JSON Format
+
+```json
+{
+  "version": "1.0.0",
+  "updated_at": "2026-01-25",
+  "signatures": [
+    {
+      "id": "MW-CUSTOM-001",
+      "name": "Custom C2 beacon pattern",
+      "description": "Detects communication with known C2 server",
+      "pattern": "https?://malicious-c2\\.example\\.com",
+      "severity": "critical",
+      "category": "exfiltration",
+      "confidence": "certain",
+      "reference": "https://example.com/threat-intel"
+    }
+  ]
+}
+```
+
+### Built-in Signatures
+
+| ID | Name | Severity |
+|----|------|----------|
+| MW-001 | C2 Beacon Pattern | Critical |
+| MW-002 | Reverse Shell (Bash TCP) | Critical |
+| MW-003 | Cryptocurrency Miner | Critical |
+| MW-004 | Known Malicious Domain | Critical |
+| MW-005 | AWS Credential Harvesting | Critical |
+| MW-006 | Browser Data Theft | Critical |
+| MW-007 | Keylogger Installation | Critical |
+| MW-008 | Hidden File in Home Directory | High |
+| MW-009 | Process Injection (Linux) | Critical |
+| MW-010 | Anti-Analysis VM Detection | High |
+
+### Usage
+
+```bash
+# Use custom malware database
+cc-audit ./my-skill/ --malware-db ./custom-signatures.json
+
+# Disable malware scanning
+cc-audit ./my-skill/ --no-malware-scan
+```
+
+## Detection Rules Reference
+
+### Exfiltration (EX)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| EX-001 | Network request with env var | Critical | Detects `curl`/`wget` with environment variables |
+| EX-002 | Base64 encoded transmission | Critical | Detects base64-encoded data in network requests |
+| EX-003 | DNS-based exfiltration | High | Detects DNS tunneling patterns |
+| EX-005 | Netcat outbound connection | Critical | Detects `nc` connections to external hosts |
+| EX-006 | Cloud storage exfiltration | High | Detects uploads to S3, GCS, Azure Blob |
+| EX-007 | FTP/SFTP exfiltration | High | Detects FTP-based data transfers |
+
+### Privilege Escalation (PE)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| PE-001 | Sudo execution | Critical | Detects sudo command usage |
+| PE-002 | Destructive root deletion | Critical | Detects `rm -rf /` and similar |
+| PE-003 | Insecure permission change | Critical | Detects `chmod 777` patterns |
+| PE-004 | System password file access | Critical | Detects access to `/etc/passwd`, `/etc/shadow` |
+| PE-005 | SSH directory access | Critical | Detects reading of SSH private keys |
+
+### Persistence (PS)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| PS-001 | Crontab manipulation | Critical | Detects crontab modifications |
+| PS-003 | Shell profile modification | Critical | Detects writes to `.bashrc`, `.zshrc` |
+| PS-004 | System service registration | Critical | Detects systemd/launchd service creation |
+| PS-005 | SSH authorized_keys modification | Critical | Detects SSH key injection |
+| PS-006 | Init script modification | Critical | Detects init.d modifications |
+| PS-007 | Background process execution | Critical | Detects `nohup`, `setsid`, `&` patterns |
+
+### Prompt Injection (PI)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| PI-001 | Ignore instructions pattern | High | Detects "ignore previous instructions" |
+| PI-002 | Hidden HTML instructions | High | Detects instructions in HTML comments |
+| PI-003 | Invisible Unicode characters | High | Detects zero-width characters |
+
+### Overpermission (OP)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| OP-001 | Wildcard tool permission | High | Detects `allowed-tools: *` |
+
+### Obfuscation (OB)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| OB-001 | Eval with variable | High | Detects `eval $VAR` patterns |
+| OB-002 | Base64 decode execution | High | Detects `base64 -d \| bash` |
+| OB-003 | Hex/Octal execution | High | Detects encoded shell commands |
+| OB-004 | String manipulation | Medium | Detects `rev`, `cut` obfuscation |
+| OB-005 | Environment variable tricks | Medium | Detects variable substitution tricks |
+| OB-006 | File descriptor manipulation | Medium | Detects `exec 3<>` patterns |
+
+### Supply Chain (SC)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| SC-001 | curl pipe to shell | Critical | Detects `curl ... \| bash` |
+| SC-002 | wget pipe to shell | Critical | Detects `wget ... \| bash` |
+| SC-003 | Untrusted package source | High | Detects insecure pip/npm sources |
+
+### Secret Leak (SL)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| SL-001 | AWS Access Key | Critical | Detects `AKIA...` patterns |
+| SL-002 | GitHub Token | Critical | Detects `ghp_`, `gho_`, etc. |
+| SL-003 | AI API Key | Critical | Detects Anthropic/OpenAI keys |
+| SL-004 | Private Key | Critical | Detects PEM private keys |
+| SL-005 | Credential in URL | Critical | Detects `user:pass@host` |
+
+### Docker (DK)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| DK-001 | Privileged container | Critical | Detects `--privileged` flag |
+| DK-002 | Running as root | High | Detects `USER root` |
+| DK-003 | Remote script in RUN | Critical | Detects `RUN curl \| bash` |
+
+### Dependency (DEP)
+
+| ID | Name | Severity | Description |
+|----|------|----------|-------------|
+| DEP-001 | Dangerous lifecycle scripts | High | Detects malicious npm scripts |
+| DEP-002 | Unpinned version | Medium | Detects `*` or `latest` versions |
+| DEP-003 | Insecure package source | High | Detects HTTP package URLs |
+| DEP-004 | Deprecated package | Medium | Detects known deprecated packages |
+| DEP-005 | Known vulnerable version | Critical | Detects packages with known CVEs |
+
+## CI/CD Integration
+
+### GitHub Actions
+
+Create `.github/workflows/cc-audit.yml`:
+
+```yaml
+name: cc-audit Security Scan
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.claude/**'
+      - 'mcp.json'
+      - 'package.json'
+      - 'Cargo.toml'
+  pull_request:
+    paths:
+      - '.claude/**'
+      - 'mcp.json'
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cc-audit
+        run: cargo install cc-audit
+
+      - name: Scan Skills
+        run: cc-audit --type skill --ci --format sarif .claude/skills/ > skills.sarif
+        continue-on-error: true
+
+      - name: Scan MCP Configuration
+        run: cc-audit --type mcp --ci mcp.json
+        continue-on-error: true
+
+      - name: Scan Dependencies
+        run: cc-audit --type dependency --ci ./
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: skills.sarif
+        if: always()
+```
+
+### GitLab CI
+
+```yaml
+cc-audit:
+  stage: security
+  image: rust:latest
+  before_script:
+    - cargo install cc-audit
+  script:
+    - cc-audit --type skill --ci .claude/
+    - cc-audit --type mcp --ci mcp.json
+    - cc-audit --type dependency --ci ./
+  allow_failure: false
+```
+
+### Pre-commit Hook
+
+```bash
+# Install hook in your project
+cc-audit --init-hook .
+
+# Remove hook
+cc-audit --remove-hook .
+```
+
+The pre-commit hook automatically scans staged files before each commit.
+
+## Troubleshooting
+
+### Common Issues
+
+**"No files found to scan"**
+
+```bash
+# Check if the path exists and contains scannable files
+ls -la ./my-skill/
+
+# Use recursive mode for nested directories
+cc-audit --recursive ./my-skill/
+```
+
+**"Permission denied"**
+
+```bash
+# Ensure read permissions on target files
+chmod -R +r ./my-skill/
+```
+
+**High false positive rate**
+
+```bash
+# Increase minimum confidence level
+cc-audit --min-confidence firm ./my-skill/
+
+# Or use certain for highest precision
+cc-audit --min-confidence certain ./my-skill/
+
+# Skip comment lines (reduces false positives in documentation)
+cc-audit --skip-comments ./my-skill/
+```
+
+**Scan is too slow**
+
+```bash
+# Exclude test directories
+cc-audit ./my-skill/  # (tests excluded by default)
+
+# Explicitly include if needed
+cc-audit --include-tests ./my-skill/
+
+# Exclude node_modules (excluded by default)
+cc-audit ./my-skill/
+```
+
+**Custom rules not loading**
+
+```bash
+# Validate YAML syntax
+cat ./my-rules.yaml | python -c "import yaml, sys; yaml.safe_load(sys.stdin)"
+
+# Check for required fields: id, name, severity, category, patterns, message, recommendation
+```
+
+### Exit Code Reference
+
+| Code | Meaning | Action |
+|------|---------|--------|
+| 0 | Clean scan | Safe to proceed |
+| 1 | Issues found | Review findings before installation |
+| 2 | Scan error | Check file paths and permissions |
+
+## FAQ
+
+**Q: Does cc-audit send any data externally?**
+
+A: No. cc-audit runs entirely locally. No data is transmitted to external servers.
+
+**Q: Can I use cc-audit in air-gapped environments?**
+
+A: Yes. Once installed, cc-audit works completely offline with no network dependencies.
+
+**Q: How do I suppress specific rules?**
+
+A: Currently, you can use `--min-confidence` to filter by confidence level. Rule-specific suppression is planned for v1.0.0.
+
+**Q: Does cc-audit scan binary files?**
+
+A: No. cc-audit only scans text-based files (scripts, configs, markdown, JSON, YAML, etc.).
+
+**Q: Can I scan remote repositories directly?**
+
+A: Not yet. Clone the repository first, then scan locally. Remote scanning is planned for v1.0.0.
+
+**Q: What's the difference between `--strict` and default mode?**
+
+A: Default mode only reports critical and high severity findings. `--strict` includes medium and low severity findings as well.
+
+**Q: How often is the malware signature database updated?**
+
+A: The built-in database is updated with each release. You can supplement it with your own signatures using `--malware-db`.
+
+**Q: Can I contribute new detection rules?**
+
+A: Yes! See our [Contributing Guide](CONTRIBUTING.md). Rule contributions are especially welcome.
+
 ## Roadmap
 
 - [x] **v0.1.0** — Skills scanning, 12 built-in rules, terminal/JSON output

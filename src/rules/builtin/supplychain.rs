@@ -15,26 +15,28 @@ fn sc_001() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // curl | bash/sh/zsh (basic)
-            Regex::new(r"curl\s+[^|]*\|\s*(bash|sh|zsh|dash)").unwrap(),
+            Regex::new(r"curl\s+[^|]*\|\s*(bash|sh|zsh|dash)").expect("SC-001: invalid regex"),
             // curl | sudo bash/sh
-            Regex::new(r"curl\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)").unwrap(),
+            Regex::new(r"curl\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)")
+                .expect("SC-001: invalid regex"),
             // curl -s | bash
-            Regex::new(r"curl\s+-[a-zA-Z]*s[a-zA-Z]*\s+[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"curl\s+-[a-zA-Z]*s[a-zA-Z]*\s+[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-001: invalid regex"),
             // curl -sSL | bash (common installer pattern)
             Regex::new(r"curl\s+-[a-zA-Z]*[sS]+[a-zA-Z]*L?[a-zA-Z]*\s+[^|]*\|\s*(bash|sh|zsh)")
-                .unwrap(),
+                .expect("SC-001: invalid regex"),
             // curl | python (also dangerous)
-            Regex::new(r"curl\s+[^|]*\|\s*python").unwrap(),
+            Regex::new(r"curl\s+[^|]*\|\s*python").expect("SC-001: invalid regex"),
             // bash -c "$(curl ...)"
-            Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(curl"#).unwrap(),
+            Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(curl"#).expect("SC-001: invalid regex"),
             // source <(curl ...)
-            Regex::new(r"source\s+<\(curl").unwrap(),
+            Regex::new(r"source\s+<\(curl").expect("SC-001: invalid regex"),
             // . <(curl ...)
-            Regex::new(r"\.\s+<\(curl").unwrap(),
+            Regex::new(r"\.\s+<\(curl").expect("SC-001: invalid regex"),
         ],
         exclusions: vec![
             // localhost is generally safe
-            Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap(),
+            Regex::new(r"localhost|127\.0\.0\.1|::1").expect("SC-001: invalid regex"),
         ],
         message: "Remote script execution via curl detected. This is a common supply chain attack vector where malicious code can be injected.",
         recommendation: "Download the script first, review it, then execute. Use checksums to verify integrity.",
@@ -55,17 +57,21 @@ fn sc_002() -> Rule {
         confidence: Confidence::Certain,
         patterns: vec![
             // wget -O- | bash/sh
-            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
             // wget -qO- | bash
-            Regex::new(r"wget\s+[^|]*-[a-zA-Z]*q[a-zA-Z]*O\s*-[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"wget\s+[^|]*-[a-zA-Z]*q[a-zA-Z]*O\s*-[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
             // wget --quiet -O - | bash
-            Regex::new(r"wget\s+[^|]*--quiet[^|]*-O\s+-[^|]*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"wget\s+[^|]*--quiet[^|]*-O\s+-[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
             // wget | sudo bash/sh
-            Regex::new(r"wget\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)").unwrap(),
+            Regex::new(r"wget\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
             // bash -c "$(wget ...)"
-            Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(wget"#).unwrap(),
+            Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(wget"#).expect("SC-002: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap()],
+        exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").expect("SC-002: invalid regex")],
         message: "Remote script execution via wget detected. This is a common supply chain attack vector.",
         recommendation: "Download the script first, review it, then execute. Use checksums to verify integrity.",
         fix_hint: Some(
@@ -85,29 +91,30 @@ fn sc_003() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // pip install from HTTP (not HTTPS)
-            Regex::new(r"pip3?\s+install\s+.*--index-url\s+http://").unwrap(),
-            Regex::new(r"pip3?\s+install\s+.*-i\s+http://").unwrap(),
+            Regex::new(r"pip3?\s+install\s+.*--index-url\s+http://")
+                .expect("SC-003: invalid regex"),
+            Regex::new(r"pip3?\s+install\s+.*-i\s+http://").expect("SC-003: invalid regex"),
             // pip install from git over HTTP
-            Regex::new(r"pip3?\s+install\s+git\+http://").unwrap(),
+            Regex::new(r"pip3?\s+install\s+git\+http://").expect("SC-003: invalid regex"),
             // npm install from HTTP registry
-            Regex::new(r"npm\s+.*--registry\s+http://").unwrap(),
+            Regex::new(r"npm\s+.*--registry\s+http://").expect("SC-003: invalid regex"),
             // npm install from git URL (insecure protocol)
-            Regex::new(r"npm\s+install\s+git://").unwrap(),
-            Regex::new(r"npm\s+install\s+git\+http://").unwrap(),
+            Regex::new(r"npm\s+install\s+git://").expect("SC-003: invalid regex"),
+            Regex::new(r"npm\s+install\s+git\+http://").expect("SC-003: invalid regex"),
             // yarn with HTTP registry
-            Regex::new(r"yarn\s+.*--registry\s+http://").unwrap(),
+            Regex::new(r"yarn\s+.*--registry\s+http://").expect("SC-003: invalid regex"),
             // gem install from HTTP source
-            Regex::new(r"gem\s+install\s+.*--source\s+http://").unwrap(),
+            Regex::new(r"gem\s+install\s+.*--source\s+http://").expect("SC-003: invalid regex"),
             // cargo install from git with HTTP
-            Regex::new(r"cargo\s+install\s+--git\s+http://").unwrap(),
+            Regex::new(r"cargo\s+install\s+--git\s+http://").expect("SC-003: invalid regex"),
             // pip install with --trusted-host (often used to bypass HTTPS)
-            Regex::new(r"pip3?\s+install\s+.*--trusted-host").unwrap(),
+            Regex::new(r"pip3?\s+install\s+.*--trusted-host").expect("SC-003: invalid regex"),
         ],
         exclusions: vec![
             // localhost/internal registries are often legitimate
-            Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap(),
+            Regex::new(r"localhost|127\.0\.0\.1|::1").expect("SC-003: invalid regex"),
             // Private registries with common naming
-            Regex::new(r"registry\.(internal|corp|local)").unwrap(),
+            Regex::new(r"registry\.(internal|corp|local)").expect("SC-003: invalid regex"),
         ],
         message: "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
         recommendation: "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning.",

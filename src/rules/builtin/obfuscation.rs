@@ -14,11 +14,11 @@ fn ob_001() -> Rule {
         category: Category::Obfuscation,
         confidence: Confidence::Firm,
         patterns: vec![
-            Regex::new(r"eval\s+.*\$").unwrap(),
-            Regex::new(r#"eval\s+["'].*\$"#).unwrap(),
-            Regex::new(r"eval\s*\(.*\$").unwrap(),
-            Regex::new(r"exec\s*\(.*\$").unwrap(),
-            Regex::new(r"Function\s*\(.*\$").unwrap(),
+            Regex::new(r"eval\s+.*\$").expect("OB-001: invalid regex"),
+            Regex::new(r#"eval\s+["'].*\$"#).expect("OB-001: invalid regex"),
+            Regex::new(r"eval\s*\(.*\$").expect("OB-001: invalid regex"),
+            Regex::new(r"exec\s*\(.*\$").expect("OB-001: invalid regex"),
+            Regex::new(r"Function\s*\(.*\$").expect("OB-001: invalid regex"),
         ],
         exclusions: vec![],
         message: "Potential obfuscation: eval with variable expansion can execute arbitrary code",
@@ -40,13 +40,15 @@ fn ob_002() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"base64\s+(-d|--decode).*\|\s*(bash|sh|zsh|python|perl|ruby|node)")
-                .unwrap(),
-            Regex::new(r"base64\s+(-d|--decode).*\|\s*eval").unwrap(),
-            Regex::new(r"echo\s+.*\|\s*base64\s+(-d|--decode)\s*\|").unwrap(),
-            Regex::new(r"atob\s*\(").unwrap(),
-            Regex::new(r#"Buffer\.from\s*\([^,]+,\s*['"]base64['"]"#).unwrap(),
+                .expect("OB-002: invalid regex"),
+            Regex::new(r"base64\s+(-d|--decode).*\|\s*eval").expect("OB-002: invalid regex"),
+            Regex::new(r"echo\s+.*\|\s*base64\s+(-d|--decode)\s*\|")
+                .expect("OB-002: invalid regex"),
+            Regex::new(r"atob\s*\(").expect("OB-002: invalid regex"),
+            Regex::new(r#"Buffer\.from\s*\([^,]+,\s*['"]base64['"]"#)
+                .expect("OB-002: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"#.*base64").unwrap()],
+        exclusions: vec![Regex::new(r"#.*base64").expect("OB-002: invalid regex")],
         message: "Potential obfuscation: base64 decode piped to execution",
         recommendation: "Decode and review the base64 content before execution",
         fix_hint: Some("Decode first: base64 -d file.txt > script.sh, review, then execute"),
@@ -64,24 +66,27 @@ fn ob_003() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // echo -e with hex escape sequences piped to execution
-            Regex::new(r"echo\s+-e\s+.*\\x[0-9a-fA-F]{2}.*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"echo\s+-e\s+.*\\x[0-9a-fA-F]{2}.*\|\s*(bash|sh|zsh)")
+                .expect("OB-003: invalid regex"),
             // bash -c with hex encoded content
-            Regex::new(r"bash\s+-c\s+.*\\x[0-9a-fA-F]{2}").unwrap(),
+            Regex::new(r"bash\s+-c\s+.*\\x[0-9a-fA-F]{2}").expect("OB-003: invalid regex"),
             // $'...' quoting with escape sequences
-            Regex::new(r"\$'.*\\x[0-9a-fA-F]{2}").unwrap(),
+            Regex::new(r"\$'.*\\x[0-9a-fA-F]{2}").expect("OB-003: invalid regex"),
             // Octal encoding
-            Regex::new(r"echo\s+-e\s+.*\\[0-7]{3}.*\|\s*(bash|sh|zsh)").unwrap(),
+            Regex::new(r"echo\s+-e\s+.*\\[0-7]{3}.*\|\s*(bash|sh|zsh)")
+                .expect("OB-003: invalid regex"),
             // printf with hex/octal
-            Regex::new(r"printf\s+.*\\x[0-9a-fA-F]{2}.*\)\s*(https?:|[A-Za-z])").unwrap(),
+            Regex::new(r"printf\s+.*\\x[0-9a-fA-F]{2}.*\)\s*(https?:|[A-Za-z])")
+                .expect("OB-003: invalid regex"),
             // xxd reverse (hex to binary)
-            Regex::new(r"xxd\s+-r.*\|\s*(bash|sh|zsh|eval)").unwrap(),
+            Regex::new(r"xxd\s+-r.*\|\s*(bash|sh|zsh|eval)").expect("OB-003: invalid regex"),
             // Python chr() obfuscation
-            Regex::new(r"''.join\s*\(\s*\[\s*chr\s*\(").unwrap(),
-            Regex::new(r"exec\s*\(\s*''.join").unwrap(),
+            Regex::new(r"''.join\s*\(\s*\[\s*chr\s*\(").expect("OB-003: invalid regex"),
+            Regex::new(r"exec\s*\(\s*''.join").expect("OB-003: invalid regex"),
         ],
         exclusions: vec![
             // Comments
-            Regex::new(r"^\s*#").unwrap(),
+            Regex::new(r"^\s*#").expect("OB-003: invalid regex"),
         ],
         message: "Potential obfuscation: hex/octal encoded command execution detected. This technique is commonly used to hide malicious commands.",
         recommendation: "Decode the hex/octal content to inspect the actual command. Avoid executing encoded content.",
@@ -102,25 +107,25 @@ fn ob_004() -> Rule {
         confidence: Confidence::Tentative,
         patterns: vec![
             // rev trick to reverse command names
-            Regex::new(r"\$\(.*\|\s*rev\s*\)").unwrap(),
-            Regex::new(r"`.*\|\s*rev`").unwrap(),
+            Regex::new(r"\$\(.*\|\s*rev\s*\)").expect("OB-004: invalid regex"),
+            Regex::new(r"`.*\|\s*rev`").expect("OB-004: invalid regex"),
             // String slicing in bash: ${var:start:length}
-            Regex::new(r"\$\{[^}]+:[0-9]+:[0-9]+\}.*https?://").unwrap(),
+            Regex::new(r"\$\{[^}]+:[0-9]+:[0-9]+\}.*https?://").expect("OB-004: invalid regex"),
             // Array joining to build commands
-            Regex::new(r#""\$\{[^}]+\[\*\]\}"\s+https?://"#).unwrap(),
+            Regex::new(r#""\$\{[^}]+\[\*\]\}"\s+https?://"#).expect("OB-004: invalid regex"),
             // IFS manipulation
-            Regex::new(r"IFS\s*=.*read.*<<<").unwrap(),
+            Regex::new(r"IFS\s*=.*read.*<<<").expect("OB-004: invalid regex"),
             // Indirect variable reference
-            Regex::new(r"\$\{![^}]+\}.*https?://").unwrap(),
+            Regex::new(r"\$\{![^}]+\}.*https?://").expect("OB-004: invalid regex"),
             // tr for character substitution building commands
-            Regex::new(r"tr\s+.*\|\s*(bash|sh|eval)").unwrap(),
+            Regex::new(r"tr\s+.*\|\s*(bash|sh|eval)").expect("OB-004: invalid regex"),
             // sed/awk for command transformation
-            Regex::new(r"(sed|awk).*\|\s*(bash|sh|eval)").unwrap(),
+            Regex::new(r"(sed|awk).*\|\s*(bash|sh|eval)").expect("OB-004: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"^\s*#").unwrap(),
+            Regex::new(r"^\s*#").expect("OB-004: invalid regex"),
             // Common legitimate uses
-            Regex::new(r"rev\s+<\s*[^|]+$").unwrap(),
+            Regex::new(r"rev\s+<\s*[^|]+$").expect("OB-004: invalid regex"),
         ],
         message: "Potential obfuscation: command construction via string manipulation detected. This technique can hide the actual command being executed.",
         recommendation: "Review the string manipulation to understand what command is being constructed.",
@@ -139,32 +144,35 @@ fn ob_005() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // Python compile() for dynamic execution
-            Regex::new(r#"compile\s*\([^)]*['\"][^'\"]*os\.(system|popen|exec)"#).unwrap(),
-            Regex::new(r#"compile\s*\([^)]*['\"][^'\"]*subprocess"#).unwrap(),
+            Regex::new(r#"compile\s*\([^)]*['\"][^'\"]*os\.(system|popen|exec)"#)
+                .expect("OB-005: invalid regex"),
+            Regex::new(r#"compile\s*\([^)]*['\"][^'\"]*subprocess"#)
+                .expect("OB-005: invalid regex"),
             // Python __import__ for dynamic imports
-            Regex::new(r#"__import__\s*\(\s*['\"]os['\"]"#).unwrap(),
-            Regex::new(r#"__import__\s*\(\s*['\"]subprocess['\"]"#).unwrap(),
-            Regex::new(r#"__import__\s*\(\s*['\"]socket['\"]"#).unwrap(),
+            Regex::new(r#"__import__\s*\(\s*['\"]os['\"]"#).expect("OB-005: invalid regex"),
+            Regex::new(r#"__import__\s*\(\s*['\"]subprocess['\"]"#).expect("OB-005: invalid regex"),
+            Regex::new(r#"__import__\s*\(\s*['\"]socket['\"]"#).expect("OB-005: invalid regex"),
             // Python getattr for method access obfuscation
-            Regex::new(r#"getattr\s*\([^)]*,\s*['\"]system['\"]"#).unwrap(),
-            Regex::new(r#"getattr\s*\([^)]*,\s*['\"]popen['\"]"#).unwrap(),
+            Regex::new(r#"getattr\s*\([^)]*,\s*['\"]system['\"]"#).expect("OB-005: invalid regex"),
+            Regex::new(r#"getattr\s*\([^)]*,\s*['\"]popen['\"]"#).expect("OB-005: invalid regex"),
             // Node.js vm module
-            Regex::new(r"vm\.run(In(This)?Context|InNewContext)\s*\(").unwrap(),
+            Regex::new(r"vm\.run(In(This)?Context|InNewContext)\s*\(")
+                .expect("OB-005: invalid regex"),
             // Node.js new Function
-            Regex::new(r"new\s+Function\s*\([^)]*require").unwrap(),
+            Regex::new(r"new\s+Function\s*\([^)]*require").expect("OB-005: invalid regex"),
             // Node.js dynamic require
-            Regex::new(r#"require\s*\(\s*[^'"][^)]+\)"#).unwrap(),
+            Regex::new(r#"require\s*\(\s*[^'"][^)]+\)"#).expect("OB-005: invalid regex"),
             // Python globals/locals manipulation
-            Regex::new(r#"globals\s*\(\s*\)\s*\[.*exec"#).unwrap(),
-            Regex::new(r#"locals\s*\(\s*\)\s*\["#).unwrap(),
+            Regex::new(r#"globals\s*\(\s*\)\s*\[.*exec"#).expect("OB-005: invalid regex"),
+            Regex::new(r#"locals\s*\(\s*\)\s*\["#).expect("OB-005: invalid regex"),
             // Python pickle (code execution via deserialization)
-            Regex::new(r"pickle\.loads?\s*\(").unwrap(),
+            Regex::new(r"pickle\.loads?\s*\(").expect("OB-005: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"^\s*#").unwrap(),
-            Regex::new(r"^\s*//").unwrap(),
+            Regex::new(r"^\s*#").expect("OB-005: invalid regex"),
+            Regex::new(r"^\s*//").expect("OB-005: invalid regex"),
             // Safe require patterns
-            Regex::new(r#"require\s*\(\s*['\"]"#).unwrap(),
+            Regex::new(r#"require\s*\(\s*['\"]"#).expect("OB-005: invalid regex"),
         ],
         message: "Dynamic code execution pattern detected. This can be used to hide malicious intent or execute arbitrary code.",
         recommendation: "Avoid dynamic code execution. Use explicit imports and direct function calls instead.",
@@ -185,22 +193,29 @@ fn ob_006() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // base32 decode and execute
-            Regex::new(r"base32\s+(-d|--decode).*\|\s*(bash|sh|zsh|eval)").unwrap(),
-            Regex::new(r"\|\s*base32\s+(-d|--decode)\s*\|\s*(bash|sh)").unwrap(),
+            Regex::new(r"base32\s+(-d|--decode).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
+            Regex::new(r"\|\s*base32\s+(-d|--decode)\s*\|\s*(bash|sh)")
+                .expect("OB-006: invalid regex"),
             // ROT13 (tr command)
-            Regex::new(r#"tr\s+['"]A-Za-z['"]\s+['"]N-ZA-Mn-za-m['"]\s*\|\s*(bash|sh)"#).unwrap(),
+            Regex::new(r#"tr\s+['"]A-Za-z['"]\s+['"]N-ZA-Mn-za-m['"]\s*\|\s*(bash|sh)"#)
+                .expect("OB-006: invalid regex"),
             // gzip/gunzip pipe to execution
-            Regex::new(r"(gunzip|gzip\s+-d|zcat).*\|\s*(bash|sh|zsh|eval)").unwrap(),
+            Regex::new(r"(gunzip|gzip\s+-d|zcat).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
             // bzip2 pipe to execution
-            Regex::new(r"(bunzip2|bzip2\s+-d|bzcat).*\|\s*(bash|sh|zsh|eval)").unwrap(),
+            Regex::new(r"(bunzip2|bzip2\s+-d|bzcat).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
             // xz/unxz pipe to execution
-            Regex::new(r"(unxz|xz\s+-d|xzcat).*\|\s*(bash|sh|zsh|eval)").unwrap(),
+            Regex::new(r"(unxz|xz\s+-d|xzcat).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
             // openssl encoding
-            Regex::new(r"openssl\s+(enc|base64)\s+-d.*\|\s*(bash|sh|eval)").unwrap(),
+            Regex::new(r"openssl\s+(enc|base64)\s+-d.*\|\s*(bash|sh|eval)")
+                .expect("OB-006: invalid regex"),
             // uudecode
-            Regex::new(r"uudecode.*\|\s*(bash|sh|eval)").unwrap(),
+            Regex::new(r"uudecode.*\|\s*(bash|sh|eval)").expect("OB-006: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"^\s*#").unwrap()],
+        exclusions: vec![Regex::new(r"^\s*#").expect("OB-006: invalid regex")],
         message: "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",
         recommendation: "Decode the content first and review before execution. Avoid executing encoded content.",
         fix_hint: Some("Decode and review: base32 -d file.txt, then inspect before executing"),

@@ -3,6 +3,11 @@ name: Semver
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'CHANGELOG.md'
   push:
     tags:
       - 'v*'

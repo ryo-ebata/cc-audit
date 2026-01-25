@@ -1,0 +1,13 @@
+{
+  "name": "@cc-audit/linux-arm64",
+  "version": "0.4.1",
+  "description": "cc-audit binary for Linux ARM64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryo-ebata/cc-audit.git"
+  },
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "files": ["bin"]
+}

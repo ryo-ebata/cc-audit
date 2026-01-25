@@ -4,8 +4,9 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.2.x   | :white_check_mark: |
-| < 0.2   | :x:                |
+| 0.4.x   | :white_check_mark: |
+| 0.3.x   | :white_check_mark: |
+| < 0.3   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -14,7 +15,7 @@ We take security vulnerabilities in cc-audit seriously. If you discover a securi
 ### How to Report
 
 1. **Do NOT** create a public GitHub issue for security vulnerabilities
-2. Send an email to: security@example.com (replace with actual contact)
+2. Report vulnerabilities via [GitHub Security Advisories](https://github.com/ryo-ebata/cc-audit/security/advisories/new)
 3. Include the following information:
    - Description of the vulnerability
    - Steps to reproduce

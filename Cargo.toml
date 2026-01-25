@@ -3,7 +3,7 @@ members = [".", "xtask"]
 
 [package]
 name = "cc-audit"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT"
 description = "Security auditor for Claude Code skills, hooks, and MCP servers"

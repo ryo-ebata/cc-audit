@@ -13,11 +13,33 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      should_run: ${{ github.event_name == 'schedule' || steps.filter.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'schedule'
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'deny.toml'
+              - 'supply-chain/**'
+
   audit:
     name: Security Audit
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -27,9 +49,11 @@ jobs:
 
   deny:
     name: Dependency Check
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
@@ -37,9 +61,11 @@ jobs:
 
   supply-chain:
     name: Supply Chain Security
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -51,9 +77,11 @@ jobs:
 
   advisory-db:
     name: Advisory Database
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: rustsec/audit-check@v2
         with:
@@ -61,9 +89,11 @@ jobs:
 
   outdated:
     name: Outdated Dependencies
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -77,3 +107,25 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           cargo outdated --root-deps-only 2>&1 | tee -a $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
+  security-result:
+    name: Security Result
+    needs: [changes, audit, deny, supply-chain, advisory-db, outdated]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+            echo "No relevant changes detected, skipping security checks"
+            exit 0
+          fi
+          if [[ "${{ needs.audit.result }}" == "failure" || \
+                "${{ needs.deny.result }}" == "failure" || \
+                "${{ needs.supply-chain.result }}" == "failure" || \
+                "${{ needs.advisory-db.result }}" == "failure" || \
+                "${{ needs.outdated.result }}" == "failure" ]]; then
+            echo "One or more security jobs failed"
+            exit 1
+          fi
+          echo "All security checks passed"

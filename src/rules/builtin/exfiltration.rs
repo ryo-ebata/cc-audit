@@ -14,6 +14,8 @@ pub fn rules() -> Vec<Rule> {
         ex_010(),
         ex_011(),
         ex_012(),
+        ex_013(),
+        ex_014(),
     ]
 }
 
@@ -326,6 +328,74 @@ fn ex_012() -> Rule {
         recommendation: "Review media capture functionality and ensure it's not used for surveillance.",
         fix_hint: Some("Remove camera/microphone access unless explicitly required"),
         cwe_ids: &["CWE-200"],
+    }
+}
+
+fn ex_013() -> Rule {
+    Rule {
+        id: "EX-013",
+        name: "Webhook data exfiltration",
+        description: "Detects data being sent to webhook endpoints, potentially exfiltrating sensitive information",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Generic webhook patterns
+            Regex::new(r"(curl|wget|fetch|axios|request).*webhook").expect("EX-013: invalid regex"),
+            Regex::new(r"webhook\.(site|com|io)").expect("EX-013: invalid regex"),
+            // POST to webhook endpoints
+            Regex::new(r#"(curl|wget)\s+.*-X\s*POST.*webhook"#).expect("EX-013: invalid regex"),
+            Regex::new(r#"(curl|wget)\s+.*--data.*webhook"#).expect("EX-013: invalid regex"),
+            // n8n, Zapier, Make (Integromat) webhooks
+            Regex::new(r"hooks\.(n8n|zapier|make|integromat)").expect("EX-013: invalid regex"),
+            // Pipedream webhooks
+            Regex::new(r"pipedream\.net").expect("EX-013: invalid regex"),
+            // IFTTT webhooks
+            Regex::new(r"maker\.ifttt\.com/trigger").expect("EX-013: invalid regex"),
+            // RequestBin style services
+            Regex::new(r"(requestbin|hookbin|requestcatcher)").expect("EX-013: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"localhost|127\.0\.0\.1").expect("EX-013: invalid regex"),
+            Regex::new(r"^\s*#").expect("EX-013: invalid regex"),
+        ],
+        message: "Webhook data exfiltration detected. Sensitive data may be sent to external webhook services.",
+        recommendation: "Review webhook usage and ensure no sensitive data is being transmitted.",
+        fix_hint: Some("Remove webhook calls or ensure only non-sensitive data is transmitted"),
+        cwe_ids: &["CWE-200", "CWE-319"],
+    }
+}
+
+fn ex_014() -> Rule {
+    Rule {
+        id: "EX-014",
+        name: "Discord/Slack webhook abuse",
+        description: "Detects data being sent to Discord or Slack webhooks, commonly abused for data exfiltration",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Discord webhooks
+            Regex::new(r"discord(app)?\.com/api/webhooks/").expect("EX-014: invalid regex"),
+            Regex::new(r#"(curl|wget|fetch).*discord.*webhook"#).expect("EX-014: invalid regex"),
+            // Slack webhooks
+            Regex::new(r"hooks\.slack\.com/services/").expect("EX-014: invalid regex"),
+            Regex::new(r#"(curl|wget|fetch).*slack.*webhook"#).expect("EX-014: invalid regex"),
+            // Microsoft Teams webhooks
+            Regex::new(r"webhook\.office\.com").expect("EX-014: invalid regex"),
+            Regex::new(r"teams\.microsoft\.com.*webhook").expect("EX-014: invalid regex"),
+            // Telegram bot API (often abused)
+            Regex::new(r"api\.telegram\.org/bot.*sendMessage").expect("EX-014: invalid regex"),
+            Regex::new(r"api\.telegram\.org/bot.*sendDocument").expect("EX-014: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("EX-014: invalid regex"),
+            Regex::new(r"test|example|demo").expect("EX-014: invalid regex"),
+        ],
+        message: "Discord/Slack/Teams webhook detected. These are commonly abused for data exfiltration.",
+        recommendation: "Remove messaging webhook integrations or ensure they don't transmit sensitive data.",
+        fix_hint: Some("Remove webhook URLs or use authenticated, auditable notification channels"),
+        cwe_ids: &["CWE-200", "CWE-319"],
     }
 }
 

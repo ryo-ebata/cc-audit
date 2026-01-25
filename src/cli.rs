@@ -21,6 +21,10 @@ pub enum ScanType {
     Rules,
     Docker,
     Dependency,
+    /// Scan .claude/agents/ subagent definitions
+    Subagent,
+    /// Scan marketplace.json plugin definitions
+    Plugin,
 }
 
 #[derive(Parser, Debug)]
@@ -118,6 +122,46 @@ pub struct Cli {
     /// Generate a default configuration file template
     #[arg(long)]
     pub init: bool,
+
+    /// Output file path (for HTML/JSON output)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Save baseline to specified file
+    #[arg(long, value_name = "FILE")]
+    pub save_baseline: Option<PathBuf>,
+
+    /// Compare against baseline file (show only new findings)
+    #[arg(long, value_name = "FILE")]
+    pub baseline_file: Option<PathBuf>,
+
+    /// Compare two paths and show differences
+    #[arg(long, num_args = 2, value_names = ["PATH1", "PATH2"])]
+    pub compare: Option<Vec<PathBuf>>,
+
+    /// Auto-fix issues (where possible)
+    #[arg(long)]
+    pub fix: bool,
+
+    /// Preview auto-fix changes without applying them
+    #[arg(long)]
+    pub fix_dry_run: bool,
+
+    /// Run as MCP server
+    #[arg(long)]
+    pub mcp_server: bool,
+
+    /// Enable deep scan with deobfuscation
+    #[arg(long)]
+    pub deep_scan: bool,
+
+    /// Load settings from a named profile
+    #[arg(long, value_name = "NAME")]
+    pub profile: Option<String>,
+
+    /// Save current settings as a named profile
+    #[arg(long, value_name = "NAME")]
+    pub save_profile: Option<String>,
 }
 
 #[cfg(test)]

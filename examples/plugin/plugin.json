@@ -1,0 +1,24 @@
+{
+  "name": "safe-plugin",
+  "version": "1.0.0",
+  "description": "A safe plugin with minimal permissions",
+  "skills": [
+    {
+      "name": "helper-skill",
+      "allowedTools": "Read, Grep",
+      "description": "Helps with code reading"
+    }
+  ],
+  "mcpServers": [
+    {
+      "name": "helper-server",
+      "command": "node",
+      "args": ["helper-server.js"]
+    }
+  ],
+  "permissions": {
+    "allowedTools": ["Read", "Grep"],
+    "networkAccess": false,
+    "fileAccess": ["."]
+  }
+}

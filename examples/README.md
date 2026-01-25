@@ -19,6 +19,8 @@ cargo run -- ./examples/obfuscation/
 cargo run -- ./examples/supply-chain/
 cargo run -- ./examples/secrets/
 cargo run -- ./examples/docker/ --type docker
+cargo run -- ./examples/subagent/ --type subagent
+cargo run -- ./examples/plugin/ --type plugin
 cargo run -- ./examples/false-positives/
 cargo run -- ./examples/edge-cases/
 ```
@@ -37,6 +39,8 @@ cargo run -- ./examples/edge-cases/
 | `supply-chain/` | FAIL | SC-001, SC-002, SC-003 |
 | `secrets/` | FAIL | SL-001, SL-002, SL-003, SL-004, SL-005 |
 | `docker/` | FAIL | DK-001, DK-002, DK-003 |
+| `subagent/` | FAIL | OP-001, EX-001, PE-001, PE-005 |
+| `plugin/` | FAIL | OP-001, SC-001, PE-001 |
 | `false-positives/` | PASS* | Tests for false positives |
 | `edge-cases/` | Mixed | Boundary condition tests |
 
@@ -111,6 +115,26 @@ Docker security detection examples (use `--type docker`):
 - `DK-001`: privileged containers
 - `DK-002`: running as root user
 - `DK-003`: curl/wget piped to shell in RUN instructions
+
+### subagent/
+Subagent definition scanning examples (use `--type subagent`):
+- Scans `.claude/agents/*.md` files
+- Checks for `allowed-tools: *` (wildcard permissions)
+- Detects hooks with dangerous commands
+- Identifies privileged operations in agent descriptions
+- Files:
+  - `dangerous-agent.md`: Agent with wildcard permissions, exfiltration hooks, sudo usage
+  - `safe-agent.md`: Safe agent with minimal permissions (Read, Grep only)
+
+### plugin/
+Plugin marketplace definition scanning examples (use `--type plugin`):
+- Scans `marketplace.json` and `plugin.json` files
+- Checks for wildcard tool permissions in skills and permissions
+- Detects sudo/privileged MCP server commands
+- Identifies supply chain attacks in hooks (curl|bash, wget|sh)
+- Files:
+  - `marketplace.json`: Plugin with wildcard permissions, sudo MCP server, malicious hooks
+  - `plugin.json`: Safe plugin with minimal permissions
 
 ## Dependency Scanning
 

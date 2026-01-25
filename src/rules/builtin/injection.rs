@@ -2,7 +2,15 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![pi_001(), pi_002(), pi_003(), pi_004(), pi_005(), pi_006()]
+    vec![
+        pi_001(),
+        pi_002(),
+        pi_003(),
+        pi_004(),
+        pi_005(),
+        pi_006(),
+        pi_007(),
+    ]
 }
 
 fn pi_001() -> Rule {
@@ -182,6 +190,48 @@ fn pi_006() -> Rule {
             "Limit path patterns, add validation, and avoid wildcard permissions in schemas",
         ),
         cwe_ids: &["CWE-250", "CWE-94"],
+    }
+}
+
+fn pi_007() -> Rule {
+    Rule {
+        id: "PI-007",
+        name: "Markdown comment injection",
+        description: "Detects hidden instructions in Markdown comments that may manipulate AI behavior",
+        severity: Severity::High,
+        category: Category::PromptInjection,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Markdown reference-style link definitions used for hidden text
+            Regex::new(r"^\s*\[//\]:\s*#\s*\(.*\b(ignore|execute|run|must|should|always|never)\b")
+                .expect("PI-007: invalid regex"),
+            // HTML comments in Markdown with suspicious content
+            Regex::new(r"<!--[^>]*\b(system|assistant|user)\s*:").expect("PI-007: invalid regex"),
+            // Markdown attributes with hidden content (some parsers support {: .class })
+            Regex::new(r"\{:.*\b(ignore|override|bypass)\b.*\}").expect("PI-007: invalid regex"),
+            // Fenced code blocks with suspicious language tags
+            Regex::new(r"```\s*(system|assistant|hidden|invisible)")
+                .expect("PI-007: invalid regex"),
+            // Hidden text in Markdown using zero-width characters after [
+            Regex::new(r"\[[\u200B\u200C\u200D\u2060\uFEFF]").expect("PI-007: invalid regex"),
+            // Abuse of footnote syntax for hidden instructions
+            Regex::new(r"\[\^[^\]]+\]:\s*.*\b(ignore|override|execute|system)\b")
+                .expect("PI-007: invalid regex"),
+            // White text on white background (inline HTML styles)
+            Regex::new(
+                r#"<span[^>]*style\s*=\s*["'][^"']*color\s*:\s*(white|#fff|#ffffff|transparent)"#,
+            )
+            .expect("PI-007: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*\[//\]:\s*#\s*\((TODO|FIXME|NOTE)").expect("PI-007: invalid regex"),
+        ],
+        message: "Hidden instructions detected in Markdown comments. This may attempt to manipulate AI behavior.",
+        recommendation: "Review Markdown content for hidden instructions and remove suspicious patterns.",
+        fix_hint: Some(
+            "Remove hidden comments and instructions. Use visible text for legitimate documentation.",
+        ),
+        cwe_ids: &["CWE-94"],
     }
 }
 

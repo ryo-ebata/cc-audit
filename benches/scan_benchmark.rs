@@ -31,6 +31,16 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         baseline: false,
         check_drift: false,
         init: false,
+        output: None,
+        save_baseline: None,
+        baseline_file: None,
+        compare: None,
+        fix: false,
+        fix_dry_run: false,
+        mcp_server: false,
+        deep_scan: false,
+        profile: None,
+        save_profile: None,
     }
 }
 

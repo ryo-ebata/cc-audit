@@ -131,7 +131,7 @@ impl Baseline {
         })
     }
 
-    /// Save baseline to file
+    /// Save baseline to default location (dir/.cc-audit-baseline.json)
     pub fn save(&self, dir: &Path) -> Result<()> {
         let baseline_path = if dir.is_file() {
             dir.parent()
@@ -141,20 +141,25 @@ impl Baseline {
             dir.join(BASELINE_FILENAME)
         };
 
+        self.save_to_file(&baseline_path)
+    }
+
+    /// Save baseline to a specific file path
+    pub fn save_to_file(&self, path: &Path) -> Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(|e| AuditError::ParseError {
-            path: baseline_path.display().to_string(),
+            path: path.display().to_string(),
             message: e.to_string(),
         })?;
 
-        fs::write(&baseline_path, json).map_err(|e| AuditError::ReadError {
-            path: baseline_path.display().to_string(),
+        fs::write(path, json).map_err(|e| AuditError::ReadError {
+            path: path.display().to_string(),
             source: e,
         })?;
 
         Ok(())
     }
 
-    /// Load baseline from file
+    /// Load baseline from default location (dir/.cc-audit-baseline.json)
     pub fn load(dir: &Path) -> Result<Self> {
         let baseline_path = if dir.is_file() {
             dir.parent()
@@ -164,19 +169,22 @@ impl Baseline {
             dir.join(BASELINE_FILENAME)
         };
 
-        if !baseline_path.exists() {
-            return Err(AuditError::FileNotFound(
-                baseline_path.display().to_string(),
-            ));
+        Self::load_from_file(&baseline_path)
+    }
+
+    /// Load baseline from a specific file path
+    pub fn load_from_file(path: &Path) -> Result<Self> {
+        if !path.exists() {
+            return Err(AuditError::FileNotFound(path.display().to_string()));
         }
 
-        let content = fs::read_to_string(&baseline_path).map_err(|e| AuditError::ReadError {
-            path: baseline_path.display().to_string(),
+        let content = fs::read_to_string(path).map_err(|e| AuditError::ReadError {
+            path: path.display().to_string(),
             source: e,
         })?;
 
         serde_json::from_str(&content).map_err(|e| AuditError::ParseError {
-            path: baseline_path.display().to_string(),
+            path: path.display().to_string(),
             message: e.to_string(),
         })
     }
@@ -432,5 +440,278 @@ mod tests {
         assert!(output.contains("Modified files"));
         assert!(output.contains("Added files"));
         assert!(output.contains("Removed files"));
+    }
+
+    #[test]
+    fn test_drift_report_format_no_drift() {
+        let report = DriftReport {
+            modified: vec![],
+            added: vec![],
+            removed: vec![],
+            has_drift: false,
+        };
+
+        let output = report.format_terminal();
+        assert!(output.contains("No drift detected"));
+    }
+
+    #[test]
+    fn test_save_and_load_from_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test Skill").unwrap();
+
+        let baseline = Baseline::from_directory(temp_dir.path()).unwrap();
+        let custom_path = temp_dir.path().join("custom-baseline.json");
+
+        baseline.save_to_file(&custom_path).unwrap();
+        let loaded = Baseline::load_from_file(&custom_path).unwrap();
+
+        assert_eq!(baseline.file_count, loaded.file_count);
+    }
+
+    #[test]
+    fn test_load_from_file_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent = temp_dir.path().join("does-not-exist.json");
+
+        let result = Baseline::load_from_file(&nonexistent);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_baseline_from_single_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test Skill").unwrap();
+
+        let baseline = Baseline::from_directory(&skill_md).unwrap();
+        assert_eq!(baseline.file_count, 1);
+    }
+
+    #[test]
+    fn test_save_baseline_for_single_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test Skill").unwrap();
+
+        let baseline = Baseline::from_directory(&skill_md).unwrap();
+        baseline.save(&skill_md).unwrap();
+
+        let baseline_file = temp_dir.path().join(BASELINE_FILENAME);
+        assert!(baseline_file.exists());
+    }
+
+    #[test]
+    fn test_load_baseline_for_single_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let skill_md = temp_dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test Skill").unwrap();
+
+        let baseline = Baseline::from_directory(&skill_md).unwrap();
+        baseline.save(&skill_md).unwrap();
+
+        let loaded = Baseline::load(&skill_md).unwrap();
+        assert_eq!(baseline.file_count, loaded.file_count);
+    }
+
+    #[test]
+    fn test_is_relevant_file_extensions() {
+        // Relevant extensions
+        assert!(Baseline::is_relevant_file(Path::new("file.md")));
+        assert!(Baseline::is_relevant_file(Path::new("file.json")));
+        assert!(Baseline::is_relevant_file(Path::new("file.yaml")));
+        assert!(Baseline::is_relevant_file(Path::new("file.yml")));
+        assert!(Baseline::is_relevant_file(Path::new("file.toml")));
+        assert!(Baseline::is_relevant_file(Path::new("file.sh")));
+        assert!(Baseline::is_relevant_file(Path::new("file.bash")));
+        assert!(Baseline::is_relevant_file(Path::new("file.zsh")));
+
+        // Not relevant
+        assert!(!Baseline::is_relevant_file(Path::new("file.txt")));
+        assert!(!Baseline::is_relevant_file(Path::new("file.exe")));
+        assert!(!Baseline::is_relevant_file(Path::new("file.bin")));
+    }
+
+    #[test]
+    fn test_is_relevant_file_names() {
+        // Relevant file names
+        assert!(Baseline::is_relevant_file(Path::new("SKILL.md")));
+        assert!(Baseline::is_relevant_file(Path::new("skill.md")));
+        assert!(Baseline::is_relevant_file(Path::new("mcp.json")));
+        assert!(Baseline::is_relevant_file(Path::new(".mcp.json")));
+        assert!(Baseline::is_relevant_file(Path::new("settings.json")));
+        assert!(Baseline::is_relevant_file(Path::new("Dockerfile")));
+        assert!(Baseline::is_relevant_file(Path::new("dockerfile")));
+        assert!(Baseline::is_relevant_file(Path::new("package.json")));
+        assert!(Baseline::is_relevant_file(Path::new("Cargo.toml")));
+        assert!(Baseline::is_relevant_file(Path::new("requirements.txt")));
+    }
+
+    #[test]
+    fn test_baseline_debug_trait() {
+        let baseline = Baseline {
+            version: "0.1.0".to_string(),
+            created_at: "2024-01-01".to_string(),
+            file_hashes: HashMap::new(),
+            file_count: 0,
+        };
+
+        let debug_str = format!("{:?}", baseline);
+        assert!(debug_str.contains("Baseline"));
+        assert!(debug_str.contains("0.1.0"));
+    }
+
+    #[test]
+    fn test_baseline_clone_trait() {
+        let baseline = Baseline {
+            version: "0.1.0".to_string(),
+            created_at: "2024-01-01".to_string(),
+            file_hashes: HashMap::new(),
+            file_count: 0,
+        };
+
+        let cloned = baseline.clone();
+        assert_eq!(baseline.version, cloned.version);
+        assert_eq!(baseline.file_count, cloned.file_count);
+    }
+
+    #[test]
+    fn test_file_hash_debug_trait() {
+        let hash = FileHash {
+            hash: "abc123".to_string(),
+            size: 100,
+        };
+
+        let debug_str = format!("{:?}", hash);
+        assert!(debug_str.contains("FileHash"));
+        assert!(debug_str.contains("abc123"));
+    }
+
+    #[test]
+    fn test_file_hash_clone_trait() {
+        let hash = FileHash {
+            hash: "abc123".to_string(),
+            size: 100,
+        };
+
+        let cloned = hash.clone();
+        assert_eq!(hash.hash, cloned.hash);
+        assert_eq!(hash.size, cloned.size);
+    }
+
+    #[test]
+    fn test_drift_entry_debug_trait() {
+        let entry = DriftEntry {
+            path: "file.md".to_string(),
+            baseline_hash: "abc".to_string(),
+            current_hash: "def".to_string(),
+        };
+
+        let debug_str = format!("{:?}", entry);
+        assert!(debug_str.contains("DriftEntry"));
+        assert!(debug_str.contains("file.md"));
+    }
+
+    #[test]
+    fn test_drift_entry_clone_trait() {
+        let entry = DriftEntry {
+            path: "file.md".to_string(),
+            baseline_hash: "abc".to_string(),
+            current_hash: "def".to_string(),
+        };
+
+        let cloned = entry.clone();
+        assert_eq!(entry.path, cloned.path);
+    }
+
+    #[test]
+    fn test_drift_report_debug_trait() {
+        let report = DriftReport {
+            modified: vec![],
+            added: vec![],
+            removed: vec![],
+            has_drift: false,
+        };
+
+        let debug_str = format!("{:?}", report);
+        assert!(debug_str.contains("DriftReport"));
+    }
+
+    #[test]
+    fn test_drift_report_clone_trait() {
+        let report = DriftReport {
+            modified: vec![],
+            added: vec!["new.md".to_string()],
+            removed: vec![],
+            has_drift: true,
+        };
+
+        let cloned = report.clone();
+        assert_eq!(report.has_drift, cloned.has_drift);
+        assert_eq!(report.added.len(), cloned.added.len());
+    }
+
+    #[test]
+    fn test_drift_report_format_short_hash() {
+        let report = DriftReport {
+            modified: vec![DriftEntry {
+                path: "file.md".to_string(),
+                baseline_hash: "short".to_string(), // Less than 16 chars
+                current_hash: "also_short".to_string(),
+            }],
+            added: vec![],
+            removed: vec![],
+            has_drift: true,
+        };
+
+        let output = report.format_terminal();
+        assert!(output.contains("short"));
+        assert!(output.contains("also_short"));
+    }
+
+    #[test]
+    fn test_baseline_from_empty_directory() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let baseline = Baseline::from_directory(temp_dir.path()).unwrap();
+        assert_eq!(baseline.file_count, 0);
+        assert!(baseline.file_hashes.is_empty());
+    }
+
+    #[test]
+    fn test_baseline_multiple_files() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("SKILL.md"), "# Skill").unwrap();
+        fs::write(temp_dir.path().join("mcp.json"), "{}").unwrap();
+        fs::write(temp_dir.path().join("settings.yaml"), "key: value").unwrap();
+
+        let baseline = Baseline::from_directory(temp_dir.path()).unwrap();
+        assert_eq!(baseline.file_count, 3);
+    }
+
+    #[test]
+    fn test_baseline_serialization() {
+        let mut file_hashes = HashMap::new();
+        file_hashes.insert(
+            "test.md".to_string(),
+            FileHash {
+                hash: "abc123".to_string(),
+                size: 100,
+            },
+        );
+
+        let baseline = Baseline {
+            version: "0.1.0".to_string(),
+            created_at: "2024-01-01".to_string(),
+            file_hashes,
+            file_count: 1,
+        };
+
+        let json = serde_json::to_string(&baseline).unwrap();
+        let parsed: Baseline = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(baseline.version, parsed.version);
+        assert_eq!(baseline.file_count, parsed.file_count);
     }
 }

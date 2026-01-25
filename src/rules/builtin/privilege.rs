@@ -2,7 +2,15 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![pe_001(), pe_002(), pe_003(), pe_004(), pe_005()]
+    vec![
+        pe_001(),
+        pe_002(),
+        pe_003(),
+        pe_004(),
+        pe_005(),
+        pe_006(),
+        pe_007(),
+    ]
 }
 
 fn pe_001() -> Rule {
@@ -110,6 +118,78 @@ fn pe_005() -> Rule {
         recommendation: "Skills should never access SSH keys or configuration",
         fix_hint: Some("Remove any references to ~/.ssh/ or SSH key files"),
         cwe_ids: &["CWE-200", "CWE-522"],
+    }
+}
+
+fn pe_006() -> Rule {
+    Rule {
+        id: "PE-006",
+        name: "Setuid/setgid manipulation",
+        description: "Detects setuid/setgid bit manipulation which can grant elevated privileges to executables",
+        severity: Severity::Critical,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // chmod with setuid bit
+            Regex::new(r"chmod\s+[0-7]*4[0-7]{3}\b").expect("PE-006: invalid regex"),
+            Regex::new(r"chmod\s+u\+s\b").expect("PE-006: invalid regex"),
+            // chmod with setgid bit
+            Regex::new(r"chmod\s+[0-7]*2[0-7]{3}\b").expect("PE-006: invalid regex"),
+            Regex::new(r"chmod\s+g\+s\b").expect("PE-006: invalid regex"),
+            // chmod with both setuid and setgid
+            Regex::new(r"chmod\s+[0-7]*6[0-7]{3}\b").expect("PE-006: invalid regex"),
+            // find with -perm for setuid/setgid (suid discovery)
+            Regex::new(r"find\s+.*-perm\s+.*[/-]4000").expect("PE-006: invalid regex"),
+            Regex::new(r"find\s+.*-perm\s+.*[/-]2000").expect("PE-006: invalid regex"),
+            Regex::new(r"find\s+.*-perm\s+.*[/-]6000").expect("PE-006: invalid regex"),
+            // chown to root (often combined with setuid)
+            Regex::new(r"chown\s+root[:\s]").expect("PE-006: invalid regex"),
+        ],
+        exclusions: vec![Regex::new(r"^\s*#").expect("PE-006: invalid regex")],
+        message: "Setuid/setgid manipulation detected. This can grant elevated privileges to executables.",
+        recommendation: "Avoid setting setuid/setgid bits. Use capability-based permissions instead.",
+        fix_hint: Some(
+            "Remove setuid/setgid: chmod u-s,g-s <file>. Use capabilities if elevated privileges are needed.",
+        ),
+        cwe_ids: &["CWE-250", "CWE-269"],
+    }
+}
+
+fn pe_007() -> Rule {
+    Rule {
+        id: "PE-007",
+        name: "Linux capabilities manipulation",
+        description: "Detects manipulation of Linux capabilities which can grant specific elevated privileges",
+        severity: Severity::Critical,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // setcap to add capabilities
+            Regex::new(r"\bsetcap\s+").expect("PE-007: invalid regex"),
+            // Dangerous capabilities
+            Regex::new(r"cap_setuid").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_setgid").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_sys_admin").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_sys_ptrace").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_net_admin").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_net_raw").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_dac_override").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_dac_read_search").expect("PE-007: invalid regex"),
+            Regex::new(r"cap_chown").expect("PE-007: invalid regex"),
+            // getcap to discover capabilities (reconnaissance)
+            Regex::new(r"\bgetcap\s+-r\s+/").expect("PE-007: invalid regex"),
+            // Python capability libraries
+            Regex::new(r"prctl\.set_keepcaps").expect("PE-007: invalid regex"),
+            Regex::new(r"capng\.|libcap").expect("PE-007: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("PE-007: invalid regex"),
+            Regex::new(r"getcap\s+[^/]").expect("PE-007: invalid regex"), // getcap on specific file is less suspicious
+        ],
+        message: "Linux capabilities manipulation detected. This can grant specific elevated privileges.",
+        recommendation: "Avoid manipulating capabilities. Skills should not require elevated privileges.",
+        fix_hint: Some("Remove capability operations. Run with minimal privileges required."),
+        cwe_ids: &["CWE-250", "CWE-269"],
     }
 }
 

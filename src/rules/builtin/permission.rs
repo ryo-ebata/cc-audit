@@ -2,7 +2,17 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![op_001(), op_002(), op_003(), op_004(), op_005(), op_006()]
+    vec![
+        op_001(),
+        op_002(),
+        op_003(),
+        op_004(),
+        op_005(),
+        op_006(),
+        op_007(),
+        op_008(),
+        op_009(),
+    ]
 }
 
 fn op_001() -> Rule {
@@ -150,6 +160,123 @@ fn op_006() -> Rule {
         recommendation: "Access only specific required environment variables.",
         fix_hint: Some("Use specific env vars: process.env.API_KEY instead of process.env"),
         cwe_ids: &["CWE-200", "CWE-532"],
+    }
+}
+
+fn op_007() -> Rule {
+    Rule {
+        id: "OP-007",
+        name: "Subagent excessive permission delegation",
+        description: "Detects subagent definitions with overly permissive tool access",
+        severity: Severity::High,
+        category: Category::Overpermission,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Subagent with all tools
+            Regex::new(r#"subagent_type.*allowed-tools:\s*\*"#).expect("OP-007: invalid regex"),
+            Regex::new(r#""subagent"[^}]*"allowed-tools"\s*:\s*"\*""#)
+                .expect("OP-007: invalid regex"),
+            // Agent definition with wildcard tools
+            Regex::new(r#"\.claude/agents/.*allowed-tools:\s*\*"#).expect("OP-007: invalid regex"),
+            // Task tool with full access
+            Regex::new(r#"Task\s*\([^)]*tools\s*=\s*\*"#).expect("OP-007: invalid regex"),
+            // Subagent with Bash access
+            Regex::new(r#"subagent.*allowed-tools:.*Bash[^(]"#).expect("OP-007: invalid regex"),
+            // Agent spawning with inherited permissions
+            Regex::new(r#"spawn_agent.*inherit_permissions\s*[:=]\s*(true|True)"#)
+                .expect("OP-007: invalid regex"),
+            // Subagent with unrestricted Write
+            Regex::new(r#"subagent.*allowed-tools:.*Write[^(]"#).expect("OP-007: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("OP-007: invalid regex"),
+            Regex::new(r"Bash\([^)]+\)").expect("OP-007: invalid regex"), // Restricted Bash is OK
+            Regex::new(r"Write\([^)]+\)").expect("OP-007: invalid regex"), // Restricted Write is OK
+        ],
+        message: "Excessive permission delegation to subagent detected. Subagents should have minimal required permissions.",
+        recommendation: "Restrict subagent permissions to only required tools with specific patterns.",
+        fix_hint: Some(
+            "Use specific tool permissions: allowed-tools: Read, Grep instead of wildcard",
+        ),
+        cwe_ids: &["CWE-250", "CWE-269"],
+    }
+}
+
+fn op_008() -> Rule {
+    Rule {
+        id: "OP-008",
+        name: "MCP tool unrestricted access",
+        description: "Detects MCP server configurations with unrestricted tool access",
+        severity: Severity::Critical,
+        category: Category::Overpermission,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // MCP server with all tools auto-approved
+            Regex::new(r#""mcpServers"[^}]*"autoApprove"\s*:\s*\[\s*"\*"\s*\]"#)
+                .expect("OP-008: invalid regex"),
+            Regex::new(r#""mcpServers"[^}]*"autoApproveTools"\s*:\s*true"#)
+                .expect("OP-008: invalid regex"),
+            // Trust all tools from server
+            Regex::new(r#""trustTools"\s*:\s*(true|\[\s*"\*"\s*\])"#)
+                .expect("OP-008: invalid regex"),
+            // Allow all MCP capabilities
+            Regex::new(r#""capabilities"\s*:\s*\[\s*"\*"\s*\]"#).expect("OP-008: invalid regex"),
+            // Unrestricted MCP tool patterns
+            Regex::new(r#"mcp.*tool.*permission.*\*"#).expect("OP-008: invalid regex"),
+            // MCP server running with elevated privileges
+            Regex::new(r#""command"\s*:\s*"sudo"#).expect("OP-008: invalid regex"),
+            // No sandbox for MCP
+            Regex::new(r#""sandbox"\s*:\s*false"#).expect("OP-008: invalid regex"),
+            Regex::new(r#""disableSandbox"\s*:\s*true"#).expect("OP-008: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("OP-008: invalid regex"),
+            Regex::new(r"^\s*//").expect("OP-008: invalid regex"),
+        ],
+        message: "MCP server with unrestricted tool access detected. This allows the server to execute any tool without approval.",
+        recommendation: "Explicitly list allowed tools and require approval for sensitive operations.",
+        fix_hint: Some(
+            "Remove autoApprove: ['*'] and specify individual tools that can be auto-approved",
+        ),
+        cwe_ids: &["CWE-250", "CWE-269"],
+    }
+}
+
+fn op_009() -> Rule {
+    Rule {
+        id: "OP-009",
+        name: "Bash wildcard permission",
+        description: "Detects Bash permissions with overly broad wildcard patterns",
+        severity: Severity::High,
+        category: Category::Overpermission,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Bash with single wildcard (too broad)
+            Regex::new(r"Bash\s*\(\s*\*\s*\)").expect("OP-009: invalid regex"),
+            Regex::new(r#"Bash\s*\(\s*["']\*["']\s*\)"#).expect("OP-009: invalid regex"),
+            // Bash with trailing wildcard on dangerous commands
+            Regex::new(r"Bash\s*\(\s*(curl|wget|nc|netcat|ssh|scp)\s*:\s*\*\s*\)")
+                .expect("OP-009: invalid regex"),
+            // Bash with leading wildcard
+            Regex::new(r"Bash\s*\(\s*\*\s*:").expect("OP-009: invalid regex"),
+            // Permission string with overly broad Bash
+            Regex::new(r#"permissions.*Bash\s*\(\s*[^)]{0,5}\*[^)]{0,5}\s*\)"#)
+                .expect("OP-009: invalid regex"),
+            // Shell commands with wildcards
+            Regex::new(r"Bash\s*\(\s*(sh|bash|zsh)\s*:\s*\*\s*\)").expect("OP-009: invalid regex"),
+            // Package managers with wildcards (can install anything)
+            Regex::new(r"Bash\s*\(\s*(npm|pip|cargo|apt|brew|yum)\s+install\s*:\s*\*\s*\)")
+                .expect("OP-009: invalid regex"),
+        ],
+        exclusions: vec![
+            // Specific command with wildcard arguments is safer
+            Regex::new(r"Bash\s*\(\s*[a-z]+\s+[a-z]+\s*:\s*\*\s*\)")
+                .expect("OP-009: invalid regex"),
+        ],
+        message: "Bash wildcard permission detected. This allows execution of a broad range of commands.",
+        recommendation: "Use specific command patterns instead of wildcards.",
+        fix_hint: Some("Replace Bash(*) with specific patterns: Bash(npm test:*), Bash(git:*)"),
+        cwe_ids: &["CWE-78", "CWE-250"],
     }
 }
 

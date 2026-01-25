@@ -32,6 +32,16 @@ impl RuleEngine {
         self.dynamic_rules.extend(rules);
     }
 
+    /// Get a rule by ID
+    pub fn get_rule(&self, id: &str) -> Option<&Rule> {
+        self.rules.iter().find(|r| r.id == id)
+    }
+
+    /// Get all builtin rules
+    pub fn get_all_rules(&self) -> &[Rule] {
+        self.rules
+    }
+
     pub fn check_content(&self, content: &str, file_path: &str) -> Vec<Finding> {
         let mut findings = Vec::new();
         let mut next_line_suppression: Option<SuppressionType> = None;

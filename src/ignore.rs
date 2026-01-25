@@ -1,4 +1,6 @@
+use crate::config::IgnoreConfig;
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use std::collections::HashSet;
 use std::path::Path;
 
 #[derive(Default)]
@@ -7,6 +9,10 @@ pub struct IgnoreFilter {
     include_tests: bool,
     include_node_modules: bool,
     include_vendor: bool,
+    /// Additional directories to ignore from config
+    extra_directories: HashSet<String>,
+    /// Custom glob patterns from config
+    custom_patterns: Option<Gitignore>,
 }
 
 impl IgnoreFilter {
@@ -18,7 +24,34 @@ impl IgnoreFilter {
             include_tests: false,
             include_node_modules: false,
             include_vendor: false,
+            extra_directories: HashSet::new(),
+            custom_patterns: None,
         }
+    }
+
+    /// Create IgnoreFilter from config
+    pub fn from_config(root: &Path, config: &IgnoreConfig) -> Self {
+        let gitignore = Self::load_ignorefiles(root);
+        let custom_patterns = Self::build_custom_patterns(root, &config.patterns);
+
+        Self {
+            gitignore,
+            include_tests: config.include_tests,
+            include_node_modules: config.include_node_modules,
+            include_vendor: config.include_vendor,
+            extra_directories: config.directories.clone(),
+            custom_patterns,
+        }
+    }
+
+    /// Apply config settings to existing filter
+    pub fn with_config(mut self, config: &IgnoreConfig) -> Self {
+        self.include_tests = config.include_tests;
+        self.include_node_modules = config.include_node_modules;
+        self.include_vendor = config.include_vendor;
+        self.extra_directories = config.directories.clone();
+        // Note: custom_patterns requires root path, so it's not updated here
+        self
     }
 
     pub fn with_include_tests(mut self, include: bool) -> Self {
@@ -34,6 +67,21 @@ impl IgnoreFilter {
     pub fn with_include_vendor(mut self, include: bool) -> Self {
         self.include_vendor = include;
         self
+    }
+
+    /// Build gitignore-style patterns from config patterns
+    fn build_custom_patterns(root: &Path, patterns: &[String]) -> Option<Gitignore> {
+        if patterns.is_empty() {
+            return None;
+        }
+
+        let mut builder = GitignoreBuilder::new(root);
+        for pattern in patterns {
+            // Add pattern - ignore errors for invalid patterns
+            let _ = builder.add_line(None, pattern);
+        }
+
+        builder.build().ok()
     }
 
     fn load_ignorefiles(root: &Path) -> Option<Gitignore> {
@@ -74,6 +122,19 @@ impl IgnoreFilter {
             return true;
         }
 
+        // Check extra directories from config
+        if self.is_in_extra_directories(path) {
+            return true;
+        }
+
+        // Check custom patterns from config
+        if let Some(ref custom) = self.custom_patterns {
+            let is_dir = path.is_dir();
+            if custom.matched(path, is_dir).is_ignore() {
+                return true;
+            }
+        }
+
         // Check .cc-auditignore patterns
         if let Some(ref gitignore) = self.gitignore {
             let is_dir = path.is_dir();
@@ -81,6 +142,17 @@ impl IgnoreFilter {
         }
 
         false
+    }
+
+    fn is_in_extra_directories(&self, path: &Path) -> bool {
+        if self.extra_directories.is_empty() {
+            return false;
+        }
+
+        path.components().any(|c| {
+            let name = c.as_os_str().to_string_lossy();
+            self.extra_directories.contains(name.as_ref())
+        })
     }
 
     fn is_test_path(&self, path: &Path) -> bool {
@@ -254,5 +326,106 @@ mod tests {
         assert!(filter.is_test_path(Path::new("/project/api.test")));
         assert!(!filter.is_test_path(Path::new("/project/src/main.rs")));
         assert!(!filter.is_test_path(Path::new("/project/contest/app.js"))); // Should not match 'test' in 'contest'
+    }
+
+    #[test]
+    fn test_from_config() {
+        use crate::config::IgnoreConfig;
+
+        let dir = TempDir::new().unwrap();
+        let config = IgnoreConfig {
+            directories: ["custom_ignore_dir", "my_cache"]
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            patterns: vec!["*.generated.js".to_string()],
+            include_tests: true,
+            include_node_modules: false,
+            include_vendor: true,
+        };
+
+        let filter = IgnoreFilter::from_config(dir.path(), &config);
+
+        // Tests should NOT be ignored (include_tests is true)
+        assert!(!filter.is_ignored(Path::new("/project/tests/test.rs")));
+        // node_modules should be ignored (include_node_modules is false)
+        assert!(filter.is_ignored(Path::new("/project/node_modules/pkg")));
+        // vendor should NOT be ignored (include_vendor is true)
+        assert!(!filter.is_ignored(Path::new("/project/vendor/lib")));
+        // custom directories should be ignored
+        assert!(filter.is_ignored(Path::new("/project/custom_ignore_dir/file.rs")));
+        assert!(filter.is_ignored(Path::new("/project/my_cache/data")));
+    }
+
+    #[test]
+    fn test_extra_directories_ignored() {
+        use crate::config::IgnoreConfig;
+
+        let dir = TempDir::new().unwrap();
+        let mut config = IgnoreConfig::default();
+        config.directories.insert("my_special_dir".to_string());
+
+        let filter = IgnoreFilter::from_config(dir.path(), &config);
+
+        // Custom directory should be ignored
+        assert!(filter.is_ignored(Path::new("/project/my_special_dir/file.rs")));
+        // Nested path with custom directory should be ignored
+        assert!(filter.is_ignored(Path::new("/project/src/my_special_dir/nested/file.rs")));
+    }
+
+    #[test]
+    fn test_custom_patterns_from_config() {
+        use crate::config::IgnoreConfig;
+
+        let dir = TempDir::new().unwrap();
+        let config = IgnoreConfig {
+            directories: std::collections::HashSet::new(),
+            patterns: vec!["*.log".to_string(), "temp/**".to_string()],
+            include_tests: true,
+            include_node_modules: true,
+            include_vendor: true,
+        };
+
+        let filter = IgnoreFilter::from_config(dir.path(), &config);
+
+        // Create test files
+        let log_file = dir.path().join("debug.log");
+        fs::write(&log_file, "").unwrap();
+        assert!(filter.is_ignored(&log_file));
+
+        let temp_file = dir.path().join("temp/cache.txt");
+        fs::create_dir_all(dir.path().join("temp")).unwrap();
+        fs::write(&temp_file, "").unwrap();
+        assert!(filter.is_ignored(&temp_file));
+
+        // Normal file should not be ignored
+        let src_file = dir.path().join("main.rs");
+        fs::write(&src_file, "").unwrap();
+        assert!(!filter.is_ignored(&src_file));
+    }
+
+    #[test]
+    fn test_with_config_method() {
+        use crate::config::IgnoreConfig;
+
+        let dir = TempDir::new().unwrap();
+        let config = IgnoreConfig {
+            directories: ["target", "dist"].into_iter().map(String::from).collect(),
+            patterns: vec![],
+            include_tests: true,
+            include_node_modules: true,
+            include_vendor: false,
+        };
+
+        let filter = IgnoreFilter::new(dir.path()).with_config(&config);
+
+        // Tests should NOT be ignored
+        assert!(!filter.is_ignored(Path::new("/project/tests/test.rs")));
+        // node_modules should NOT be ignored
+        assert!(!filter.is_ignored(Path::new("/project/node_modules/pkg")));
+        // vendor should be ignored
+        assert!(filter.is_ignored(Path::new("/project/vendor/lib")));
+        // target should be ignored (from extra_directories)
+        assert!(filter.is_ignored(Path::new("/project/target/debug")));
     }
 }

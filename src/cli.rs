@@ -2,15 +2,16 @@ use crate::rules::Confidence;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
 pub enum OutputFormat {
     #[default]
     Terminal,
     Json,
     Sarif,
+    Html,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
 pub enum ScanType {
     #[default]
     Skill,
@@ -20,6 +21,10 @@ pub enum ScanType {
     Rules,
     Docker,
     Dependency,
+    /// Scan .claude/agents/ subagent definitions
+    Subagent,
+    /// Scan marketplace.json plugin definitions
+    Plugin,
 }
 
 #[derive(Parser, Debug)]
@@ -105,6 +110,58 @@ pub struct Cli {
     /// Path to a custom rules file (YAML format)
     #[arg(long)]
     pub custom_rules: Option<PathBuf>,
+
+    /// Create a baseline snapshot for drift detection (rug pull prevention)
+    #[arg(long)]
+    pub baseline: bool,
+
+    /// Check for drift against saved baseline
+    #[arg(long)]
+    pub check_drift: bool,
+
+    /// Generate a default configuration file template
+    #[arg(long)]
+    pub init: bool,
+
+    /// Output file path (for HTML/JSON output)
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
+
+    /// Save baseline to specified file
+    #[arg(long, value_name = "FILE")]
+    pub save_baseline: Option<PathBuf>,
+
+    /// Compare against baseline file (show only new findings)
+    #[arg(long, value_name = "FILE")]
+    pub baseline_file: Option<PathBuf>,
+
+    /// Compare two paths and show differences
+    #[arg(long, num_args = 2, value_names = ["PATH1", "PATH2"])]
+    pub compare: Option<Vec<PathBuf>>,
+
+    /// Auto-fix issues (where possible)
+    #[arg(long)]
+    pub fix: bool,
+
+    /// Preview auto-fix changes without applying them
+    #[arg(long)]
+    pub fix_dry_run: bool,
+
+    /// Run as MCP server
+    #[arg(long)]
+    pub mcp_server: bool,
+
+    /// Enable deep scan with deobfuscation
+    #[arg(long)]
+    pub deep_scan: bool,
+
+    /// Load settings from a named profile
+    #[arg(long, value_name = "NAME")]
+    pub profile: Option<String>,
+
+    /// Save current settings as a named profile
+    #[arg(long, value_name = "NAME")]
+    pub save_profile: Option<String>,
 }
 
 #[cfg(test)]
@@ -400,5 +457,17 @@ mod tests {
     fn test_default_custom_rules_none() {
         let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
         assert!(cli.custom_rules.is_none());
+    }
+
+    #[test]
+    fn test_parse_init() {
+        let cli = Cli::try_parse_from(["cc-audit", "--init", "./"]).unwrap();
+        assert!(cli.init);
+    }
+
+    #[test]
+    fn test_default_init_false() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(!cli.init);
     }
 }

@@ -2,7 +2,16 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![ps_001(), ps_003(), ps_004(), ps_005(), ps_006(), ps_007()]
+    vec![
+        ps_001(),
+        ps_003(),
+        ps_004(),
+        ps_005(),
+        ps_006(),
+        ps_007(),
+        ps_008(),
+        ps_009(),
+    ]
 }
 
 fn ps_001() -> Rule {
@@ -181,6 +190,86 @@ fn ps_007() -> Rule {
         message: "Init system manipulation detected. This is commonly used to establish boot-time persistence.",
         recommendation: "Skills should not modify system startup scripts or init configurations.",
         fix_hint: Some("Remove init system modifications. Provide manual setup instructions."),
+        cwe_ids: &["CWE-912"],
+    }
+}
+
+fn ps_008() -> Rule {
+    Rule {
+        id: "PS-008",
+        name: "Systemd service creation",
+        description: "Detects creation of systemd service unit files for establishing persistence on Linux systems",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // Writing service files
+            Regex::new(r">\s*/etc/systemd/system/[^/]+\.service").expect("PS-008: invalid regex"),
+            Regex::new(r">>\s*/etc/systemd/system/").expect("PS-008: invalid regex"),
+            Regex::new(r"tee\s+.*\.service").expect("PS-008: invalid regex"),
+            // User systemd services
+            Regex::new(r"~/.config/systemd/user/").expect("PS-008: invalid regex"),
+            Regex::new(r"\$HOME/.config/systemd/user/").expect("PS-008: invalid regex"),
+            // Service file content patterns
+            Regex::new(r"\[Service\]").expect("PS-008: invalid regex"),
+            Regex::new(r"ExecStart\s*=").expect("PS-008: invalid regex"),
+            Regex::new(r"WantedBy\s*=\s*(multi-user|default)\.target")
+                .expect("PS-008: invalid regex"),
+            // Timer units (for scheduled execution)
+            Regex::new(r">\s*/etc/systemd/system/[^/]+\.timer").expect("PS-008: invalid regex"),
+            Regex::new(r"\[Timer\]").expect("PS-008: invalid regex"),
+            Regex::new(r"OnBootSec\s*=|OnUnitActiveSec\s*=").expect("PS-008: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("PS-008: invalid regex"),
+            Regex::new(r"systemctl\s+(status|show|cat)").expect("PS-008: invalid regex"),
+        ],
+        message: "Systemd service creation detected. This establishes persistent execution on system boot.",
+        recommendation: "Skills should not create systemd services. Provide manual installation instructions.",
+        fix_hint: Some(
+            "Remove systemd service creation. Document how users can manually install if needed.",
+        ),
+        cwe_ids: &["CWE-912"],
+    }
+}
+
+fn ps_009() -> Rule {
+    Rule {
+        id: "PS-009",
+        name: "Launchd plist creation (macOS)",
+        description: "Detects creation of launchd plist files for establishing persistence on macOS",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // User LaunchAgents
+            Regex::new(r">\s*~/Library/LaunchAgents/[^/]+\.plist").expect("PS-009: invalid regex"),
+            Regex::new(r">\s*\$HOME/Library/LaunchAgents/").expect("PS-009: invalid regex"),
+            Regex::new(r"tee\s+.*LaunchAgents.*\.plist").expect("PS-009: invalid regex"),
+            // System-wide LaunchDaemons
+            Regex::new(r">\s*/Library/LaunchDaemons/").expect("PS-009: invalid regex"),
+            Regex::new(r">\s*/Library/LaunchAgents/").expect("PS-009: invalid regex"),
+            // Plist content patterns
+            Regex::new(r"<key>ProgramArguments</key>").expect("PS-009: invalid regex"),
+            Regex::new(r"<key>RunAtLoad</key>").expect("PS-009: invalid regex"),
+            Regex::new(r"<key>KeepAlive</key>").expect("PS-009: invalid regex"),
+            Regex::new(r"<key>StartInterval</key>").expect("PS-009: invalid regex"),
+            Regex::new(r"<key>StartCalendarInterval</key>").expect("PS-009: invalid regex"),
+            // plutil to manipulate plists
+            Regex::new(r"plutil\s+-insert.*LaunchAgents").expect("PS-009: invalid regex"),
+            // defaults write to plist
+            Regex::new(r"defaults\s+write.*LaunchAgents").expect("PS-009: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("PS-009: invalid regex"),
+            Regex::new(r"launchctl\s+list").expect("PS-009: invalid regex"),
+            Regex::new(r"plutil\s+-lint").expect("PS-009: invalid regex"),
+        ],
+        message: "Launchd plist creation detected. This establishes persistent execution on macOS.",
+        recommendation: "Skills should not create launchd plists. Provide manual installation instructions.",
+        fix_hint: Some(
+            "Remove launchd plist creation. Document how users can manually install if needed.",
+        ),
         cwe_ids: &["CWE-912"],
     }
 }

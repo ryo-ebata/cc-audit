@@ -2,7 +2,21 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![ex_001(), ex_002(), ex_003(), ex_005(), ex_006(), ex_007()]
+    vec![
+        ex_001(),
+        ex_002(),
+        ex_003(),
+        ex_005(),
+        ex_006(),
+        ex_007(),
+        ex_008(),
+        ex_009(),
+        ex_010(),
+        ex_011(),
+        ex_012(),
+        ex_013(),
+        ex_014(),
+    ]
 }
 
 fn ex_001() -> Rule {
@@ -172,6 +186,215 @@ fn ex_007() -> Rule {
         message: "Cloud storage exfiltration pattern detected. Sensitive data may be uploaded to cloud services.",
         recommendation: "Review cloud storage operations and ensure no sensitive data is being exfiltrated.",
         fix_hint: Some("Avoid uploading sensitive data to external cloud storage."),
+        cwe_ids: &["CWE-200", "CWE-319"],
+    }
+}
+
+fn ex_008() -> Rule {
+    Rule {
+        id: "EX-008",
+        name: "Screenshot capture",
+        description: "Detects screenshot capture capabilities that may exfiltrate visual data",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // macOS screenshot
+            Regex::new(r"screencapture\s+-").expect("EX-008: invalid regex"),
+            // Linux scrot/import
+            Regex::new(r"\b(scrot|import\s+-window)\b").expect("EX-008: invalid regex"),
+            // Windows screenshot
+            Regex::new(r"nircmd.*savescreenshot").expect("EX-008: invalid regex"),
+            // Python screenshot libraries
+            Regex::new(r"(pyautogui|pyscreenshot|mss)\.screenshot").expect("EX-008: invalid regex"),
+            // Node.js screenshot
+            Regex::new(r"screenshot-desktop|desktop-screenshot").expect("EX-008: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Screenshot capture detected. Visual data may be exfiltrated.",
+        recommendation: "Review screenshot functionality and ensure it's not used for data exfiltration.",
+        fix_hint: Some("Remove screenshot capture unless explicitly required"),
+        cwe_ids: &["CWE-200"],
+    }
+}
+
+fn ex_009() -> Rule {
+    Rule {
+        id: "EX-009",
+        name: "Clipboard access",
+        description: "Detects clipboard read operations that may access sensitive data",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // macOS clipboard
+            Regex::new(r"pbpaste").expect("EX-009: invalid regex"),
+            // Linux clipboard
+            Regex::new(r"xclip\s+-o|xsel\s+-o").expect("EX-009: invalid regex"),
+            // Windows clipboard
+            Regex::new(r"Get-Clipboard|powershell.*clipboard").expect("EX-009: invalid regex"),
+            // Python clipboard
+            Regex::new(r"(pyperclip|clipboard)\.paste\(\)").expect("EX-009: invalid regex"),
+            // Node.js clipboard
+            Regex::new(r"clipboardy\.read|clipboard\.readSync").expect("EX-009: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Clipboard read access detected. Sensitive data from clipboard may be exfiltrated.",
+        recommendation: "Review clipboard access and ensure it's not used for data theft.",
+        fix_hint: Some("Remove clipboard read unless explicitly required"),
+        cwe_ids: &["CWE-200"],
+    }
+}
+
+fn ex_010() -> Rule {
+    Rule {
+        id: "EX-010",
+        name: "Keylogger pattern",
+        description: "Detects patterns associated with keyboard input capture (keylogging)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Python keylogger libraries
+            Regex::new(r"pynput\.keyboard|keyboard\.on_press").expect("EX-010: invalid regex"),
+            // Node.js keyboard capture
+            Regex::new(r"iohook|node-global-key-listener").expect("EX-010: invalid regex"),
+            // Linux input device access
+            Regex::new(r"/dev/input/event\d+").expect("EX-010: invalid regex"),
+            // Windows hook patterns
+            Regex::new(r"SetWindowsHookEx|GetAsyncKeyState").expect("EX-010: invalid regex"),
+        ],
+        exclusions: vec![Regex::new(r"test|mock|example").expect("EX-010: invalid regex")],
+        message: "Keylogger pattern detected. Keyboard input may be captured and exfiltrated.",
+        recommendation: "Remove keyboard capture functionality unless it's a legitimate feature.",
+        fix_hint: Some("Remove keyboard hooking code"),
+        cwe_ids: &["CWE-200", "CWE-319"],
+    }
+}
+
+fn ex_011() -> Rule {
+    Rule {
+        id: "EX-011",
+        name: "Browser data access",
+        description: "Detects access to browser history, cookies, or passwords",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Chrome data paths
+            Regex::new(r"Chrome/User Data|\.config/google-chrome").expect("EX-011: invalid regex"),
+            // Firefox data paths
+            Regex::new(r"\.mozilla/firefox|places\.sqlite|logins\.json")
+                .expect("EX-011: invalid regex"),
+            // Safari data
+            Regex::new(r"Library/Safari/History\.db|Library/Cookies")
+                .expect("EX-011: invalid regex"),
+            // Generic browser data patterns
+            Regex::new(r"(Login Data|Cookies|History)\s*sqlite").expect("EX-011: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|example|documentation").expect("EX-011: invalid regex"),
+        ],
+        message: "Browser data access detected. Browser history, cookies, or passwords may be stolen.",
+        recommendation: "Remove browser data access unless it's a legitimate browser-related tool.",
+        fix_hint: Some("Remove browser data access code"),
+        cwe_ids: &["CWE-200", "CWE-522"],
+    }
+}
+
+fn ex_012() -> Rule {
+    Rule {
+        id: "EX-012",
+        name: "Camera/microphone access",
+        description: "Detects access to camera or microphone that may capture audio/video",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // FFmpeg capture
+            Regex::new(r"ffmpeg.*-f\s+(avfoundation|v4l2|alsa|pulse)")
+                .expect("EX-012: invalid regex"),
+            // macOS camera/mic
+            Regex::new(r"imagesnap|AVCaptureDevice").expect("EX-012: invalid regex"),
+            // Linux video/audio devices
+            Regex::new(r"/dev/video\d+|/dev/snd/").expect("EX-012: invalid regex"),
+            // Python camera libraries
+            Regex::new(r"cv2\.VideoCapture|picamera").expect("EX-012: invalid regex"),
+            // Browser media APIs
+            Regex::new(r"getUserMedia|mediaDevices").expect("EX-012: invalid regex"),
+        ],
+        exclusions: vec![Regex::new(r"test|mock|example").expect("EX-012: invalid regex")],
+        message: "Camera/microphone access detected. Audio or video may be captured and exfiltrated.",
+        recommendation: "Review media capture functionality and ensure it's not used for surveillance.",
+        fix_hint: Some("Remove camera/microphone access unless explicitly required"),
+        cwe_ids: &["CWE-200"],
+    }
+}
+
+fn ex_013() -> Rule {
+    Rule {
+        id: "EX-013",
+        name: "Webhook data exfiltration",
+        description: "Detects data being sent to webhook endpoints, potentially exfiltrating sensitive information",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Generic webhook patterns
+            Regex::new(r"(curl|wget|fetch|axios|request).*webhook").expect("EX-013: invalid regex"),
+            Regex::new(r"webhook\.(site|com|io)").expect("EX-013: invalid regex"),
+            // POST to webhook endpoints
+            Regex::new(r#"(curl|wget)\s+.*-X\s*POST.*webhook"#).expect("EX-013: invalid regex"),
+            Regex::new(r#"(curl|wget)\s+.*--data.*webhook"#).expect("EX-013: invalid regex"),
+            // n8n, Zapier, Make (Integromat) webhooks
+            Regex::new(r"hooks\.(n8n|zapier|make|integromat)").expect("EX-013: invalid regex"),
+            // Pipedream webhooks
+            Regex::new(r"pipedream\.net").expect("EX-013: invalid regex"),
+            // IFTTT webhooks
+            Regex::new(r"maker\.ifttt\.com/trigger").expect("EX-013: invalid regex"),
+            // RequestBin style services
+            Regex::new(r"(requestbin|hookbin|requestcatcher)").expect("EX-013: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"localhost|127\.0\.0\.1").expect("EX-013: invalid regex"),
+            Regex::new(r"^\s*#").expect("EX-013: invalid regex"),
+        ],
+        message: "Webhook data exfiltration detected. Sensitive data may be sent to external webhook services.",
+        recommendation: "Review webhook usage and ensure no sensitive data is being transmitted.",
+        fix_hint: Some("Remove webhook calls or ensure only non-sensitive data is transmitted"),
+        cwe_ids: &["CWE-200", "CWE-319"],
+    }
+}
+
+fn ex_014() -> Rule {
+    Rule {
+        id: "EX-014",
+        name: "Discord/Slack webhook abuse",
+        description: "Detects data being sent to Discord or Slack webhooks, commonly abused for data exfiltration",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Discord webhooks
+            Regex::new(r"discord(app)?\.com/api/webhooks/").expect("EX-014: invalid regex"),
+            Regex::new(r#"(curl|wget|fetch).*discord.*webhook"#).expect("EX-014: invalid regex"),
+            // Slack webhooks
+            Regex::new(r"hooks\.slack\.com/services/").expect("EX-014: invalid regex"),
+            Regex::new(r#"(curl|wget|fetch).*slack.*webhook"#).expect("EX-014: invalid regex"),
+            // Microsoft Teams webhooks
+            Regex::new(r"webhook\.office\.com").expect("EX-014: invalid regex"),
+            Regex::new(r"teams\.microsoft\.com.*webhook").expect("EX-014: invalid regex"),
+            // Telegram bot API (often abused)
+            Regex::new(r"api\.telegram\.org/bot.*sendMessage").expect("EX-014: invalid regex"),
+            Regex::new(r"api\.telegram\.org/bot.*sendDocument").expect("EX-014: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("EX-014: invalid regex"),
+            Regex::new(r"test|example|demo").expect("EX-014: invalid regex"),
+        ],
+        message: "Discord/Slack/Teams webhook detected. These are commonly abused for data exfiltration.",
+        recommendation: "Remove messaging webhook integrations or ensure they don't transmit sensitive data.",
+        fix_hint: Some("Remove webhook URLs or use authenticated, auditable notification channels"),
         cwe_ids: &["CWE-200", "CWE-319"],
     }
 }

@@ -4,8 +4,10 @@ pub mod dependency;
 pub mod dockerfile;
 pub mod hook;
 pub mod mcp;
+pub mod plugin;
 pub mod rules_dir;
 pub mod skill;
+pub mod subagent;
 
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
@@ -17,8 +19,10 @@ pub use dependency::DependencyScanner;
 pub use dockerfile::DockerScanner;
 pub use hook::HookScanner;
 pub use mcp::McpScanner;
+pub use plugin::PluginScanner;
 pub use rules_dir::RulesDirScanner;
 pub use skill::{FrontmatterParser, SkillFileFilter, SkillScanner};
+pub use subagent::SubagentScanner;
 
 /// Core trait for all security scanners.
 pub trait Scanner {

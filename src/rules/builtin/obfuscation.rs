@@ -2,7 +2,16 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![ob_001(), ob_002(), ob_003(), ob_004(), ob_005(), ob_006()]
+    vec![
+        ob_001(),
+        ob_002(),
+        ob_003(),
+        ob_004(),
+        ob_005(),
+        ob_006(),
+        ob_007(),
+        ob_008(),
+    ]
 }
 
 fn ob_001() -> Rule {
@@ -220,6 +229,92 @@ fn ob_006() -> Rule {
         recommendation: "Decode the content first and review before execution. Avoid executing encoded content.",
         fix_hint: Some("Decode and review: base32 -d file.txt, then inspect before executing"),
         cwe_ids: &["CWE-95", "CWE-116"],
+    }
+}
+
+fn ob_007() -> Rule {
+    Rule {
+        id: "OB-007",
+        name: "String concatenation obfuscation",
+        description: "Detects command obfuscation via string concatenation to hide malicious intent",
+        severity: Severity::Medium,
+        category: Category::Obfuscation,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // JavaScript string concatenation building commands
+            Regex::new(r#"['"]cu['"].*\+.*['"]rl['"]"#).expect("OB-007: invalid regex"),
+            Regex::new(r#"['"]wg['"].*\+.*['"]et['"]"#).expect("OB-007: invalid regex"),
+            Regex::new(r#"['"]ev['"].*\+.*['"]al['"]"#).expect("OB-007: invalid regex"),
+            // Python string concatenation
+            Regex::new(r#"['"]cu['"].*['"]rl['"]"#).expect("OB-007: invalid regex"),
+            // Bash variable concatenation building commands
+            Regex::new(r#"[a-z]=["']?[a-z]{1,3}["']?;.*\$[a-z].*\$[a-z]"#).expect("OB-007: invalid regex"),
+            // Split array join to build command
+            Regex::new(r#"\[\s*['"][a-z]{1,3}['"]\s*,\s*['"][a-z]{1,3}['"].*\]\.join\s*\(\s*['"]['"]\s*\)"#)
+                .expect("OB-007: invalid regex"),
+            // Template literal concatenation
+            Regex::new(r#"`\$\{['"][a-z]{1,3}['"]\}`"#).expect("OB-007: invalid regex"),
+            // Character code building (String.fromCharCode patterns)
+            Regex::new(r"String\.fromCharCode\s*\(\s*\d+\s*(,\s*\d+\s*){3,}")
+                .expect("OB-007: invalid regex"),
+            // Python chr() building
+            Regex::new(r"chr\s*\(\s*\d+\s*\)\s*\+\s*chr\s*\(\s*\d+\s*\)")
+                .expect("OB-007: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("OB-007: invalid regex"),
+            Regex::new(r"^\s*//").expect("OB-007: invalid regex"),
+            // Test/example files
+            Regex::new(r"test|spec|example").expect("OB-007: invalid regex"),
+        ],
+        message: "String concatenation obfuscation detected. Command names may be built from fragments to evade detection.",
+        recommendation: "Use direct command names instead of building them from string fragments.",
+        fix_hint: Some("Replace string concatenation with direct command: 'curl' instead of 'cu' + 'rl'"),
+        cwe_ids: &["CWE-95"],
+    }
+}
+
+fn ob_008() -> Rule {
+    Rule {
+        id: "OB-008",
+        name: "Variable expansion obfuscation",
+        description: "Detects command obfuscation via variable expansion and indirect references",
+        severity: Severity::Medium,
+        category: Category::Obfuscation,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // Bash indirect variable expansion
+            Regex::new(r"\$\{![a-zA-Z_][a-zA-Z0-9_]*\}").expect("OB-008: invalid regex"),
+            // Building command in variable then executing
+            Regex::new(r#"[A-Z_]+=['"]?(curl|wget|nc|bash|sh|eval)['"]?.*;\s*\$[A-Z_]+"#)
+                .expect("OB-008: invalid regex"),
+            // Brace expansion building commands
+            Regex::new(r"\{[a-z],[a-z],[a-z]\}").expect("OB-008: invalid regex"),
+            // Parameter expansion tricks
+            Regex::new(r"\$\{[a-zA-Z_]+::\d+\}").expect("OB-008: invalid regex"),
+            Regex::new(r"\$\{[a-zA-Z_]+:\d+:\d+\}").expect("OB-008: invalid regex"),
+            // Environment variable command execution
+            Regex::new(r"\$\([^)]*\$[A-Z_]+[^)]*\)").expect("OB-008: invalid regex"),
+            // Command substitution with variable command
+            Regex::new(r"`\$[A-Z_]+.*`").expect("OB-008: invalid regex"),
+            // Python globals/eval tricks
+            Regex::new(r#"globals\s*\(\s*\)\s*\[['"]"#).expect("OB-008: invalid regex"),
+            Regex::new(r"eval\s*\(\s*[a-zA-Z_]+\s*\)").expect("OB-008: invalid regex"),
+            // Node.js global/process tricks
+            Regex::new(r#"global\s*\[\s*['"][a-zA-Z]+['"]\s*\]"#).expect("OB-008: invalid regex"),
+            Regex::new(r#"process\s*\[\s*['"]"#).expect("OB-008: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"^\s*#").expect("OB-008: invalid regex"),
+            Regex::new(r"^\s*//").expect("OB-008: invalid regex"),
+            // Common legitimate uses
+            Regex::new(r"\$\{[A-Z_]+:-").expect("OB-008: invalid regex"), // Default value expansion
+            Regex::new(r"\$\{#[A-Z_]+\}").expect("OB-008: invalid regex"), // String length
+        ],
+        message: "Variable expansion obfuscation detected. Commands may be hidden in variable references.",
+        recommendation: "Use direct command names instead of variable indirection.",
+        fix_hint: Some("Replace variable expansion with direct commands for clarity"),
+        cwe_ids: &["CWE-95"],
     }
 }
 

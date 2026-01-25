@@ -111,7 +111,7 @@ mod cli_options {
             .clone();
 
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
-        assert_eq!(json["version"], "0.3.0");
+        assert_eq!(json["version"], "0.4.0");
         assert!(json["summary"]["passed"].as_bool().unwrap());
     }
 
@@ -178,7 +178,7 @@ mod cli_options {
             .arg("--version")
             .assert()
             .success()
-            .stdout(predicate::str::contains("0.3.0"));
+            .stdout(predicate::str::contains("0.4.0"));
     }
 
     #[test]

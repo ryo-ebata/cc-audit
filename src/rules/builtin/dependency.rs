@@ -2,7 +2,18 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![dep_001(), dep_002(), dep_003(), dep_004(), dep_005()]
+    vec![
+        dep_001(),
+        dep_002(),
+        dep_003(),
+        dep_004(),
+        dep_005(),
+        dep_006(),
+        dep_007(),
+        dep_008(),
+        dep_009(),
+        dep_010(),
+    ]
 }
 
 fn dep_001() -> Rule {
@@ -130,6 +141,121 @@ fn dep_005() -> Rule {
         recommendation: "Use package registry versions instead of direct file URLs",
         fix_hint: Some("Publish the package to a registry or use git with commit pinning"),
         cwe_ids: &["CWE-829", "CWE-494"],
+    }
+}
+
+fn dep_006() -> Rule {
+    Rule {
+        id: "DEP-006",
+        name: "Postinstall script execution",
+        description: "Detects postinstall scripts that may execute arbitrary code",
+        severity: Severity::Medium,
+        category: Category::SupplyChain,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            Regex::new(r#""postinstall"\s*:\s*"[^"]+""#).expect("DEP-006: invalid regex"),
+            Regex::new(r#""install"\s*:\s*"[^"]+""#).expect("DEP-006: invalid regex"),
+        ],
+        exclusions: vec![
+            // Common safe postinstall scripts
+            Regex::new(r"node-gyp|husky|patch-package|ngcc|postinstall-postinstall")
+                .expect("DEP-006: invalid regex"),
+        ],
+        message: "Postinstall script detected. These scripts run automatically after npm install.",
+        recommendation: "Review the postinstall script to ensure it's safe. Consider using --ignore-scripts.",
+        fix_hint: Some("npm install --ignore-scripts or review the script manually"),
+        cwe_ids: &["CWE-829"],
+    }
+}
+
+fn dep_007() -> Rule {
+    Rule {
+        id: "DEP-007",
+        name: "Preinstall script execution",
+        description: "Detects preinstall scripts that execute before package installation",
+        severity: Severity::High,
+        category: Category::SupplyChain,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            Regex::new(r#""preinstall"\s*:\s*"[^"]+""#).expect("DEP-007: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Preinstall script detected. These scripts run before installation completes.",
+        recommendation: "Preinstall scripts are higher risk. Review carefully before proceeding.",
+        fix_hint: Some("npm install --ignore-scripts or review the script manually"),
+        cwe_ids: &["CWE-829"],
+    }
+}
+
+fn dep_008() -> Rule {
+    Rule {
+        id: "DEP-008",
+        name: "Typosquatting package name",
+        description: "Detects common typosquatting patterns in package names",
+        severity: Severity::High,
+        category: Category::SupplyChain,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // Common typosquatting patterns for popular packages
+            Regex::new(r#""(loadash|lodahs|lod-ash|l0dash)"\s*:"#).expect("DEP-008: invalid regex"),
+            Regex::new(r#""(reacct|reactt|re-act|raect)"\s*:"#).expect("DEP-008: invalid regex"),
+            Regex::new(r#""(expresss|expres|ex-press|exppress)"\s*:"#)
+                .expect("DEP-008: invalid regex"),
+            Regex::new(r#""(axois|axioss|ax-ios|axos)"\s*:"#).expect("DEP-008: invalid regex"),
+            Regex::new(r#""(momnet|momentt|mom-ent|momen)"\s*:"#).expect("DEP-008: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Potential typosquatting package detected. Verify the package name is correct.",
+        recommendation: "Check the official package name and correct any typos.",
+        fix_hint: Some("Verify package name at npmjs.com before installing"),
+        cwe_ids: &["CWE-494", "CWE-1357"],
+    }
+}
+
+fn dep_009() -> Rule {
+    Rule {
+        id: "DEP-009",
+        name: "Dependency confusion pattern",
+        description: "Detects internal/private package naming patterns that may be vulnerable to dependency confusion",
+        severity: Severity::Medium,
+        category: Category::SupplyChain,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // Common internal package prefixes
+            Regex::new(r#""@internal/[^"]+"\s*:"#).expect("DEP-009: invalid regex"),
+            Regex::new(r#""@private/[^"]+"\s*:"#).expect("DEP-009: invalid regex"),
+            Regex::new(r#""@corp/[^"]+"\s*:"#).expect("DEP-009: invalid regex"),
+            Regex::new(r#""@company/[^"]+"\s*:"#).expect("DEP-009: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Internal package naming pattern detected. Ensure private registry is configured.",
+        recommendation: "Configure .npmrc to use private registry for internal packages.",
+        fix_hint: Some("Add @scope:registry=https://your-private-registry in .npmrc"),
+        cwe_ids: &["CWE-427", "CWE-1357"],
+    }
+}
+
+fn dep_010() -> Rule {
+    Rule {
+        id: "DEP-010",
+        name: "Unpinned major version",
+        description: "Detects dependencies with unpinned major versions (^0.x or >=)",
+        severity: Severity::Low,
+        category: Category::SupplyChain,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // ^0.x.x allows breaking changes
+            Regex::new(r#":\s*"\^0\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
+            // >= without upper bound
+            Regex::new(r#":\s*">=\d+\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
+            // > without upper bound
+            Regex::new(r#":\s*">\d+\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Unpinned version range detected. May allow unexpected major version upgrades.",
+        recommendation: "Use exact versions or tilde ranges for better reproducibility.",
+        fix_hint: Some("Use exact version (1.2.3) or tilde range (~1.2.3)"),
+        cwe_ids: &["CWE-1357"],
     }
 }
 

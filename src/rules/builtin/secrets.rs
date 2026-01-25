@@ -2,7 +2,18 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![sl_001(), sl_002(), sl_003(), sl_004(), sl_005()]
+    vec![
+        sl_001(),
+        sl_002(),
+        sl_003(),
+        sl_004(),
+        sl_005(),
+        sl_006(),
+        sl_007(),
+        sl_008(),
+        sl_009(),
+        sl_010(),
+    ]
 }
 
 fn sl_001() -> Rule {
@@ -185,6 +196,127 @@ fn sl_005() -> Rule {
             "git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch PATH' HEAD",
         ),
         cwe_ids: &["CWE-321", "CWE-522"],
+    }
+}
+
+fn sl_006() -> Rule {
+    Rule {
+        id: "SL-006",
+        name: "JWT token hardcoded",
+        description: "Detects hardcoded JWT tokens in source code",
+        severity: Severity::High,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // JWT format: header.payload.signature (base64url encoded)
+            Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
+                .expect("SL-006: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-006: invalid regex"),
+        ],
+        message: "Hardcoded JWT token detected. This token may grant unauthorized access.",
+        recommendation: "Remove the JWT token and use environment variables or secure token generation.",
+        fix_hint: Some("Use process.env.JWT_TOKEN or generate tokens dynamically"),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_007() -> Rule {
+    Rule {
+        id: "SL-007",
+        name: "Slack webhook URL",
+        description: "Detects Slack incoming webhook URLs",
+        severity: Severity::High,
+        category: Category::SecretLeak,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            Regex::new(
+                r"https://hooks\.slack\.com/services/T[A-Z0-9]{8,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{20,}",
+            )
+            .expect("SL-007: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-007: invalid regex"),
+        ],
+        message: "Slack webhook URL detected. Anyone with this URL can post to your Slack channel.",
+        recommendation: "Rotate the webhook URL in Slack and use environment variables.",
+        fix_hint: Some("Use $SLACK_WEBHOOK_URL environment variable"),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_008() -> Rule {
+    Rule {
+        id: "SL-008",
+        name: "Discord webhook URL",
+        description: "Detects Discord webhook URLs",
+        severity: Severity::High,
+        category: Category::SecretLeak,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            Regex::new(r"https://discord(app)?\.com/api/webhooks/\d{17,}/[A-Za-z0-9_-]{60,}")
+                .expect("SL-008: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-008: invalid regex"),
+        ],
+        message: "Discord webhook URL detected. Anyone with this URL can post to your Discord channel.",
+        recommendation: "Regenerate the webhook in Discord and use environment variables.",
+        fix_hint: Some("Use $DISCORD_WEBHOOK_URL environment variable"),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_009() -> Rule {
+    Rule {
+        id: "SL-009",
+        name: "Telegram bot token",
+        description: "Detects Telegram bot API tokens",
+        severity: Severity::High,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Telegram bot token format: bot_id:secret
+            Regex::new(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b").expect("SL-009: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|fake|dummy|example").expect("SL-009: invalid regex"),
+        ],
+        message: "Telegram bot token detected. This token provides full control over the bot.",
+        recommendation: "Revoke the token via @BotFather and use environment variables.",
+        fix_hint: Some("Use $TELEGRAM_BOT_TOKEN environment variable"),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_010() -> Rule {
+    Rule {
+        id: "SL-010",
+        name: "Database connection string",
+        description: "Detects database connection strings with embedded credentials",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // MongoDB connection string with credentials
+            Regex::new(r"mongodb(\+srv)?://[^:]+:[^@]+@[^/]+").expect("SL-010: invalid regex"),
+            // PostgreSQL connection string with credentials
+            Regex::new(r"postgres(ql)?://[^:]+:[^@]+@[^/]+").expect("SL-010: invalid regex"),
+            // MySQL connection string with credentials
+            Regex::new(r"mysql://[^:]+:[^@]+@[^/]+").expect("SL-010: invalid regex"),
+            // Redis connection string with password
+            Regex::new(r"redis://:[^@]+@[^/]+").expect("SL-010: invalid regex"),
+        ],
+        exclusions: vec![
+            Regex::new(r"test|mock|fake|dummy|example|localhost|127\.0\.0\.1")
+                .expect("SL-010: invalid regex"),
+            Regex::new(r"password|secret|\$\{").expect("SL-010: invalid regex"),
+        ],
+        message: "Database connection string with embedded credentials detected.",
+        recommendation: "Use environment variables for database connection strings.",
+        fix_hint: Some("Use $DATABASE_URL environment variable"),
+        cwe_ids: &["CWE-798", "CWE-259"],
     }
 }
 

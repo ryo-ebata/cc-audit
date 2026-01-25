@@ -1,0 +1,161 @@
+name: Performance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run benchmarks
+        run: cargo bench --bench scan_benchmark -- --noplot --save-baseline pr
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: target/criterion/
+
+      - name: Compare benchmarks (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main
+          git checkout origin/main -- . || true
+          cargo bench --bench scan_benchmark -- --noplot --save-baseline main || echo "No baseline on main"
+          git checkout - -- .
+          cargo bench --bench scan_benchmark -- --noplot --baseline main || echo "Comparison skipped"
+
+  binary-size:
+    name: Binary Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Measure binary size
+        id: size
+        run: |
+          SIZE=$(stat -c%s target/release/cc-audit)
+          SIZE_MB=$(echo "scale=2; $SIZE / 1048576" | bc)
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+          echo "size_mb=$SIZE_MB" >> $GITHUB_OUTPUT
+          echo "Binary size: ${SIZE_MB}MB ($SIZE bytes)"
+
+      - name: Check binary size threshold
+        run: |
+          SIZE=${{ steps.size.outputs.size }}
+          # Threshold: 20MB (adjust as needed)
+          THRESHOLD=20971520
+          if [ "$SIZE" -gt "$THRESHOLD" ]; then
+            echo "::warning::Binary size ($SIZE bytes) exceeds threshold ($THRESHOLD bytes)"
+          fi
+
+      - name: Create size report
+        run: |
+          echo "## Binary Size Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Binary | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| cc-audit | ${{ steps.size.outputs.size_mb }}MB |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload size data
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-size
+          path: target/release/cc-audit
+
+  build-time:
+    name: Build Time
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Clean build (no cache)
+        run: |
+          cargo clean
+
+      - name: Measure debug build time
+        id: debug_build
+        run: |
+          START=$(date +%s.%N)
+          cargo build 2>&1
+          END=$(date +%s.%N)
+          DURATION=$(echo "$END - $START" | bc)
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "Debug build time: ${DURATION}s"
+
+      - name: Clean for release build
+        run: cargo clean
+
+      - name: Measure release build time
+        id: release_build
+        run: |
+          START=$(date +%s.%N)
+          cargo build --release 2>&1
+          END=$(date +%s.%N)
+          DURATION=$(echo "$END - $START" | bc)
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          echo "Release build time: ${DURATION}s"
+
+      - name: Create build time report
+        run: |
+          echo "## Build Time Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Build Type | Duration |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Debug | ${{ steps.debug_build.outputs.duration }}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | ${{ steps.release_build.outputs.duration }}s |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check build time threshold
+        run: |
+          # Threshold: 5 minutes for release build (adjust as needed)
+          THRESHOLD=300
+          DURATION=${{ steps.release_build.outputs.duration }}
+          DURATION_INT=${DURATION%.*}
+          if [ "$DURATION_INT" -gt "$THRESHOLD" ]; then
+            echo "::warning::Release build time ($DURATION s) exceeds threshold ($THRESHOLD s)"
+          fi
+
+  performance-summary:
+    name: Performance Summary
+    runs-on: ubuntu-latest
+    needs: [benchmark, binary-size, build-time]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create summary
+        run: |
+          echo "# Performance Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All performance checks completed." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Jobs Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Benchmark: ${{ needs.benchmark.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Binary Size: ${{ needs.binary-size.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build Time: ${{ needs.build-time.result }}" >> $GITHUB_STEP_SUMMARY

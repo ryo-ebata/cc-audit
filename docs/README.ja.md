@@ -67,12 +67,33 @@ cc-audit ./skill/ --strict
 
 # 再帰スキャン
 cc-audit --recursive ~/.claude/skills/
+
+# MCP設定ファイルをスキャン
+cc-audit --type mcp ~/.claude/mcp.json
+
+# スラッシュコマンドをスキャン
+cc-audit --type command ./.claude/commands/
+
+# Dockerfile をスキャン
+cc-audit --type docker ./
+
+# 依存関係ファイルをスキャン（package.json、Cargo.toml、requirements.txt）
+cc-audit --type dependency ./
+
+# ウォッチモード（ファイル変更時に自動再スキャン）
+cc-audit --watch ./my-skill/
+
+# pre-commit フックをインストール
+cc-audit --init-hook .
+
+# 修正ヒントを表示
+cc-audit --fix-hint ./my-skill/
 ```
 
 ## 出力例
 
 ```
-cc-audit v0.2.0 - Claude Code Security Auditor
+cc-audit v0.3.0 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 
@@ -109,56 +130,21 @@ Result: FAIL (exit code 1)
 | **medium**   | 注意が必要、レビュー推奨         | `--strict` で表示 |
 | **low**      | 情報提供、ベストプラクティス違反 | `--strict` で表示 |
 
-### ビルトインルール（v0.2.0）
+### 検出カテゴリ
 
-#### データ流出（Exfiltration）
+- **データ流出** — 機密データを含むネットワークリクエスト、DNSトンネリング、代替プロトコル、クラウドストレージ
+- **権限昇格** — sudo、破壊的コマンド、危険なパーミッション
+- **永続化** — crontab、シェルプロファイル、システムサービス、SSH鍵、initスクリプト、バックグラウンド実行
+- **プロンプトインジェクション** — 隠し指示、Unicode難読化
+- **過剰権限** — ワイルドカードツール権限
+- **難読化** — eval、base64/hex/octal実行、エンコーディングトリック、文字列操作
+- **サプライチェーン** — リモートスクリプト実行、信頼できないソース
+- **シークレット漏洩** — APIキー、トークン、秘密鍵
+- **Docker** — 特権コンテナ、rootユーザー、危険なRUNコマンド
+- **依存関係** — 危険なライフサイクルスクリプト、ピン留めされていないバージョン、危険なURL
+- **マルウェアシグネチャ** — C2ビーコン、リバースシェル、マイナー、認証情報窃取
 
-| ID     | ルール                               | 深刻度   |
-| ------ | ------------------------------------ | -------- |
-| EX-001 | 環境変数を含むネットワークリクエスト | Critical |
-| EX-002 | Base64エンコード + ネットワーク送信  | Critical |
-| EX-003 | DNSベースのデータ流出                | High     |
-| EX-005 | Netcat の外部接続                    | Critical |
-
-#### 権限昇格（Privilege Escalation）
-
-| ID     | ルール                                  | 深刻度   |
-| ------ | --------------------------------------- | -------- |
-| PE-001 | sudo 実行                               | Critical |
-| PE-002 | 破壊的なルート削除（`rm -rf /`）        | Critical |
-| PE-003 | 危険なパーミッション設定（`chmod 777`） | Critical |
-| PE-004 | システムパスワードファイルへのアクセス  | Critical |
-| PE-005 | SSH ディレクトリへのアクセス            | Critical |
-
-#### 永続化（Persistence）
-
-| ID     | ルール                       | 深刻度   |
-| ------ | ---------------------------- | -------- |
-| PS-001 | crontab 操作                 | Critical |
-| PS-003 | シェルプロファイルの改ざん   | Critical |
-| PS-004 | システムサービスの登録       | Critical |
-| PS-005 | SSH authorized_keys の改ざん | Critical |
-
-#### プロンプトインジェクション（Prompt Injection）
-
-| ID     | ルール                       | 深刻度 |
-| ------ | ---------------------------- | ------ |
-| PI-001 | 「以前の指示を無視」パターン | High   |
-| PI-002 | HTML コメント内の隠し指示    | High   |
-| PI-003 | 不可視 Unicode 文字          | High   |
-
-#### 過剰権限（Overpermission）
-
-| ID     | ルール                                         | 深刻度 |
-| ------ | ---------------------------------------------- | ------ |
-| OP-001 | ワイルドカードツール権限（`allowed-tools: *`） | High   |
-
-#### 難読化（Obfuscation）
-
-| ID     | ルール              | 深刻度 |
-| ------ | ------------------- | ------ |
-| OB-001 | eval と変数展開     | High   |
-| OB-002 | Base64 デコード実行 | High   |
+`cc-audit --verbose` で全ルールを確認できます。
 
 ## CLI リファレンス
 
@@ -169,14 +155,26 @@ Arguments:
   <PATHS>...  スキャンするパス（ファイルまたはディレクトリ）
 
 Options:
-  -f, --format <FORMAT>    出力形式 [デフォルト: terminal] [可能な値: terminal, json, sarif]
-  -s, --strict             厳格モード: medium/low の問題も表示
-  -t, --type <SCAN_TYPE>   スキャンタイプ [デフォルト: skill] [可能な値: skill, hook]
-  -r, --recursive          再帰スキャン
-      --ci                 CI モード: 非インタラクティブ出力
-  -v, --verbose            詳細出力
-  -h, --help               ヘルプを表示
-  -V, --version            バージョンを表示
+  -f, --format <FORMAT>           出力形式 [デフォルト: terminal] [可能な値: terminal, json, sarif]
+  -s, --strict                    厳格モード: medium/low の問題も表示
+  -t, --type <SCAN_TYPE>          スキャンタイプ [デフォルト: skill] [可能な値: skill, hook, mcp, command, rules, docker, dependency]
+  -r, --recursive                 再帰スキャン
+      --ci                        CI モード: 非インタラクティブ出力
+  -v, --verbose                   詳細出力
+      --include-tests             テストディレクトリを含める
+      --include-node-modules      node_modules ディレクトリを含める
+      --include-vendor            vendor ディレクトリを含める
+      --min-confidence <LEVEL>    最小信頼度レベル [デフォルト: tentative] [可能な値: tentative, firm, certain]
+      --skip-comments             コメント行をスキップ
+      --fix-hint                  修正ヒントを表示
+  -w, --watch                     ウォッチモード: ファイル変更を監視
+      --init-hook                 pre-commit フックをインストール
+      --remove-hook               pre-commit フックを削除
+      --malware-db <PATH>         カスタムマルウェアシグネチャDBのパス
+      --no-malware-scan           マルウェアスキャンを無効化
+      --custom-rules <PATH>       カスタムルールファイルのパス（YAML形式）
+  -h, --help                      ヘルプを表示
+  -V, --version                   バージョンを表示
 ```
 
 ### 終了コード
@@ -195,7 +193,7 @@ cc-audit ./skill/ --format json
 
 ```json
 {
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"scanned_at": "2026-01-25T12:00:00Z",
 	"target": "./awesome-skill/",
 	"summary": {
@@ -227,8 +225,8 @@ cc-audit ./skill/ --format json
 
 - [x] **v0.1.0** — Skills スキャン、12 ビルトインルール、terminal/JSON 出力
 - [x] **v0.2.0** — Hooks（`settings.json`）対応、SARIF 出力、17 ビルトインルール
-- [ ] **v0.3.0** — MCP Server スキャン、カスタムルール（TOML）、サプライチェーンチェック、GitHub Action
-- [ ] **v1.0.0** — 安定版リリース、ドキュメントサイト、コミュニティルールデータベース
+- [x] **v0.3.0** — MCP/Commands/Rules/Docker スキャン、サプライチェーン & シークレット漏洩検出、マルウェアDB、ウォッチモード、pre-commit フック
+- [ ] **v1.0.0** — 安定版リリース、GitHub Action、VSCode 拡張、ドキュメントサイト
 
 ## コントリビュート
 

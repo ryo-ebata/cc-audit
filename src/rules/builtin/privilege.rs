@@ -1,4 +1,4 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
@@ -12,10 +12,13 @@ fn pe_001() -> Rule {
         description: "Detects sudo commands which could be used for privilege escalation",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
         patterns: vec![Regex::new(r"\bsudo\s+").unwrap()],
         exclusions: vec![],
         message: "Privilege escalation: sudo command detected",
         recommendation: "Skills should not require sudo. Review why elevated privileges are needed",
+        fix_hint: Some("Remove sudo or run the skill with appropriate user permissions"),
+        cwe_ids: &["CWE-250"],
     }
 }
 
@@ -26,6 +29,7 @@ fn pe_002() -> Rule {
         description: "Detects rm -rf / or similar commands that could destroy the entire filesystem",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
         patterns: vec![
             Regex::new(r"rm\s+(-[rfRF]+\s+)+/\s*$").unwrap(),
             Regex::new(r"rm\s+(-[rfRF]+\s+)+/[^a-zA-Z]").unwrap(),
@@ -35,6 +39,8 @@ fn pe_002() -> Rule {
         exclusions: vec![],
         message: "Destructive command: potential filesystem destruction detected",
         recommendation: "Never use rm -rf on root or with wildcards in skills",
+        fix_hint: Some("Specify exact paths instead of wildcards: rm -rf /tmp/specific-dir"),
+        cwe_ids: &["CWE-250", "CWE-73"],
     }
 }
 
@@ -45,6 +51,7 @@ fn pe_003() -> Rule {
         description: "Detects chmod 777 which makes files world-writable, a security risk",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
         patterns: vec![
             Regex::new(r"chmod\s+777\b").unwrap(),
             Regex::new(r"chmod\s+[0-7]?777\b").unwrap(),
@@ -54,6 +61,8 @@ fn pe_003() -> Rule {
         exclusions: vec![],
         message: "Insecure permissions: chmod 777 makes files world-writable",
         recommendation: "Use more restrictive permissions (e.g., 755 for directories, 644 for files)",
+        fix_hint: Some("chmod 755 for directories, chmod 644 for files"),
+        cwe_ids: &["CWE-732"],
     }
 }
 
@@ -64,6 +73,7 @@ fn pe_004() -> Rule {
         description: "Detects access to /etc/passwd, /etc/shadow, or other sensitive system files",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"/etc/passwd\b").unwrap(),
             Regex::new(r"/etc/shadow\b").unwrap(),
@@ -74,6 +84,8 @@ fn pe_004() -> Rule {
         exclusions: vec![],
         message: "Sensitive file access: system password file access detected",
         recommendation: "Skills should never access system authentication files",
+        fix_hint: Some("Remove any references to /etc/passwd, /etc/shadow, or /etc/sudoers"),
+        cwe_ids: &["CWE-200", "CWE-522"],
     }
 }
 
@@ -84,6 +96,7 @@ fn pe_005() -> Rule {
         description: "Detects access to ~/.ssh/ directory which contains sensitive authentication keys",
         severity: Severity::Critical,
         category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"~/\.ssh/").unwrap(),
             Regex::new(r"\$HOME/\.ssh/").unwrap(),
@@ -95,6 +108,8 @@ fn pe_005() -> Rule {
         exclusions: vec![],
         message: "Sensitive file access: SSH directory access detected",
         recommendation: "Skills should never access SSH keys or configuration",
+        fix_hint: Some("Remove any references to ~/.ssh/ or SSH key files"),
+        cwe_ids: &["CWE-200", "CWE-522"],
     }
 }
 
@@ -186,5 +201,4 @@ mod tests {
             assert_eq!(matched, should_match, "Failed for input: {}", input);
         }
     }
-
 }

@@ -1,0 +1,68 @@
+name: Semver
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  semver-check:
+    name: API Compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks --locked
+
+      - name: Check semver compatibility
+        run: |
+          # Get the latest tag for comparison
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous tags found, skipping semver check"
+            echo "## Semver Check" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No previous release found. Skipping API compatibility check." >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          echo "Checking API compatibility against $LATEST_TAG"
+          echo "## Semver Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Comparing against: **$LATEST_TAG**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if cargo semver-checks check-release --baseline-rev "$LATEST_TAG"; then
+            echo "API is compatible" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning::API breaking changes detected"
+            echo "API breaking changes detected. Ensure version bump is appropriate." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  changelog-check:
+    name: Changelog Updated
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check CHANGELOG.md updated
+        run: |
+          if git diff --name-only origin/main...HEAD | grep -q "CHANGELOG.md"; then
+            echo "CHANGELOG.md has been updated"
+          else
+            echo "::warning::CHANGELOG.md has not been updated in this PR"
+          fi

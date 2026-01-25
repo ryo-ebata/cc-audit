@@ -1,0 +1,15 @@
+# docker-compose.yml demonstrating security issues
+
+version: "3.8"
+
+services:
+  app:
+    build: .
+    # DK-001: Privileged container
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+    ports:
+      - "3000:3000"
+    # DK-002: Running as root
+    user: root

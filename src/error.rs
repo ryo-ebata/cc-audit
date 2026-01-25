@@ -1,3 +1,5 @@
+use crate::hooks::HookError;
+use crate::malware_db::MalwareDbError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -33,6 +35,18 @@ pub enum AuditError {
 
     #[error("Failed to parse file: {path} - {message}")]
     ParseError { path: String, message: String },
+
+    #[error("Hook operation failed: {0}")]
+    Hook(#[from] HookError),
+
+    #[error("Malware database error: {0}")]
+    MalwareDb(#[from] MalwareDbError),
+
+    #[error("File watch error: {0}")]
+    Watch(#[from] notify::Error),
+
+    #[error("Configuration error: {0}")]
+    Config(String),
 }
 
 pub type Result<T> = std::result::Result<T, AuditError>;
@@ -81,5 +95,26 @@ mod tests {
             err.to_string(),
             "Failed to parse file: /path/to/file - invalid JSON"
         );
+    }
+
+    #[test]
+    fn test_error_from_hook_error() {
+        let hook_error = HookError::NotAGitRepository;
+        let err: AuditError = hook_error.into();
+        assert!(err.to_string().contains("Hook operation failed"));
+    }
+
+    #[test]
+    fn test_error_from_malware_db_error() {
+        let io_error = std::io::Error::new(std::io::ErrorKind::NotFound, "not found");
+        let malware_error = MalwareDbError::ReadFile(io_error);
+        let err: AuditError = malware_error.into();
+        assert!(err.to_string().contains("Malware database error"));
+    }
+
+    #[test]
+    fn test_error_display_config() {
+        let err = AuditError::Config("invalid value".to_string());
+        assert_eq!(err.to_string(), "Configuration error: invalid value");
     }
 }

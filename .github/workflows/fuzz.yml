@@ -1,0 +1,88 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    # Run weekly on Saturday at 03:00 UTC
+    - cron: '0 3 * * 6'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Fuzzing duration in seconds'
+        required: false
+        default: '300'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Check for fuzz targets
+        id: check
+        run: |
+          if [ -d "fuzz" ] && [ -f "fuzz/Cargo.toml" ]; then
+            TARGETS=$(cargo fuzz list 2>/dev/null || echo "")
+            if [ -n "$TARGETS" ]; then
+              echo "has_targets=true" >> $GITHUB_OUTPUT
+              echo "targets=$TARGETS" >> $GITHUB_OUTPUT
+            else
+              echo "has_targets=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "has_targets=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run fuzz tests
+        if: steps.check.outputs.has_targets == 'true'
+        run: |
+          DURATION=${{ github.event.inputs.duration || '300' }}
+          echo "## Fuzz Testing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Duration: ${DURATION}s per target" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          for target in $(cargo fuzz list); do
+            echo "Fuzzing target: $target"
+            echo "### Target: $target" >> $GITHUB_STEP_SUMMARY
+            if timeout ${DURATION}s cargo fuzz run "$target" -- -max_total_time=${DURATION} 2>&1 | tee -a fuzz-output.txt; then
+              echo "No crashes found" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "::warning::Potential issues found in $target"
+              echo "Issues found - check artifacts" >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: No fuzz targets
+        if: steps.check.outputs.has_targets != 'true'
+        run: |
+          echo "## Fuzz Testing" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No fuzz targets configured. To add fuzzing:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "cargo fuzz init" >> $GITHUB_STEP_SUMMARY
+          echo "cargo fuzz add <target_name>" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload crash artifacts
+        if: always() && steps.check.outputs.has_targets == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: |
+            fuzz/artifacts/
+            fuzz-output.txt
+          retention-days: 30
+          if-no-files-found: ignore

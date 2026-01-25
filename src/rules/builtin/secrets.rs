@@ -1,0 +1,310 @@
+use crate::rules::types::{Category, Confidence, Rule, Severity};
+use regex::Regex;
+
+pub fn rules() -> Vec<Rule> {
+    vec![sl_001(), sl_002(), sl_003(), sl_004(), sl_005()]
+}
+
+fn sl_001() -> Rule {
+    Rule {
+        id: "SL-001",
+        name: "AWS Access Key exposure",
+        description: "Detects AWS Access Key IDs that may have been accidentally committed",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // AWS Access Key ID format: AKIA followed by 16 alphanumeric characters
+            Regex::new(r"AKIA[0-9A-Z]{16}").unwrap(),
+            // AWS Secret Access Key assignment
+            Regex::new(r#"aws_secret_access_key\s*[=:]\s*["'][A-Za-z0-9/+=]{40}["']"#).unwrap(),
+            // AWS Access Key ID assignment
+            Regex::new(r#"aws_access_key_id\s*[=:]\s*["']AKIA[0-9A-Z]{16}["']"#).unwrap(),
+        ],
+        exclusions: vec![
+            // Example/placeholder keys
+            Regex::new(r"AKIAIOSFODNN7EXAMPLE").unwrap(),
+            Regex::new(r"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY").unwrap(),
+            // Test files
+            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+        ],
+        message: "AWS Access Key detected. This credential could allow unauthorized access to AWS resources.",
+        recommendation: "Remove the key immediately, rotate it in AWS IAM console, and use environment variables or AWS Secrets Manager instead.",
+        fix_hint: Some(
+            "export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID (use env vars, not hardcoded keys)",
+        ),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_002() -> Rule {
+    Rule {
+        id: "SL-002",
+        name: "GitHub Token exposure",
+        description: "Detects GitHub personal access tokens and other GitHub tokens",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // GitHub Personal Access Token (classic)
+            Regex::new(r"ghp_[A-Za-z0-9]{36}").unwrap(),
+            // GitHub OAuth Access Token
+            Regex::new(r"gho_[A-Za-z0-9]{36}").unwrap(),
+            // GitHub User-to-Server Token
+            Regex::new(r"ghu_[A-Za-z0-9]{36}").unwrap(),
+            // GitHub Server-to-Server Token
+            Regex::new(r"ghs_[A-Za-z0-9]{36}").unwrap(),
+            // GitHub Refresh Token
+            Regex::new(r"ghr_[A-Za-z0-9]{36}").unwrap(),
+            // GitHub Fine-grained Personal Access Token
+            Regex::new(r"github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59}").unwrap(),
+        ],
+        exclusions: vec![
+            // Test/example patterns
+            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+        ],
+        message: "GitHub Token detected. This token could allow unauthorized access to repositories.",
+        recommendation: "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead.",
+        fix_hint: Some("Use $GITHUB_TOKEN env var or gh auth login for CLI authentication"),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_003() -> Rule {
+    Rule {
+        id: "SL-003",
+        name: "AI API Key exposure",
+        description: "Detects OpenAI, Anthropic, and other AI service API keys",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // OpenAI API Key (starts with sk-)
+            Regex::new(r"sk-[A-Za-z0-9]{48}").unwrap(),
+            // OpenAI Project API Key
+            Regex::new(r"sk-proj-[A-Za-z0-9]{48}").unwrap(),
+            // Anthropic API Key
+            Regex::new(r"sk-ant-api[0-9]{2}-[A-Za-z0-9-]{86}").unwrap(),
+            // Google AI/Gemini API Key
+            Regex::new(r"AIza[A-Za-z0-9_-]{35}").unwrap(),
+            // Cohere API Key
+            Regex::new(r"[A-Za-z0-9]{40}").unwrap(),
+        ],
+        exclusions: vec![
+            // Test/example patterns
+            Regex::new(r"test|mock|fake|dummy|example|placeholder").unwrap(),
+            // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
+            Regex::new(r"sha1|sha256|commit").unwrap(),
+        ],
+        message: "AI API Key detected. This key could allow unauthorized API usage and incur costs.",
+        recommendation: "Remove the key, rotate it in the respective service dashboard, and use environment variables instead.",
+        fix_hint: Some("Use env var: export OPENAI_API_KEY=... or ANTHROPIC_API_KEY=..."),
+        cwe_ids: &["CWE-798", "CWE-200"],
+    }
+}
+
+fn sl_004() -> Rule {
+    Rule {
+        id: "SL-004",
+        name: "Generic secret pattern",
+        description: "Detects common patterns for hardcoded secrets, passwords, and API keys",
+        severity: Severity::High,
+        category: Category::SecretLeak,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // API key assignments
+            Regex::new(r#"api[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            // Secret key assignments
+            Regex::new(r#"secret[_-]?key\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            // Password assignments (but not password prompts)
+            Regex::new(r#"password\s*[=:]\s*["'][^"']{8,}["']"#).unwrap(),
+            // Access token assignments
+            Regex::new(r#"access[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            // Auth token assignments
+            Regex::new(r#"auth[_-]?token\s*[=:]\s*["'][A-Za-z0-9_-]{20,}["']"#).unwrap(),
+            // Bearer token in code
+            Regex::new(r#"[Bb]earer\s+[A-Za-z0-9_-]{20,}"#).unwrap(),
+            // Basic auth with credentials
+            Regex::new(r#"[Bb]asic\s+[A-Za-z0-9+/=]{20,}"#).unwrap(),
+        ],
+        exclusions: vec![
+            // Environment variable references (these are fine)
+            Regex::new(r"\$\{?[A-Z_]+\}?").unwrap(),
+            Regex::new(r"process\.env\.[A-Z_]+").unwrap(),
+            Regex::new(r"os\.environ").unwrap(),
+            // Test/example patterns
+            Regex::new(r"test|mock|fake|dummy|example|placeholder|your[_-]?").unwrap(),
+            // Common password prompts/labels
+            Regex::new(r"enter.*password|password.*prompt|password.*input").unwrap(),
+        ],
+        message: "Hardcoded secret detected. Storing credentials in code is a security risk.",
+        recommendation: "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control.",
+        fix_hint: Some("Replace hardcoded values with: ${API_KEY} or process.env.API_KEY"),
+        cwe_ids: &["CWE-798"],
+    }
+}
+
+fn sl_005() -> Rule {
+    Rule {
+        id: "SL-005",
+        name: "Private key exposure",
+        description: "Detects private key blocks that should never be committed to version control",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            // RSA Private Key
+            Regex::new(r"-----BEGIN RSA PRIVATE KEY-----").unwrap(),
+            // EC Private Key
+            Regex::new(r"-----BEGIN EC PRIVATE KEY-----").unwrap(),
+            // OpenSSH Private Key
+            Regex::new(r"-----BEGIN OPENSSH PRIVATE KEY-----").unwrap(),
+            // Generic Private Key
+            Regex::new(r"-----BEGIN PRIVATE KEY-----").unwrap(),
+            // DSA Private Key
+            Regex::new(r"-----BEGIN DSA PRIVATE KEY-----").unwrap(),
+            // PGP Private Key
+            Regex::new(r"-----BEGIN PGP PRIVATE KEY BLOCK-----").unwrap(),
+        ],
+        exclusions: vec![
+            // Test/example files
+            Regex::new(r"test|mock|fake|dummy|example").unwrap(),
+        ],
+        message: "Private key detected. Private keys should never be committed to version control.",
+        recommendation: "Remove the key from the repository history using git filter-branch or BFG Repo-Cleaner. Store keys securely outside of version control.",
+        fix_hint: Some(
+            "git filter-branch --force --index-filter 'git rm --cached --ignore-unmatch PATH' HEAD",
+        ),
+        cwe_ids: &["CWE-321", "CWE-522"],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sl_001_detects_aws_keys() {
+        let rule = sl_001();
+        let test_cases = vec![
+            // Should detect
+            ("AKIAIOSFODNN7ABCDEFG", true), // Valid format AWS key
+            (r#"aws_access_key_id = "AKIAIOSFODNN7ABCDEFG""#, true),
+            // Should not detect (examples/test)
+            ("AKIAIOSFODNN7EXAMPLE", false), // AWS example key
+            ("test AKIAIOSFODNN7ABCDEFG in test file", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sl_002_detects_github_tokens() {
+        let rule = sl_002();
+        let test_cases = vec![
+            // Should detect (36 characters after prefix)
+            ("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", true),
+            ("gho_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", true),
+            ("ghs_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", true),
+            // Should not detect
+            ("ghp_", false), // Too short
+            ("not a github token", false),
+            ("test ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", false), // In test context
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sl_003_detects_ai_api_keys() {
+        let rule = sl_003();
+        let test_cases = vec![
+            // Should detect (OpenAI-like keys)
+            ("sk-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv", true),
+            // Should not detect
+            ("sk-", false), // Too short
+            ("not an api key", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sl_004_detects_generic_secrets() {
+        let rule = sl_004();
+        let test_cases = vec![
+            // Should detect
+            (r#"api_key = "abc123def456ghi789jkl012mno""#, true),
+            (r#"secret_key: "ABCDEFGHIJKLMNOPabcdefghijklmnop""#, true),
+            (r#"password = "mysecretpassword123""#, true),
+            (r#"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"#, true),
+            // Should not detect (env vars, examples)
+            (r#"api_key = "${API_KEY}""#, false),
+            (r#"api_key = process.env.API_KEY"#, false),
+            (r#"api_key = "your_api_key_here""#, false), // placeholder
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sl_005_detects_private_keys() {
+        let rule = sl_005();
+        let test_cases = vec![
+            // Should detect
+            ("-----BEGIN RSA PRIVATE KEY-----", true),
+            ("-----BEGIN EC PRIVATE KEY-----", true),
+            ("-----BEGIN OPENSSH PRIVATE KEY-----", true),
+            ("-----BEGIN PRIVATE KEY-----", true),
+            // Should not detect
+            ("-----BEGIN PUBLIC KEY-----", false),
+            ("-----BEGIN CERTIFICATE-----", false),
+            ("test -----BEGIN RSA PRIVATE KEY----- in test", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sl_004_excludes_env_var_references() {
+        let rule = sl_004();
+        // These should NOT be flagged (they use environment variables)
+        let safe_patterns = vec![
+            r#"api_key = os.environ.get("API_KEY")"#,
+            r#"const apiKey = process.env.API_KEY"#,
+            r#"api_key: ${API_KEY}"#,
+        ];
+
+        for pattern in safe_patterns {
+            let matched = rule.patterns.iter().any(|p| p.is_match(pattern));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(pattern));
+            let result = matched && !excluded;
+            assert!(!result, "Should NOT detect env var reference: {}", pattern);
+        }
+    }
+}

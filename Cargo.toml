@@ -3,11 +3,11 @@ members = [".", "xtask"]
 
 [package]
 name = "cc-audit"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "Security auditor for Claude Code skills, hooks, and MCP servers"
-repository = "https://github.com/ryoppippi/cc-audit"
+repository = "https://github.com/ryo-ebata/cc-audit"
 keywords = ["claude", "security", "audit", "mcp", "skills"]
 categories = ["command-line-utilities", "development-tools"]
 
@@ -22,9 +22,23 @@ thiserror = "2"
 colored = "3"
 glob = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
+ignore = "0.4"
+notify = "7"
+semver = "1"
+toml = "0.8"
+dirs = "6.0.0"
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
 tempfile = "3"
 insta = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "scan_benchmark"
+harness = false
+
+# Coverage configuration
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

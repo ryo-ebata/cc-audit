@@ -1,0 +1,96 @@
+# Example GitHub Actions workflow for cc-audit
+# Copy this file to .github/workflows/cc-audit.yml in your repository
+
+name: cc-audit Security Scan
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '.claude/**'
+      - '.cursor/**'
+      - 'mcp.json'
+      - '.mcp.json'
+      - 'package.json'
+      - 'Cargo.toml'
+      - 'Dockerfile*'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '.claude/**'
+      - '.cursor/**'
+      - 'mcp.json'
+      - '.mcp.json'
+      - 'package.json'
+      - 'Cargo.toml'
+      - 'Dockerfile*'
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
+jobs:
+  scan-skills:
+    name: Scan Claude Code Skills
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cc-audit (skills)
+        uses: ryo-ebata/cc-audit/.github/actions/cc-audit@main
+        with:
+          paths: '.claude/'
+          scan-type: 'skill'
+          format: 'sarif'
+          upload-sarif: 'true'
+          diff-only: ${{ github.event_name == 'pull_request' }}
+
+  scan-mcp:
+    name: Scan MCP Configuration
+    runs-on: ubuntu-latest
+    if: hashFiles('mcp.json', '.mcp.json') != ''
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cc-audit (MCP)
+        uses: ryo-ebata/cc-audit/.github/actions/cc-audit@main
+        with:
+          paths: '.'
+          scan-type: 'mcp'
+          format: 'sarif'
+          upload-sarif: 'true'
+
+  scan-dependencies:
+    name: Scan Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cc-audit (dependencies)
+        uses: ryo-ebata/cc-audit/.github/actions/cc-audit@main
+        with:
+          paths: '.'
+          scan-type: 'dependency'
+          format: 'sarif'
+          upload-sarif: 'true'
+          fail-on-findings: 'false'  # Advisory only for dependencies
+
+  scan-docker:
+    name: Scan Dockerfiles
+    runs-on: ubuntu-latest
+    if: hashFiles('Dockerfile*', 'docker-compose*.yml') != ''
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run cc-audit (Docker)
+        uses: ryo-ebata/cc-audit/.github/actions/cc-audit@main
+        with:
+          paths: '.'
+          scan-type: 'docker'
+          format: 'sarif'
+          upload-sarif: 'true'

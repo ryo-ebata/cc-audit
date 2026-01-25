@@ -1,4 +1,4 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
@@ -12,6 +12,7 @@ fn pi_001() -> Rule {
         description: "Detects prompt injection attempts using 'ignore previous instructions' patterns",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"(?i)ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
             Regex::new(r"(?i)disregard\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)").unwrap(),
@@ -24,6 +25,8 @@ fn pi_001() -> Rule {
         exclusions: vec![],
         message: "Potential prompt injection: instruction override pattern detected",
         recommendation: "Remove or escape prompt injection patterns from skill content",
+        fix_hint: Some("Remove phrases like 'ignore previous instructions'. Use clear, direct instructions"),
+        cwe_ids: &["CWE-94"],
     }
 }
 
@@ -34,6 +37,7 @@ fn pi_002() -> Rule {
         description: "Detects potential prompt injection hidden in HTML/XML comments",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Tentative,
         patterns: vec![
             Regex::new(
                 r"<!--\s*[^>]*\b(ignore|execute|run|do|perform|must|should|always|never)\b[^>]*-->",
@@ -45,6 +49,10 @@ fn pi_002() -> Rule {
         exclusions: vec![Regex::new(r"<!--\s*(TODO|FIXME|NOTE|HACK|XXX):?").unwrap()],
         message: "Potential prompt injection: suspicious content in HTML comment",
         recommendation: "Review HTML comments for hidden instructions",
+        fix_hint: Some(
+            "Remove suspicious HTML comments or move legitimate comments to visible text",
+        ),
+        cwe_ids: &["CWE-94"],
     }
 }
 
@@ -55,6 +63,7 @@ fn pi_003() -> Rule {
         description: "Detects invisible Unicode characters that could hide malicious content",
         severity: Severity::High,
         category: Category::PromptInjection,
+        confidence: Confidence::Firm,
         patterns: vec![
             // Zero-width characters
             Regex::new(r"[\u200B\u200C\u200D\u2060\uFEFF]").unwrap(),
@@ -66,6 +75,8 @@ fn pi_003() -> Rule {
         exclusions: vec![],
         message: "Potential prompt injection: invisible Unicode characters detected",
         recommendation: "Remove invisible Unicode characters and verify content integrity",
+        fix_hint: Some("Use: cat -v file.md to reveal invisible chars, then remove them"),
+        cwe_ids: &["CWE-94"],
     }
 }
 

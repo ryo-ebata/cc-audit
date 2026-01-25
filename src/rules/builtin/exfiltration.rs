@@ -1,8 +1,8 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![ex_001(), ex_002(), ex_003(), ex_005()]
+    vec![ex_001(), ex_002(), ex_003(), ex_005(), ex_006(), ex_007()]
 }
 
 fn ex_001() -> Rule {
@@ -12,6 +12,7 @@ fn ex_001() -> Rule {
         description: "Detects curl/wget commands that include environment variables, potentially exfiltrating sensitive data",
         severity: Severity::Critical,
         category: Category::Exfiltration,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"(curl|wget)\s+.*\$[A-Z_][A-Z0-9_]*").unwrap(),
             Regex::new(r"(curl|wget)\s+.*\$\{[A-Z_][A-Z0-9_]*\}").unwrap(),
@@ -19,6 +20,10 @@ fn ex_001() -> Rule {
         exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1|\[::1\]").unwrap()],
         message: "Potential data exfiltration: network request with environment variable detected",
         recommendation: "Review the command and ensure no sensitive data is being sent externally",
+        fix_hint: Some(
+            "Use environment variable references without exposing them: ${VAR:-default}",
+        ),
+        cwe_ids: &["CWE-200", "CWE-319"],
     }
 }
 
@@ -29,6 +34,7 @@ fn ex_002() -> Rule {
         description: "Detects base64 encoding combined with network transmission, often used to obfuscate data exfiltration",
         severity: Severity::Critical,
         category: Category::Exfiltration,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"base64.*\|\s*(curl|wget|nc|netcat)").unwrap(),
             Regex::new(r"(curl|wget|nc|netcat).*base64").unwrap(),
@@ -37,6 +43,8 @@ fn ex_002() -> Rule {
         exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap()],
         message: "Potential data exfiltration: base64 encoding with network transmission detected",
         recommendation: "Investigate why data is being base64 encoded before network transmission",
+        fix_hint: None,
+        cwe_ids: &["CWE-200", "CWE-319"],
     }
 }
 
@@ -47,6 +55,7 @@ fn ex_003() -> Rule {
         description: "Detects DNS queries that may be used for data exfiltration (DNS tunneling)",
         severity: Severity::High,
         category: Category::Exfiltration,
+        confidence: Confidence::Tentative,
         patterns: vec![
             // dig/nslookup with variable data in subdomain
             Regex::new(r"\b(dig|nslookup|host)\s+.*\$").unwrap(),
@@ -58,6 +67,8 @@ fn ex_003() -> Rule {
         exclusions: vec![],
         message: "Potential DNS-based data exfiltration: data encoded in DNS query detected",
         recommendation: "Review DNS queries and ensure they are not being used to exfiltrate data",
+        fix_hint: None,
+        cwe_ids: &["CWE-200", "CWE-319"],
     }
 }
 
@@ -68,6 +79,7 @@ fn ex_005() -> Rule {
         description: "Detects netcat (nc) commands that may establish outbound connections for data exfiltration",
         severity: Severity::Critical,
         category: Category::Exfiltration,
+        confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r"\b(nc|netcat)\s+(-[a-zA-Z]*\s+)*[a-zA-Z0-9.-]+\s+\d+").unwrap(),
             Regex::new(r"\b(nc|netcat)\s+.*-e").unwrap(),
@@ -78,6 +90,83 @@ fn ex_005() -> Rule {
         ],
         message: "Potential data exfiltration: netcat outbound connection detected",
         recommendation: "Review the netcat usage and ensure it's not being used for data exfiltration",
+        fix_hint: Some("Remove netcat commands or use established APIs for network communication"),
+        cwe_ids: &["CWE-200", "CWE-94"],
+    }
+}
+
+fn ex_006() -> Rule {
+    Rule {
+        id: "EX-006",
+        name: "Alternative protocol exfiltration",
+        description: "Detects data exfiltration via alternative protocols (FTP, SCP, TFTP, SMTP, IRC)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // FTP upload with credentials or data
+            Regex::new(r"curl\s+-T.*ftp://").unwrap(),
+            Regex::new(r"ftp\s+-n.*<<").unwrap(),
+            // SCP/SFTP with sensitive data
+            Regex::new(r"scp\s+.*\$[A-Z_]").unwrap(),
+            Regex::new(r"sftp.*<<<").unwrap(),
+            // TFTP
+            Regex::new(r"tftp\s+.*-c\s*(put|get)").unwrap(),
+            // sendmail/mail with data
+            Regex::new(r"(sendmail|mail)\s+.*<<<.*\$").unwrap(),
+            Regex::new(r"(sendmail|mail).*<<.*EOF").unwrap(),
+            // IRC exfiltration
+            Regex::new(r"PRIVMSG.*\$[A-Z_]").unwrap(),
+            // WebSocket connections
+            Regex::new(r#"WebSocket\s*\(\s*['"]wss?://"#).unwrap(),
+            Regex::new(r"wscat\s+-c").unwrap(),
+            // socat for data transfer
+            Regex::new(r"socat\s+.*TCP:").unwrap(),
+            // telnet with data
+            Regex::new(r"telnet\s+.*\|\s*(bash|sh)").unwrap(),
+        ],
+        exclusions: vec![
+            Regex::new(r"localhost|127\.0\.0\.1").unwrap(),
+            Regex::new(r"^\s*#").unwrap(),
+        ],
+        message: "Alternative protocol exfiltration detected. Data may be sent via FTP, SCP, SMTP, or other protocols.",
+        recommendation: "Review the command and ensure no sensitive data is being transmitted via alternative protocols.",
+        fix_hint: Some("Use secure, auditable APIs instead of raw protocol commands."),
+        cwe_ids: &["CWE-200", "CWE-319"],
+    }
+}
+
+fn ex_007() -> Rule {
+    Rule {
+        id: "EX-007",
+        name: "Cloud storage exfiltration",
+        description: "Detects potential data exfiltration via cloud storage services (S3, GCS, Azure)",
+        severity: Severity::High,
+        category: Category::Exfiltration,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // AWS S3 uploads with sensitive data
+            Regex::new(r"aws\s+s3\s+(cp|mv|sync).*\$[A-Z_]").unwrap(),
+            Regex::new(r"aws\s+s3\s+(cp|mv|sync).*<\(").unwrap(),
+            // GCS uploads
+            Regex::new(r"gsutil\s+(cp|mv|rsync).*\$[A-Z_]").unwrap(),
+            // Azure blob uploads
+            Regex::new(r"az\s+storage\s+blob\s+upload.*\$[A-Z_]").unwrap(),
+            // rclone (multi-cloud)
+            Regex::new(r"rclone\s+(copy|sync|move).*\$[A-Z_]").unwrap(),
+            // GitHub/GitLab exfiltration via commits
+            Regex::new(r"git\s+config\s+user\.(email|name).*\$[A-Z_]").unwrap(),
+            // Pastebin-style services
+            Regex::new(r"(curl|wget).*(paste|hastebin|sprunge|ix\.io|termbin)").unwrap(),
+        ],
+        exclusions: vec![
+            Regex::new(r"localhost|127\.0\.0\.1").unwrap(),
+            Regex::new(r"^\s*#").unwrap(),
+        ],
+        message: "Cloud storage exfiltration pattern detected. Sensitive data may be uploaded to cloud services.",
+        recommendation: "Review cloud storage operations and ensure no sensitive data is being exfiltrated.",
+        fix_hint: Some("Avoid uploading sensitive data to external cloud storage."),
+        cwe_ids: &["CWE-200", "CWE-319"],
     }
 }
 

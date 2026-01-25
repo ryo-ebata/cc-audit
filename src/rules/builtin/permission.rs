@@ -1,4 +1,4 @@
-use crate::rules::types::{Category, Rule, Severity};
+use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
@@ -12,6 +12,7 @@ fn op_001() -> Rule {
         description: "Detects allowed-tools: * which grants access to all tools",
         severity: Severity::High,
         category: Category::Overpermission,
+        confidence: Confidence::Certain,
         patterns: vec![
             Regex::new(r"allowed-tools:\s*\*").unwrap(),
             Regex::new(r#"allowed-tools:\s*["']\*["']"#).unwrap(),
@@ -20,6 +21,10 @@ fn op_001() -> Rule {
         exclusions: vec![],
         message: "Overpermission: wildcard tool access grants unrestricted capabilities",
         recommendation: "Specify only required tools (e.g., \"Read, Write, Bash\")",
+        fix_hint: Some(
+            "Replace 'allowed-tools: *' with specific tools: 'allowed-tools: Read, Write'",
+        ),
+        cwe_ids: &["CWE-250"],
     }
 }
 

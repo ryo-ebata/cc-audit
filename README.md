@@ -74,7 +74,7 @@ cc-audit --init ./
 ## Example Output
 
 ```
-cc-audit v0.4.0 - Claude Code Security Auditor
+cc-audit v0.4.1 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 

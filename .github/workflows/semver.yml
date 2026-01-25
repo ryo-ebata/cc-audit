@@ -3,11 +3,6 @@ name: Semver
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'CHANGELOG.md'
   push:
     tags:
       - 'v*'
@@ -16,8 +11,29 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      should_run: ${{ github.event_name == 'push' || steps.filter.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'CHANGELOG.md'
+
   semver-check:
     name: API Compatibility
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -57,8 +73,9 @@ jobs:
 
   changelog-check:
     name: Changelog Updated
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,3 +88,22 @@ jobs:
           else
             echo "::warning::CHANGELOG.md has not been updated in this PR"
           fi
+
+  semver-result:
+    name: Semver Result
+    needs: [changes, semver-check, changelog-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
+            echo "No relevant changes detected, skipping semver checks"
+            exit 0
+          fi
+          if [[ "${{ needs.semver-check.result }}" == "failure" || \
+                "${{ needs.changelog-check.result }}" == "failure" ]]; then
+            echo "Semver check failed"
+            exit 1
+          fi
+          echo "Semver checks passed"

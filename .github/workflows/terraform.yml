@@ -3,14 +3,8 @@ name: Terraform
 on:
   push:
     branches: [main]
-    paths:
-      - 'infra/**'
-      - '.github/workflows/terraform.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'infra/**'
-      - '.github/workflows/terraform.yml'
 
 permissions:
   contents: read
@@ -21,16 +15,26 @@ env:
   TF_INPUT: false
 
 jobs:
-  detect-directories:
-    name: Detect Terraform Directories
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
+      infra: ${{ steps.filter.outputs.infra }}
       directories: ${{ steps.find.outputs.directories }}
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - '.github/workflows/terraform.yml'
+
       - name: Find Terraform directories
         id: find
+        if: steps.filter.outputs.infra == 'true'
         run: |
           # Find all directories containing .tf files
           DIRS=$(find infra -name "*.tf" -type f -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
@@ -40,12 +44,12 @@ jobs:
   fmt:
     name: Format
     runs-on: ubuntu-latest
-    needs: detect-directories
-    if: needs.detect-directories.outputs.directories != '[]'
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
     strategy:
       fail-fast: false
       matrix:
-        directory: ${{ fromJson(needs.detect-directories.outputs.directories) }}
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,12 +72,12 @@ jobs:
   validate:
     name: Validate
     runs-on: ubuntu-latest
-    needs: detect-directories
-    if: needs.detect-directories.outputs.directories != '[]'
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
     strategy:
       fail-fast: false
       matrix:
-        directory: ${{ fromJson(needs.detect-directories.outputs.directories) }}
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -92,12 +96,12 @@ jobs:
   tflint:
     name: TFLint
     runs-on: ubuntu-latest
-    needs: detect-directories
-    if: needs.detect-directories.outputs.directories != '[]'
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
     strategy:
       fail-fast: false
       matrix:
-        directory: ${{ fromJson(needs.detect-directories.outputs.directories) }}
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -117,12 +121,12 @@ jobs:
   tfsec:
     name: Security Scan
     runs-on: ubuntu-latest
-    needs: detect-directories
-    if: needs.detect-directories.outputs.directories != '[]'
+    needs: changes
+    if: needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
     strategy:
       fail-fast: false
       matrix:
-        directory: ${{ fromJson(needs.detect-directories.outputs.directories) }}
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -136,12 +140,12 @@ jobs:
   plan:
     name: Plan
     runs-on: ubuntu-latest
-    needs: [detect-directories, fmt, validate]
-    if: github.event_name == 'pull_request' && needs.detect-directories.outputs.directories != '[]'
+    needs: [changes, fmt, validate]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.infra == 'true' && needs.changes.outputs.directories != '[]'
     strategy:
       fail-fast: false
       matrix:
-        directory: ${{ fromJson(needs.detect-directories.outputs.directories) }}
+        directory: ${{ fromJson(needs.changes.outputs.directories) }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -194,13 +198,29 @@ jobs:
               body: output
             });
 
-  summary:
-    name: Summary
+  terraform-result:
+    name: Terraform Result
     runs-on: ubuntu-latest
-    needs: [fmt, validate, tflint, tfsec]
+    needs: [changes, fmt, validate, tflint, tfsec]
     if: always()
     steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.infra }}" != "true" ]]; then
+            echo "No infrastructure changes detected, skipping Terraform checks"
+            exit 0
+          fi
+          if [[ "${{ needs.fmt.result }}" == "failure" || \
+                "${{ needs.validate.result }}" == "failure" || \
+                "${{ needs.tflint.result }}" == "failure" || \
+                "${{ needs.tfsec.result }}" == "failure" ]]; then
+            echo "One or more Terraform jobs failed"
+            exit 1
+          fi
+          echo "All Terraform checks passed"
+
       - name: Create Summary
+        if: needs.changes.outputs.infra == 'true'
         run: |
           echo "## Terraform CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

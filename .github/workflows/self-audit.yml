@@ -3,27 +3,35 @@ name: Self Audit
 on:
   push:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rules/**'
-      - '.claude/**'
   pull_request:
     branches: [main]
-    paths:
-      - 'src/**'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'rules/**'
-      - '.claude/**'
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rules/**'
+              - '.claude/**'
+
   self-audit:
     name: Self Audit
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,3 +96,21 @@ jobs:
           echo "## Strict Mode Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           ./target/release/cc-audit --type skill --ci . || echo "::warning::Strict mode found issues"
+
+  self-audit-result:
+    name: Self Audit Result
+    needs: [changes, self-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
+            echo "No relevant changes detected, skipping self-audit"
+            exit 0
+          fi
+          if [[ "${{ needs.self-audit.result }}" == "failure" ]]; then
+            echo "Self audit failed"
+            exit 1
+          fi
+          echo "Self audit passed"

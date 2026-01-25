@@ -13,5 +13,13 @@ variable "repository_name" {
 variable "required_status_checks" {
   description = "List of required CI status checks"
   type        = list(string)
-  default     = []
+  default = [
+    "CI Result",
+    "Security Result",
+    "Self Audit Result",
+    "MSRV Result",
+    "Performance Result",
+    "Semver Result",
+    "Terraform Result"
+  ]
 }

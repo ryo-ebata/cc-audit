@@ -1,5 +1,6 @@
 use crate::reporter::Reporter;
 use crate::rules::{Confidence, ScanResult, Severity};
+use crate::scoring::RiskLevel;
 use colored::Colorize;
 
 pub struct TerminalReporter {
@@ -39,6 +40,52 @@ impl TerminalReporter {
             Confidence::Tentative => "tentative".yellow(),
         }
     }
+
+    fn risk_level_color(&self, level: &RiskLevel) -> colored::ColoredString {
+        let label = level.as_str();
+        match level {
+            RiskLevel::Safe => label.green().bold(),
+            RiskLevel::Low => label.white(),
+            RiskLevel::Medium => label.cyan().bold(),
+            RiskLevel::High => label.yellow().bold(),
+            RiskLevel::Critical => label.red().bold(),
+        }
+    }
+
+    fn format_risk_score(&self, result: &ScanResult) -> String {
+        let mut output = String::new();
+
+        if let Some(ref score) = result.risk_score {
+            let level_colored = self.risk_level_color(&score.level);
+            output.push_str(&format!(
+                "{}\n",
+                format!(
+                    "━━━ RISK SCORE: {}/100 ({}) ━━━",
+                    score.total, level_colored
+                )
+                .bold()
+            ));
+            output.push('\n');
+
+            if !score.by_category.is_empty() {
+                output.push_str("Category Breakdown:\n");
+                for cat_score in &score.by_category {
+                    let bar = score.score_bar(cat_score.score, 100);
+                    let category_display = format!("{:20}", cat_score.category);
+                    output.push_str(&format!(
+                        "  {}: {:>3} {} ({})\n",
+                        category_display,
+                        cat_score.score,
+                        bar.dimmed(),
+                        cat_score.findings_count
+                    ));
+                }
+                output.push('\n');
+            }
+        }
+
+        output
+    }
 }
 
 impl Reporter for TerminalReporter {
@@ -54,6 +101,11 @@ impl Reporter for TerminalReporter {
             .bold()
         ));
         output.push_str(&format!("Scanning: {}\n\n", result.target));
+
+        // Show risk score if findings exist
+        if !result.findings.is_empty() {
+            output.push_str(&self.format_risk_score(result));
+        }
 
         let findings_to_show: Vec<_> = if self.strict {
             result.findings.iter().collect()

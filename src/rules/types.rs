@@ -1,3 +1,4 @@
+use crate::scoring::RiskScore;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -67,7 +68,7 @@ impl std::fmt::Display for Severity {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Category {
     Exfiltration,
@@ -195,6 +196,8 @@ pub struct ScanResult {
     pub target: String,
     pub summary: Summary,
     pub findings: Vec<Finding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk_score: Option<RiskScore>,
 }
 
 #[cfg(test)]

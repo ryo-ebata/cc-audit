@@ -27,6 +27,7 @@ notify = "8"
 semver = "1"
 toml = "0.8"
 dirs = "6.0.0"
+sha2 = "0.10.9"
 
 [dev-dependencies]
 assert_cmd = "2"

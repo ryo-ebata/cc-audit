@@ -28,6 +28,9 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         no_malware_scan: true,
         malware_db: None,
         custom_rules: None,
+        baseline: false,
+        check_drift: false,
+        init: false,
     }
 }
 

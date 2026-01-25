@@ -1,15 +1,22 @@
 #[cfg(test)]
 pub mod fixtures {
     use crate::rules::{Category, Confidence, Finding, Location, ScanResult, Severity, Summary};
+    use crate::scoring::RiskScore;
 
     pub fn create_test_result(findings: Vec<Finding>) -> ScanResult {
         let summary = Summary::from_findings(&findings);
+        let risk_score = if findings.is_empty() {
+            None
+        } else {
+            Some(RiskScore::from_findings(&findings))
+        };
         ScanResult {
             version: "0.2.0".to_string(),
             scanned_at: "2026-01-25T12:00:00Z".to_string(),
             target: "./test-skill/".to_string(),
             summary,
             findings,
+            risk_score,
         }
     }
 

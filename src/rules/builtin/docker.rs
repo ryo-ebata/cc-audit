@@ -2,7 +2,16 @@ use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
 
 pub fn rules() -> Vec<Rule> {
-    vec![dk_001(), dk_002(), dk_003()]
+    vec![
+        dk_001(),
+        dk_002(),
+        dk_003(),
+        dk_004(),
+        dk_005(),
+        dk_006(),
+        dk_007(),
+        dk_008(),
+    ]
 }
 
 fn dk_001() -> Rule {
@@ -99,6 +108,123 @@ fn dk_003() -> Rule {
             "RUN curl -o script.sh URL && echo 'CHECKSUM script.sh' | sha256sum -c && bash script.sh",
         ),
         cwe_ids: &["CWE-829"],
+    }
+}
+
+fn dk_004() -> Rule {
+    Rule {
+        id: "DK-004",
+        name: "ADD from remote URL",
+        description: "Detects ADD instructions fetching from remote URLs (use COPY instead)",
+        severity: Severity::High,
+        category: Category::SupplyChain,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            Regex::new(r"(?m)^ADD\s+https?://").expect("DK-004: invalid regex"),
+            Regex::new(r"(?m)^ADD\s+ftp://").expect("DK-004: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "ADD from remote URL detected. This bypasses layer caching and may fetch untrusted content.",
+        recommendation: "Use RUN curl/wget with checksum verification, or COPY from local files.",
+        fix_hint: Some(
+            "Replace ADD URL with: RUN curl -o file URL && echo 'checksum file' | sha256sum -c",
+        ),
+        cwe_ids: &["CWE-829", "CWE-494"],
+    }
+}
+
+fn dk_005() -> Rule {
+    Rule {
+        id: "DK-005",
+        name: "Using latest tag",
+        description: "Detects use of 'latest' tag which can lead to unpredictable builds",
+        severity: Severity::Medium,
+        category: Category::SupplyChain,
+        confidence: Confidence::Certain,
+        patterns: vec![
+            Regex::new(r"(?m)^FROM\s+[^:]+:latest\s*$").expect("DK-005: invalid regex"),
+            Regex::new(r"(?m)^FROM\s+[^\s:]+\s*$").expect("DK-005: invalid regex"), // No tag = latest
+            Regex::new(r#"image:\s*[^:]+:latest\s*$"#).expect("DK-005: invalid regex"),
+        ],
+        exclusions: vec![Regex::new(r"scratch").expect("DK-005: invalid regex")],
+        message: "Using 'latest' tag or no tag (defaults to latest). Builds may not be reproducible.",
+        recommendation: "Pin to a specific version tag or SHA digest for reproducible builds.",
+        fix_hint: Some("Use specific version: FROM node:20.10.0 or FROM node@sha256:..."),
+        cwe_ids: &["CWE-1357"],
+    }
+}
+
+fn dk_006() -> Rule {
+    Rule {
+        id: "DK-006",
+        name: "Sensitive port exposed",
+        description: "Detects exposure of sensitive ports like SSH, database, or admin ports",
+        severity: Severity::Medium,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Tentative,
+        patterns: vec![
+            // SSH port
+            Regex::new(r"EXPOSE\s+22\b").expect("DK-006: invalid regex"),
+            // MySQL
+            Regex::new(r"EXPOSE\s+3306\b").expect("DK-006: invalid regex"),
+            // PostgreSQL
+            Regex::new(r"EXPOSE\s+5432\b").expect("DK-006: invalid regex"),
+            // MongoDB
+            Regex::new(r"EXPOSE\s+27017\b").expect("DK-006: invalid regex"),
+            // Redis
+            Regex::new(r"EXPOSE\s+6379\b").expect("DK-006: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Sensitive port exposed. Database and SSH ports should not be publicly exposed.",
+        recommendation: "Use internal networks for database connections. Avoid exposing SSH in containers.",
+        fix_hint: Some(
+            "Remove EXPOSE for sensitive ports or use Docker networks for internal communication",
+        ),
+        cwe_ids: &["CWE-200"],
+    }
+}
+
+fn dk_007() -> Rule {
+    Rule {
+        id: "DK-007",
+        name: "HEALTHCHECK disabled",
+        description: "Detects HEALTHCHECK NONE which disables container health monitoring",
+        severity: Severity::Low,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Certain,
+        patterns: vec![Regex::new(r"(?im)^HEALTHCHECK\s+NONE\s*$").expect("DK-007: invalid regex")],
+        exclusions: vec![],
+        message: "HEALTHCHECK is disabled. Container health cannot be monitored.",
+        recommendation: "Add a proper HEALTHCHECK instruction to monitor container health.",
+        fix_hint: Some("Add: HEALTHCHECK --interval=30s CMD curl -f http://localhost/ || exit 1"),
+        cwe_ids: &["CWE-778"],
+    }
+}
+
+fn dk_008() -> Rule {
+    Rule {
+        id: "DK-008",
+        name: "Host volume mount",
+        description: "Detects mounting of sensitive host paths into containers",
+        severity: Severity::High,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Docker socket mount
+            Regex::new(r"/var/run/docker\.sock").expect("DK-008: invalid regex"),
+            // Root filesystem mount
+            Regex::new(r#"-v\s+/:/[^/]"#).expect("DK-008: invalid regex"),
+            Regex::new(r#"volumes:.*\n\s*-\s*/:/[^/]"#).expect("DK-008: invalid regex"),
+            // /etc mount
+            Regex::new(r#"-v\s+/etc:"#).expect("DK-008: invalid regex"),
+            // /proc mount
+            Regex::new(r#"-v\s+/proc:"#).expect("DK-008: invalid regex"),
+        ],
+        exclusions: vec![],
+        message: "Sensitive host path mounted. This may allow container escape or host compromise.",
+        recommendation: "Avoid mounting sensitive host paths. Use named volumes or bind mounts to specific directories.",
+        fix_hint: Some("Use named volumes: -v mydata:/data instead of host paths"),
+        cwe_ids: &["CWE-250", "CWE-732"],
     }
 }
 

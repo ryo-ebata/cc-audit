@@ -1,8 +1,12 @@
 # cc-audit
 
 [![Crates.io](https://img.shields.io/crates/v/cc-audit.svg)](https://crates.io/crates/cc-audit)
+[![Downloads](https://img.shields.io/crates/d/cc-audit.svg)](https://crates.io/crates/cc-audit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/ryo-ebata/cc-audit/workflows/CI/badge.svg)](https://github.com/ryo-ebata/cc-audit/actions)
+[![codecov](https://codecov.io/gh/ryo-ebata/cc-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/ryo-ebata/cc-audit)
+[![docs.rs](https://docs.rs/cc-audit/badge.svg)](https://docs.rs/cc-audit)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/)
 
 **Security auditor for Claude Code skills, hooks, and MCP servers.**
 
@@ -87,6 +91,9 @@ cc-audit --init-hook .
 
 # Show fix hints for detected issues
 cc-audit --fix-hint ./my-skill/
+
+# Generate a configuration file template
+cc-audit --init ./
 ```
 
 ## Example Output
@@ -218,6 +225,151 @@ cc-audit ./skill/ --format json
 		}
 	]
 }
+```
+
+## Configuration File
+
+cc-audit supports project-level configuration via `.cc-audit.yaml`, `.cc-audit.yml`, `.cc-audit.json`, or `.cc-audit.toml`.
+
+### Config File Locations
+
+1. `.cc-audit.yaml` in project root (highest priority)
+2. `.cc-audit.json` in project root
+3. `.cc-audit.toml` in project root
+4. `~/.config/cc-audit/config.yaml` (global config)
+
+### Initialize Configuration
+
+Generate a configuration file template with all options and comments:
+
+```bash
+# Create .cc-audit.yaml in current directory
+cc-audit --init ./
+
+# Create .cc-audit.yaml in a specific directory
+cc-audit --init /path/to/project/
+```
+
+The generated file includes all available options with explanatory comments.
+
+### Example Configuration
+
+```yaml
+# .cc-audit.yaml
+
+# Scan settings (CLI equivalents)
+scan:
+  # Output format: terminal, json, sarif, html
+  format: terminal
+
+  # Strict mode: show medium/low severity findings, treat warnings as errors
+  strict: false
+
+  # Scan type: skill, hook, mcp, command, rules, docker, dependency
+  scan_type: skill
+
+  # Recursive scan
+  recursive: false
+
+  # CI mode: non-interactive output
+  ci: false
+
+  # Verbose output
+  verbose: false
+
+  # Minimum confidence level: tentative, firm, certain
+  min_confidence: tentative
+
+  # Skip comment lines when scanning
+  skip_comments: false
+
+  # Show fix hints in terminal output
+  fix_hint: false
+
+  # Disable malware signature scanning
+  no_malware_scan: false
+
+# Watch mode settings
+watch:
+  debounce_ms: 300
+  poll_interval_ms: 500
+
+# Ignore settings
+ignore:
+  # Additional directories to ignore (merged with defaults)
+  directories:
+    - my_build_output
+    - .cache
+    - tmp
+
+  # Glob patterns to ignore
+  patterns:
+    - "*.log"
+    - "*.generated.*"
+    - "temp/**"
+
+  # Include/exclude settings (CLI flags override these)
+  include_tests: false        # Include test directories
+  include_node_modules: false # Include node_modules
+  include_vendor: false       # Include vendor directories
+
+# Disable specific rules by ID
+disabled_rules:
+  - "PE-001"    # Disable sudo detection
+  - "EX-002"    # Disable base64 transmission detection
+  - "CUSTOM-001"
+
+# Custom detection rules (see Custom Rules section)
+rules:
+  - id: "CUSTOM-001"
+    name: "Internal API access"
+    severity: "high"
+    category: "exfiltration"
+    patterns:
+      - 'https?://internal\.company\.com'
+    message: "Internal API access detected"
+    recommendation: "Ensure this access is authorized"
+
+# Custom malware signatures (see Malware Signatures section)
+malware_signatures:
+  - id: "MW-CUSTOM-001"
+    name: "Custom C2 pattern"
+    description: "Detects custom C2 server communication"
+    pattern: "malicious-domain\\.com"
+    severity: "critical"
+    category: "exfiltration"
+    confidence: "certain"
+```
+
+### Default Ignored Directories
+
+The following directories are ignored by default:
+
+| Category | Directories |
+|----------|-------------|
+| Build output | `target`, `dist`, `build`, `out` |
+| Package managers | `node_modules`, `.pnpm`, `.yarn` |
+| Version control | `.git`, `.svn`, `.hg` |
+| IDE | `.idea`, `.vscode` |
+| Cache | `.cache`, `__pycache__`, `.pytest_cache`, `.mypy_cache` |
+| Coverage | `coverage`, `.nyc_output` |
+
+### CLI Flag Override
+
+CLI flags and config file settings are merged:
+
+- **Boolean flags** (`strict`, `verbose`, `ci`, etc.): OR operation - if either CLI or config enables it, the feature is enabled
+- **Enum options** (`format`, `scan_type`, `min_confidence`): Config provides defaults if CLI uses default values
+
+```bash
+# Config has strict: true, running without --strict still uses strict mode
+cc-audit ./my-skill/
+
+# CLI enables verbose, config enables strict - both are active
+cc-audit --verbose ./my-skill/
+
+# Config has format: json - this will output JSON
+cc-audit ./my-skill/
 ```
 
 ## Custom Rules
@@ -564,7 +716,15 @@ A: Yes. Once installed, cc-audit works completely offline with no network depend
 
 **Q: How do I suppress specific rules?**
 
-A: Currently, you can use `--min-confidence` to filter by confidence level. Rule-specific suppression is planned for v1.0.0.
+A: Add rule IDs to `disabled_rules` in your `.cc-audit.yaml` config file:
+
+```yaml
+disabled_rules:
+  - "PE-001"
+  - "EX-002"
+```
+
+You can also use `--min-confidence` to filter by confidence level.
 
 **Q: Does cc-audit scan binary files?**
 

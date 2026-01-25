@@ -1,3 +1,4 @@
+pub mod baseline;
 pub mod cli;
 pub mod config;
 pub mod error;
@@ -8,12 +9,14 @@ pub mod reporter;
 pub mod rules;
 pub mod run;
 pub mod scanner;
+pub mod scoring;
 pub mod suppression;
 pub mod watch;
 
 #[cfg(test)]
 pub mod test_utils;
 
+pub use baseline::{Baseline, DriftEntry, DriftReport};
 pub use cli::{Cli, OutputFormat, ScanType};
 pub use config::{Config, ConfigError, TextFilesConfig, WatchConfig};
 pub use error::{AuditError, Result};
@@ -21,7 +24,8 @@ pub use hooks::{HookError, HookInstaller};
 pub use ignore::IgnoreFilter;
 pub use malware_db::{MalwareDatabase, MalwareDbError};
 pub use reporter::{
-    Reporter, json::JsonReporter, sarif::SarifReporter, terminal::TerminalReporter,
+    Reporter, html::HtmlReporter, json::JsonReporter, sarif::SarifReporter,
+    terminal::TerminalReporter,
 };
 pub use rules::{
     Confidence, CustomRuleError, CustomRuleLoader, DynamicRule, Finding, RuleEngine, ScanResult,
@@ -35,4 +39,5 @@ pub use scanner::{
     CommandScanner, DependencyScanner, DockerScanner, HookScanner, McpScanner, RulesDirScanner,
     Scanner, SkillScanner,
 };
+pub use scoring::{CategoryScore, RiskLevel, RiskScore, SeverityBreakdown};
 pub use watch::FileWatcher;

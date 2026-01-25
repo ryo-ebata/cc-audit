@@ -88,6 +88,9 @@ cc-audit --init-hook .
 
 # 修正ヒントを表示
 cc-audit --fix-hint ./my-skill/
+
+# 設定ファイルのテンプレートを生成
+cc-audit --init ./
 ```
 
 ## 出力例
@@ -219,6 +222,151 @@ cc-audit ./skill/ --format json
 		}
 	]
 }
+```
+
+## 設定ファイル
+
+cc-audit はプロジェクトレベルの設定ファイル（`.cc-audit.yaml`、`.cc-audit.yml`、`.cc-audit.json`、`.cc-audit.toml`）をサポートしています。
+
+### 設定ファイルの場所
+
+1. プロジェクトルートの `.cc-audit.yaml`（最優先）
+2. プロジェクトルートの `.cc-audit.json`
+3. プロジェクトルートの `.cc-audit.toml`
+4. `~/.config/cc-audit/config.yaml`（グローバル設定）
+
+### 設定ファイルの初期化
+
+全オプションとコメント付きの設定ファイルテンプレートを生成できます：
+
+```bash
+# カレントディレクトリに .cc-audit.yaml を作成
+cc-audit --init ./
+
+# 特定のディレクトリに作成
+cc-audit --init /path/to/project/
+```
+
+生成されたファイルには、利用可能なすべてのオプションと説明コメントが含まれています。
+
+### 設定例
+
+```yaml
+# .cc-audit.yaml
+
+# スキャン設定（CLI相当オプション）
+scan:
+  # 出力フォーマット: terminal, json, sarif, html
+  format: terminal
+
+  # 厳格モード: medium/low重大度の検出を表示、警告をエラーとして扱う
+  strict: false
+
+  # スキャンタイプ: skill, hook, mcp, command, rules, docker, dependency
+  scan_type: skill
+
+  # 再帰スキャン
+  recursive: false
+
+  # CIモード: 非インタラクティブ出力
+  ci: false
+
+  # 詳細出力
+  verbose: false
+
+  # 最小信頼度レベル: tentative, firm, certain
+  min_confidence: tentative
+
+  # スキャン時にコメント行をスキップ
+  skip_comments: false
+
+  # ターミナル出力に修正ヒントを表示
+  fix_hint: false
+
+  # マルウェアシグネチャスキャンを無効化
+  no_malware_scan: false
+
+# ウォッチモード設定
+watch:
+  debounce_ms: 300
+  poll_interval_ms: 500
+
+# 無視設定
+ignore:
+  # 追加で無視するディレクトリ（デフォルトとマージ）
+  directories:
+    - my_build_output
+    - .cache
+    - tmp
+
+  # 無視するglobパターン
+  patterns:
+    - "*.log"
+    - "*.generated.*"
+    - "temp/**"
+
+  # 含める/除外する設定（CLIフラグが優先）
+  include_tests: false        # テストディレクトリを含める
+  include_node_modules: false # node_modulesを含める
+  include_vendor: false       # vendorディレクトリを含める
+
+# 特定のルールをIDで無効化
+disabled_rules:
+  - "PE-001"    # sudo検出を無効化
+  - "EX-002"    # base64送信検出を無効化
+  - "CUSTOM-001"
+
+# カスタム検出ルール（カスタムルールセクション参照）
+rules:
+  - id: "CUSTOM-001"
+    name: "内部APIアクセス"
+    severity: "high"
+    category: "exfiltration"
+    patterns:
+      - 'https?://internal\.company\.com'
+    message: "内部APIアクセスを検出しました"
+    recommendation: "このアクセスが許可されていることを確認してください"
+
+# カスタムマルウェアシグネチャ（マルウェアシグネチャセクション参照）
+malware_signatures:
+  - id: "MW-CUSTOM-001"
+    name: "カスタムC2パターン"
+    description: "カスタムC2サーバーとの通信を検出"
+    pattern: "malicious-domain\\.com"
+    severity: "critical"
+    category: "exfiltration"
+    confidence: "certain"
+```
+
+### デフォルトで無視されるディレクトリ
+
+以下のディレクトリはデフォルトで無視されます：
+
+| カテゴリ | ディレクトリ |
+|----------|-------------|
+| ビルド出力 | `target`, `dist`, `build`, `out` |
+| パッケージマネージャ | `node_modules`, `.pnpm`, `.yarn` |
+| バージョン管理 | `.git`, `.svn`, `.hg` |
+| IDE | `.idea`, `.vscode` |
+| キャッシュ | `.cache`, `__pycache__`, `.pytest_cache`, `.mypy_cache` |
+| カバレッジ | `coverage`, `.nyc_output` |
+
+### CLIフラグとの統合
+
+CLIフラグと設定ファイルの設定はマージされます：
+
+- **ブールフラグ**（`strict`、`verbose`、`ci`など）: OR演算 - CLIまたは設定のどちらかで有効にすると、機能が有効になります
+- **列挙型オプション**（`format`、`scan_type`、`min_confidence`）: 設定ファイルがデフォルト値を提供
+
+```bash
+# 設定ファイルで strict: true の場合、--strict なしでも厳格モードになる
+cc-audit ./my-skill/
+
+# CLIで verbose を有効化、設定で strict を有効化 - 両方がアクティブ
+cc-audit --verbose ./my-skill/
+
+# 設定ファイルで format: json - JSON出力になる
+cc-audit ./my-skill/
 ```
 
 ## カスタムルール
@@ -565,7 +713,15 @@ A: はい。インストール後、cc-audit はネットワーク依存なし�
 
 **Q: 特定のルールを抑制するにはどうすればよいですか？**
 
-A: 現在は `--min-confidence` で信頼度レベルによるフィルタリングが可能です。ルール単位の抑制は v1.0.0 で予定しています。
+A: `.cc-audit.yaml` 設定ファイルの `disabled_rules` にルールIDを追加してください：
+
+```yaml
+disabled_rules:
+  - "PE-001"
+  - "EX-002"
+```
+
+また、`--min-confidence` で信頼度レベルによるフィルタリングも可能です。
 
 **Q: cc-audit はバイナリファイルをスキャンしますか？**
 

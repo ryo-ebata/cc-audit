@@ -2,15 +2,16 @@ use crate::rules::Confidence;
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
 pub enum OutputFormat {
     #[default]
     Terminal,
     Json,
     Sarif,
+    Html,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
 pub enum ScanType {
     #[default]
     Skill,
@@ -105,6 +106,18 @@ pub struct Cli {
     /// Path to a custom rules file (YAML format)
     #[arg(long)]
     pub custom_rules: Option<PathBuf>,
+
+    /// Create a baseline snapshot for drift detection (rug pull prevention)
+    #[arg(long)]
+    pub baseline: bool,
+
+    /// Check for drift against saved baseline
+    #[arg(long)]
+    pub check_drift: bool,
+
+    /// Generate a default configuration file template
+    #[arg(long)]
+    pub init: bool,
 }
 
 #[cfg(test)]
@@ -400,5 +413,17 @@ mod tests {
     fn test_default_custom_rules_none() {
         let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
         assert!(cli.custom_rules.is_none());
+    }
+
+    #[test]
+    fn test_parse_init() {
+        let cli = Cli::try_parse_from(["cc-audit", "--init", "./"]).unwrap();
+        assert!(cli.init);
+    }
+
+    #[test]
+    fn test_default_init_false() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(!cli.init);
     }
 }

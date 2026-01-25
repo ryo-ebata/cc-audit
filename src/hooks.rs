@@ -1,6 +1,8 @@
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use thiserror::Error;
 
 const PRE_COMMIT_SCRIPT: &str = r#"#!/bin/sh
@@ -65,12 +67,15 @@ impl HookInstaller {
         // Write the pre-commit script
         fs::write(&pre_commit_path, PRE_COMMIT_SCRIPT).map_err(HookError::WriteFile)?;
 
-        // Make it executable
-        let mut perms = fs::metadata(&pre_commit_path)
-            .map_err(HookError::SetPermissions)?
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&pre_commit_path, perms).map_err(HookError::SetPermissions)?;
+        // Make it executable (Unix only)
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(&pre_commit_path)
+                .map_err(HookError::SetPermissions)?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&pre_commit_path, perms).map_err(HookError::SetPermissions)?;
+        }
 
         Ok(())
     }
@@ -235,6 +240,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_hook_is_executable() {
         let repo = create_git_repo();
         HookInstaller::install(repo.path()).unwrap();

@@ -53,8 +53,7 @@ impl HookInstaller {
 
         // Check if a pre-commit hook already exists
         if pre_commit_path.exists() {
-            let existing =
-                fs::read_to_string(&pre_commit_path).map_err(HookError::ReadFile)?;
+            let existing = fs::read_to_string(&pre_commit_path).map_err(HookError::ReadFile)?;
 
             if existing.contains("cc-audit") {
                 return Err(HookError::AlreadyInstalled);
@@ -289,7 +288,8 @@ mod tests {
 
     #[test]
     fn test_hook_error_display_create_dir() {
-        let io_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
+        let io_error =
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "permission denied");
         let error = HookError::CreateDir(io_error);
         assert!(format!("{}", error).starts_with("Failed to create hooks directory:"));
     }
@@ -310,7 +310,10 @@ mod tests {
 
     #[test]
     fn test_hook_error_display_set_permissions() {
-        let io_error = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "operation not permitted");
+        let io_error = std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "operation not permitted",
+        );
         let error = HookError::SetPermissions(io_error);
         assert!(format!("{}", error).starts_with("Failed to set permissions:"));
     }

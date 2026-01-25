@@ -122,7 +122,10 @@ mod tests {
         let scanner = DependencyScanner::new();
         let findings = scanner.scan_path(dir.path()).unwrap();
 
-        assert!(findings.is_empty(), "Clean package.json should have no findings");
+        assert!(
+            findings.is_empty(),
+            "Clean package.json should have no findings"
+        );
     }
 
     #[test]
@@ -143,7 +146,9 @@ mod tests {
         let findings = scanner.scan_path(dir.path()).unwrap();
 
         assert!(
-            findings.iter().any(|f| f.id == "DEP-001" || f.id == "SC-001"),
+            findings
+                .iter()
+                .any(|f| f.id == "DEP-001" || f.id == "SC-001"),
             "Should detect dangerous postinstall script"
         );
     }
@@ -212,7 +217,9 @@ mod tests {
         let findings = scanner.scan_path(dir.path()).unwrap();
 
         assert!(
-            findings.iter().any(|f| f.id == "DEP-004" || f.id == "DEP-005"),
+            findings
+                .iter()
+                .any(|f| f.id == "DEP-004" || f.id == "DEP-005"),
             "Should detect HTTP/tarball dependency"
         );
     }
@@ -269,10 +276,7 @@ some-lib = { git = "https://github.com/user/repo" }
         let scanner = DependencyScanner::new();
         let findings = scanner.scan_path(dir.path()).unwrap();
 
-        assert!(
-            findings.is_empty(),
-            "Should not scan non-dependency files"
-        );
+        assert!(findings.is_empty(), "Should not scan non-dependency files");
     }
 
     #[test]
@@ -315,17 +319,31 @@ some-lib = { git = "https://github.com/user/repo" }
 
     #[test]
     fn test_is_dependency_file() {
-        assert!(DependencyScanner::is_dependency_file(Path::new("package.json")));
-        assert!(DependencyScanner::is_dependency_file(Path::new("Cargo.toml")));
-        assert!(DependencyScanner::is_dependency_file(Path::new("requirements.txt")));
-        assert!(DependencyScanner::is_dependency_file(Path::new("pyproject.toml")));
+        assert!(DependencyScanner::is_dependency_file(Path::new(
+            "package.json"
+        )));
+        assert!(DependencyScanner::is_dependency_file(Path::new(
+            "Cargo.toml"
+        )));
+        assert!(DependencyScanner::is_dependency_file(Path::new(
+            "requirements.txt"
+        )));
+        assert!(DependencyScanner::is_dependency_file(Path::new(
+            "pyproject.toml"
+        )));
         assert!(DependencyScanner::is_dependency_file(Path::new("Gemfile")));
         assert!(DependencyScanner::is_dependency_file(Path::new("go.mod")));
         assert!(DependencyScanner::is_dependency_file(Path::new("pom.xml")));
-        assert!(DependencyScanner::is_dependency_file(Path::new("composer.json")));
+        assert!(DependencyScanner::is_dependency_file(Path::new(
+            "composer.json"
+        )));
 
-        assert!(!DependencyScanner::is_dependency_file(Path::new("README.md")));
-        assert!(!DependencyScanner::is_dependency_file(Path::new("config.json")));
+        assert!(!DependencyScanner::is_dependency_file(Path::new(
+            "README.md"
+        )));
+        assert!(!DependencyScanner::is_dependency_file(Path::new(
+            "config.json"
+        )));
         assert!(!DependencyScanner::is_dependency_file(Path::new("main.rs")));
     }
 
@@ -374,7 +392,11 @@ some-lib = { git = "https://github.com/user/repo" }
     fn test_multiple_dependency_files() {
         let dir = TempDir::new().unwrap();
         create_file(&dir, "package.json", r#"{"dependencies": {"a": "*"}}"#);
-        create_file(&dir, "Cargo.toml", r#"[dependencies]\nb = { version = "*" }"#);
+        create_file(
+            &dir,
+            "Cargo.toml",
+            r#"[dependencies]\nb = { version = "*" }"#,
+        );
 
         let scanner = DependencyScanner::new();
         let findings = scanner.scan_path(dir.path()).unwrap();

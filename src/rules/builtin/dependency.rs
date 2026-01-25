@@ -15,7 +15,10 @@ fn dep_001() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // postinstall/preinstall with curl/wget piped to shell
-            Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*\b(curl|wget)\b[^"]*\|\s*(bash|sh|node)"#).unwrap(),
+            Regex::new(
+                r#""(post|pre)install"\s*:\s*"[^"]*\b(curl|wget)\b[^"]*\|\s*(bash|sh|node)"#,
+            )
+            .unwrap(),
             // postinstall/preinstall with eval
             Regex::new(r#""(post|pre)install"\s*:\s*"[^"]*\beval\b"#).unwrap(),
             // postinstall/preinstall downloading and executing
@@ -93,9 +96,7 @@ fn dep_004() -> Rule {
             Regex::new(r#"registry\s*=\s*"http://[^"]*""#).unwrap(),
             Regex::new(r"^http://").unwrap(),
         ],
-        exclusions: vec![
-            Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap(),
-        ],
+        exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").unwrap()],
         message: "Insecure HTTP dependency URL detected: vulnerable to MITM attacks",
         recommendation: "Use HTTPS URLs for all dependencies",
         fix_hint: Some("Change http:// to https://"),
@@ -170,11 +171,7 @@ mod tests {
         let rules = rules();
         let dep_003 = rules.iter().find(|r| r.id == "DEP-003").unwrap();
 
-        let wildcards = vec![
-            r#": "*""#,
-            r#": "latest""#,
-            r#"version = "*""#,
-        ];
+        let wildcards = vec![r#": "*""#, r#": "latest""#, r#"version = "*""#];
 
         for wildcard in wildcards {
             let matched = dep_003.patterns.iter().any(|p| p.is_match(wildcard));

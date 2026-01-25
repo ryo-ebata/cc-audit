@@ -1,7 +1,7 @@
 use crate::rules::builtin;
 use crate::rules::custom::DynamicRule;
 use crate::rules::types::{Finding, Location, Rule};
-use crate::suppression::{parse_inline_suppression, parse_next_line_suppression, SuppressionType};
+use crate::suppression::{SuppressionType, parse_inline_suppression, parse_next_line_suppression};
 
 pub struct RuleEngine {
     rules: &'static [Rule],
@@ -89,8 +89,7 @@ impl RuleEngine {
                     }
                 }
 
-                if let Some(finding) =
-                    Self::check_dynamic_line(rule, line, file_path, line_num + 1)
+                if let Some(finding) = Self::check_dynamic_line(rule, line, file_path, line_num + 1)
                 {
                     findings.push(finding);
                 }

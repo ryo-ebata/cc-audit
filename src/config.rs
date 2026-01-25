@@ -45,12 +45,10 @@ impl Config {
             .to_lowercase();
 
         match ext.as_str() {
-            "yaml" | "yml" => {
-                serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
-                    path: path.display().to_string(),
-                    source: e,
-                })
-            }
+            "yaml" | "yml" => serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
+                path: path.display().to_string(),
+                source: e,
+            }),
             "json" => serde_json::from_str(&content).map_err(|e| ConfigError::ParseJson {
                 path: path.display().to_string(),
                 source: e,
@@ -77,7 +75,12 @@ impl Config {
     pub fn load(project_root: Option<&Path>) -> Self {
         // Try project-level config files
         if let Some(root) = project_root {
-            for filename in &[".cc-audit.yaml", ".cc-audit.yml", ".cc-audit.json", ".cc-audit.toml"] {
+            for filename in &[
+                ".cc-audit.yaml",
+                ".cc-audit.yml",
+                ".cc-audit.json",
+                ".cc-audit.toml",
+            ] {
                 let path = root.join(filename);
                 if path.exists() {
                     if let Ok(config) = Self::from_file(&path) {
@@ -135,29 +138,80 @@ impl Default for TextFilesConfig {
     fn default() -> Self {
         let extensions: HashSet<String> = [
             // Markdown and text
-            "md", "txt", "rst",
+            "md",
+            "txt",
+            "rst",
             // Configuration
-            "json", "yaml", "yml", "toml", "xml", "ini", "conf", "cfg", "env",
+            "json",
+            "yaml",
+            "yml",
+            "toml",
+            "xml",
+            "ini",
+            "conf",
+            "cfg",
+            "env",
             // Shell
-            "sh", "bash", "zsh", "fish",
+            "sh",
+            "bash",
+            "zsh",
+            "fish",
             // Scripting
-            "py", "rb", "pl", "pm", "lua", "r",
+            "py",
+            "rb",
+            "pl",
+            "pm",
+            "lua",
+            "r",
             // Web
-            "js", "ts", "jsx", "tsx", "html", "css", "scss", "sass", "less",
+            "js",
+            "ts",
+            "jsx",
+            "tsx",
+            "html",
+            "css",
+            "scss",
+            "sass",
+            "less",
             // Systems
-            "rs", "go", "c", "cpp", "h", "hpp", "cc", "cxx",
+            "rs",
+            "go",
+            "c",
+            "cpp",
+            "h",
+            "hpp",
+            "cc",
+            "cxx",
             // JVM
-            "java", "kt", "kts", "scala", "clj", "groovy",
+            "java",
+            "kt",
+            "kts",
+            "scala",
+            "clj",
+            "groovy",
             // .NET
-            "cs", "fs", "vb",
+            "cs",
+            "fs",
+            "vb",
             // Mobile
-            "swift", "m", "mm",
+            "swift",
+            "m",
+            "mm",
             // Other languages
-            "php", "ex", "exs", "hs", "ml", "vim", "el", "lisp",
+            "php",
+            "ex",
+            "exs",
+            "hs",
+            "ml",
+            "vim",
+            "el",
+            "lisp",
             // Docker
             "dockerfile",
             // Build
-            "makefile", "cmake", "gradle",
+            "makefile",
+            "cmake",
+            "gradle",
         ]
         .into_iter()
         .map(String::from)

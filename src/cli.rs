@@ -390,8 +390,8 @@ mod tests {
 
     #[test]
     fn test_parse_custom_rules() {
-        let cli =
-            Cli::try_parse_from(["cc-audit", "--custom-rules", "./rules.yaml", "./skill/"]).unwrap();
+        let cli = Cli::try_parse_from(["cc-audit", "--custom-rules", "./rules.yaml", "./skill/"])
+            .unwrap();
         assert!(cli.custom_rules.is_some());
         assert_eq!(cli.custom_rules.unwrap().to_str().unwrap(), "./rules.yaml");
     }

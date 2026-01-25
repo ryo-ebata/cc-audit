@@ -521,8 +521,8 @@ rules:
 
     #[test]
     fn test_load_from_file() {
-        use tempfile::TempDir;
         use std::fs;
+        use tempfile::TempDir;
 
         let dir = TempDir::new().unwrap();
         let file_path = dir.path().join("rules.yaml");
@@ -549,29 +549,28 @@ rules:
 
     #[test]
     fn test_load_from_file_not_found() {
-        let result = CustomRuleLoader::load_from_file(std::path::Path::new("/nonexistent/file.yaml"));
+        let result =
+            CustomRuleLoader::load_from_file(std::path::Path::new("/nonexistent/file.yaml"));
         assert!(result.is_err());
         assert!(matches!(result, Err(CustomRuleError::IoError(_))));
     }
 
     #[test]
     fn test_convert_yaml_rules() {
-        let yaml_rules = vec![
-            YamlRule {
-                id: "CONV-001".to_string(),
-                name: "Convert Test".to_string(),
-                description: "Test".to_string(),
-                severity: "high".to_string(),
-                category: "exfiltration".to_string(),
-                confidence: "firm".to_string(),
-                patterns: vec!["test".to_string()],
-                exclusions: vec![],
-                message: "Test".to_string(),
-                recommendation: "".to_string(),
-                fix_hint: None,
-                cwe: vec![],
-            },
-        ];
+        let yaml_rules = vec![YamlRule {
+            id: "CONV-001".to_string(),
+            name: "Convert Test".to_string(),
+            description: "Test".to_string(),
+            severity: "high".to_string(),
+            category: "exfiltration".to_string(),
+            confidence: "firm".to_string(),
+            patterns: vec!["test".to_string()],
+            exclusions: vec![],
+            message: "Test".to_string(),
+            recommendation: "".to_string(),
+            fix_hint: None,
+            cwe: vec![],
+        }];
 
         let rules = CustomRuleLoader::convert_yaml_rules(yaml_rules).unwrap();
         assert_eq!(rules.len(), 1);

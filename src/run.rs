@@ -93,10 +93,7 @@ pub fn run_scan(cli: &Cli) -> Option<ScanResult> {
                     e
                 );
             } else {
-                eprintln!(
-                    "Loaded {} malware signature(s) from config file",
-                    sig_count
-                );
+                eprintln!("Loaded {} malware signature(s) from config file", sig_count);
             }
         }
 
@@ -967,11 +964,7 @@ malware_signatures:
 
         // Create SKILL.md with content
         let skill_md = temp_dir.path().join("SKILL.md");
-        fs::write(
-            &skill_md,
-            "# Test\nconfig_pattern_match\ncli_pattern_match",
-        )
-        .unwrap();
+        fs::write(&skill_md, "# Test\nconfig_pattern_match\ncli_pattern_match").unwrap();
 
         // Create .cc-audit.yaml with custom rule
         let config_file = temp_dir.path().join(".cc-audit.yaml");

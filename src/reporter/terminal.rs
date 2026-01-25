@@ -1,5 +1,5 @@
 use crate::reporter::Reporter;
-use crate::rules::{Confidence, ScanResult, Severity};
+use crate::rules::{Confidence, RuleSeverity, ScanResult, Severity};
 use crate::scoring::RiskLevel;
 use colored::Colorize;
 
@@ -38,6 +38,13 @@ impl TerminalReporter {
             Confidence::Certain => "certain".green(),
             Confidence::Firm => "firm".cyan(),
             Confidence::Tentative => "tentative".yellow(),
+        }
+    }
+
+    fn rule_severity_label(&self, rule_severity: &Option<RuleSeverity>) -> colored::ColoredString {
+        match rule_severity {
+            Some(RuleSeverity::Error) | None => "[ERROR]".red().bold(),
+            Some(RuleSeverity::Warn) => "[WARN]".yellow(),
         }
     }
 
@@ -121,10 +128,11 @@ impl Reporter for TerminalReporter {
             output.push_str(&"No security issues found.\n".green().to_string());
         } else {
             for finding in &findings_to_show {
+                let rule_sev_label = self.rule_severity_label(&finding.rule_severity);
                 let severity_label = self.severity_color(&finding.severity);
                 output.push_str(&format!(
-                    "{} {}: {}\n",
-                    severity_label, finding.id, finding.name
+                    "{} {} {}: {}\n",
+                    rule_sev_label, severity_label, finding.id, finding.name
                 ));
                 output.push_str(&format!(
                     "  Location: {}:{}\n",
@@ -157,13 +165,27 @@ impl Reporter for TerminalReporter {
         }
 
         output.push_str(&format!("{}\n", "━".repeat(50)));
-        output.push_str(&format!(
-            "Summary: {} critical, {} high, {} medium, {} low\n",
-            result.summary.critical.to_string().red().bold(),
-            result.summary.high.to_string().yellow().bold(),
-            result.summary.medium.to_string().cyan(),
-            result.summary.low
-        ));
+
+        // Show errors/warnings if any findings exist
+        if result.summary.errors > 0 || result.summary.warnings > 0 {
+            output.push_str(&format!(
+                "Summary: {} error(s), {} warning(s) ({} critical, {} high, {} medium, {} low)\n",
+                result.summary.errors.to_string().red().bold(),
+                result.summary.warnings.to_string().yellow(),
+                result.summary.critical.to_string().red().bold(),
+                result.summary.high.to_string().yellow().bold(),
+                result.summary.medium.to_string().cyan(),
+                result.summary.low
+            ));
+        } else {
+            output.push_str(&format!(
+                "Summary: {} critical, {} high, {} medium, {} low\n",
+                result.summary.critical.to_string().red().bold(),
+                result.summary.high.to_string().yellow().bold(),
+                result.summary.medium.to_string().cyan(),
+                result.summary.low
+            ));
+        }
 
         let result_text = if result.summary.passed {
             "PASS".green().bold()
@@ -402,6 +424,7 @@ mod tests {
             recommendation: "Test recommendation".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -429,11 +452,183 @@ mod tests {
             recommendation: "Test recommendation".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
 
         assert!(output.contains("Confidence:"));
         assert!(output.contains("certain"));
+    }
+
+    #[test]
+    fn test_report_with_rule_severity_warn() {
+        use crate::rules::RuleSeverity;
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test finding",
+            "test.sh",
+            1,
+        );
+        finding.rule_severity = Some(RuleSeverity::Warn);
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        assert!(output.contains("WARN"));
+    }
+
+    #[test]
+    fn test_report_with_risk_score_safe() {
+        use crate::scoring::{RiskLevel, RiskScore, SeverityBreakdown};
+
+        // Risk score is only displayed when there are findings
+        let reporter = TerminalReporter::new(true, false); // strict mode to show low severity
+        let finding = create_finding(
+            "LOW-001",
+            Severity::Low,
+            Category::Overpermission,
+            "Minor issue",
+            "test.md",
+            1,
+        );
+        let mut result = create_test_result(vec![finding]);
+        result.risk_score = Some(RiskScore {
+            total: 0,
+            level: RiskLevel::Safe,
+            by_severity: SeverityBreakdown {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 1,
+            },
+            by_category: vec![],
+        });
+        let output = reporter.report(&result);
+
+        assert!(output.contains("RISK SCORE: 0/100"));
+        assert!(output.contains("SAFE")); // RiskLevel displays as uppercase
+    }
+
+    #[test]
+    fn test_report_with_risk_score_high() {
+        use crate::scoring::{CategoryScore, RiskLevel, RiskScore, SeverityBreakdown};
+
+        let reporter = TerminalReporter::new(false, false);
+        let finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        let mut result = create_test_result(vec![finding]);
+        result.risk_score = Some(RiskScore {
+            total: 75,
+            level: RiskLevel::High,
+            by_severity: SeverityBreakdown {
+                critical: 1,
+                high: 0,
+                medium: 0,
+                low: 0,
+            },
+            by_category: vec![CategoryScore {
+                category: "exfiltration".to_string(),
+                score: 40,
+                findings_count: 1,
+            }],
+        });
+        let output = reporter.report(&result);
+
+        assert!(output.contains("RISK SCORE: 75/100"));
+        assert!(output.contains("HIGH")); // RiskLevel displays as uppercase
+        assert!(output.contains("Category Breakdown"));
+        assert!(output.contains("exfiltration"));
+    }
+
+    #[test]
+    fn test_report_with_risk_score_low_and_medium() {
+        use crate::scoring::{RiskLevel, RiskScore, SeverityBreakdown};
+
+        // Test Low - need a high severity finding to display risk score
+        let reporter = TerminalReporter::new(false, false);
+        let finding = create_finding(
+            "HIGH-001",
+            Severity::High,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        let mut result = create_test_result(vec![finding]);
+        result.risk_score = Some(RiskScore {
+            total: 15,
+            level: RiskLevel::Low,
+            by_severity: SeverityBreakdown {
+                critical: 0,
+                high: 1,
+                medium: 0,
+                low: 0,
+            },
+            by_category: vec![],
+        });
+        let output = reporter.report(&result);
+        assert!(output.contains("LOW")); // RiskLevel displays as uppercase
+
+        // Test Medium
+        let finding = create_finding(
+            "HIGH-001",
+            Severity::High,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        let mut result = create_test_result(vec![finding]);
+        result.risk_score = Some(RiskScore {
+            total: 45,
+            level: RiskLevel::Medium,
+            by_severity: SeverityBreakdown {
+                critical: 0,
+                high: 1,
+                medium: 0,
+                low: 0,
+            },
+            by_category: vec![],
+        });
+        let output = reporter.report(&result);
+        assert!(output.contains("MEDIUM")); // RiskLevel displays as uppercase
+    }
+
+    #[test]
+    fn test_report_with_risk_score_critical() {
+        use crate::scoring::{RiskLevel, RiskScore, SeverityBreakdown};
+
+        let reporter = TerminalReporter::new(false, false);
+        let finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        let mut result = create_test_result(vec![finding]);
+        result.risk_score = Some(RiskScore {
+            total: 95,
+            level: RiskLevel::Critical,
+            by_severity: SeverityBreakdown {
+                critical: 1,
+                high: 0,
+                medium: 0,
+                low: 0,
+            },
+            by_category: vec![],
+        });
+        let output = reporter.report(&result);
+        assert!(output.contains("CRITICAL")); // RiskLevel displays as uppercase
     }
 }

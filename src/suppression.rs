@@ -605,4 +605,35 @@ mod tests {
         assert!(!manager.is_rule_suppressed("EX-001", line));
         assert!(!manager.is_rule_suppressed("PE-001", line));
     }
+
+    #[test]
+    fn test_process_line_inline_ignore_without_next_line() {
+        let mut manager = SuppressionManager::new();
+
+        // Inline ignore (not ignore-next-line) should return Some
+        let line = "sudo rm -rf / # cc-audit-ignore";
+        let suppression = manager.process_line(line);
+
+        // Should return SuppressionType::All for inline ignore without rules
+        assert!(suppression.is_some());
+        assert!(matches!(suppression, Some(SuppressionType::All)));
+    }
+
+    #[test]
+    fn test_process_line_inline_ignore_with_specific_rules() {
+        let mut manager = SuppressionManager::new();
+
+        // Inline ignore with specific rules
+        let line = "sudo rm -rf / # cc-audit-ignore:PE-001,PE-002";
+        let suppression = manager.process_line(line);
+
+        // Should return SuppressionType::Rules for inline ignore with rules
+        assert!(suppression.is_some());
+        if let Some(SuppressionType::Rules(rules)) = suppression {
+            assert!(rules.iter().any(|r| r == "PE-001"));
+            assert!(rules.iter().any(|r| r == "PE-002"));
+        } else {
+            panic!("Expected SuppressionType::Rules");
+        }
+    }
 }

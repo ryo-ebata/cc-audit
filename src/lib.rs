@@ -4,6 +4,7 @@ pub mod config;
 pub mod deobfuscation;
 pub mod error;
 pub mod fix;
+pub mod handlers;
 pub mod hooks;
 pub mod ignore;
 pub mod malware_db;
@@ -36,8 +37,8 @@ pub use reporter::{
     terminal::TerminalReporter,
 };
 pub use rules::{
-    Confidence, CustomRuleError, CustomRuleLoader, DynamicRule, Finding, RuleEngine, ScanResult,
-    Severity, Summary,
+    Confidence, CustomRuleError, CustomRuleLoader, DynamicRule, Finding, RuleEngine, RuleSeverity,
+    ScanResult, Severity, Summary,
 };
 pub use run::{
     WatchModeResult, format_result, is_text_file, is_text_file_with_config, run_scan,

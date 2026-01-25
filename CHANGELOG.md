@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-25
+
+### Added
+- **Rule Severity Levels**: New `RuleSeverity` (error/warn) to control CI exit codes independently of detection severity
+- **Severity Configuration**: Configure per-rule severity in `.cc-audit.yaml`:
+  ```yaml
+  severity:
+    default: error
+    warn:
+      - PI-001  # Report but don't fail CI
+    ignore:
+      - OP-001  # Completely skip
+  ```
+- **New CLI Options**:
+  - `--warn-only`: Treat all findings as warnings (exit 0) - useful for initial baseline scans
+  - `--min-severity <level>`: Filter findings by severity (critical/high/medium/low)
+  - `--min-rule-severity <level>`: Filter by rule severity (error/warn)
+- **Enhanced Output**: Terminal output now shows `[ERROR]`/`[WARN]` labels per finding
+- **Summary with errors/warnings**: Summary line now shows error and warning counts
+
+### Changed
+- **BREAKING**: Default behavior now returns exit code 1 for ANY finding (previously only critical/high)
+  - Migration: Use `--warn-only` to restore previous behavior
+- **BREAKING**: Summary's `passed` field is now based on `errors == 0` instead of `critical == 0 && high == 0`
+- **SARIF Output**: Level now reflects rule severity (error/warning) instead of detection severity
+- **JSON Output**: Findings now include `rule_severity` field
+- Summary now includes `errors` and `warnings` counts
+
+### Fixed
+- Integration tests updated for new exit code behavior
+
 ## [0.4.1] - 2026-01-25
 
 ### Fixed
@@ -79,7 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JSON output format
 - Basic CLI interface
 
-[Unreleased]: https://github.com/ryo-ebata/cc-audit/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ryo-ebata/cc-audit/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/ryo-ebata/cc-audit/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/ryo-ebata/cc-audit/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/ryo-ebata/cc-audit/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/ryo-ebata/cc-audit/compare/v0.2.0...v0.3.0

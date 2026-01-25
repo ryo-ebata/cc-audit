@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Conventional Commits linter for git commit-msg hook
+# https://www.conventionalcommits.org/
+
+set -e
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip merge commits
+if echo "$COMMIT_MSG" | grep -qE "^Merge "; then
+    exit 0
+fi
+
+# Skip revert commits
+if echo "$COMMIT_MSG" | grep -qE "^Revert "; then
+    exit 0
+fi
+
+# Conventional Commits pattern
+# type(scope)?: subject
+# type!: subject (breaking change)
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?\!?: .+"
+
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+    echo ""
+    echo "ERROR: Commit message does not follow Conventional Commits format."
+    echo ""
+    echo "Expected format: <type>[optional scope]: <description>"
+    echo ""
+    echo "Allowed types:"
+    echo "  feat:     A new feature"
+    echo "  fix:      A bug fix"
+    echo "  docs:     Documentation only changes"
+    echo "  style:    Changes that do not affect code meaning (formatting)"
+    echo "  refactor: Code change that neither fixes a bug nor adds a feature"
+    echo "  perf:     A code change that improves performance"
+    echo "  test:     Adding missing tests or correcting existing tests"
+    echo "  build:    Changes that affect the build system or dependencies"
+    echo "  ci:       Changes to CI configuration files and scripts"
+    echo "  chore:    Other changes that don't modify src or test files"
+    echo "  revert:   Reverts a previous commit"
+    echo ""
+    echo "Examples:"
+    echo "  feat: add user authentication"
+    echo "  fix(parser): handle empty input"
+    echo "  docs: update README with examples"
+    echo "  feat!: change API response format (breaking change)"
+    echo ""
+    echo "Your commit message:"
+    echo "  $FIRST_LINE"
+    echo ""
+    exit 1
+fi
+
+# Check subject starts with lowercase
+SUBJECT=$(echo "$FIRST_LINE" | sed -E 's/^[a-z]+(\(.+\))?\!?: //')
+FIRST_CHAR=$(echo "$SUBJECT" | cut -c1)
+
+if echo "$FIRST_CHAR" | grep -qE "^[A-Z]$"; then
+    echo ""
+    echo "ERROR: Commit subject should start with lowercase letter."
+    echo ""
+    echo "Your subject: $SUBJECT"
+    echo "Should be:    $(echo "$SUBJECT" | sed 's/./\L&/')"
+    echo ""
+    exit 1
+fi
+
+# Check header length
+HEADER_LENGTH=${#FIRST_LINE}
+if [ "$HEADER_LENGTH" -gt 100 ]; then
+    echo ""
+    echo "ERROR: Commit header exceeds 100 characters ($HEADER_LENGTH chars)."
+    echo ""
+    echo "Your header: $FIRST_LINE"
+    echo ""
+    exit 1
+fi
+
+exit 0

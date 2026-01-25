@@ -714,4 +714,95 @@ mod tests {
         assert_eq!(baseline.version, parsed.version);
         assert_eq!(baseline.file_count, parsed.file_count);
     }
+
+    #[test]
+    fn test_hash_file_nonexistent() {
+        let result = Baseline::hash_file(Path::new("/nonexistent/file/path.md"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_save_to_file_invalid_path() {
+        let baseline = Baseline {
+            version: "0.1.0".to_string(),
+            created_at: "2024-01-01".to_string(),
+            file_hashes: HashMap::new(),
+            file_count: 0,
+        };
+
+        let result = baseline.save_to_file(Path::new("/nonexistent/directory/baseline.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let invalid_json = temp_dir.path().join("invalid.json");
+        fs::write(&invalid_json, "{ invalid json }").unwrap();
+
+        let result = Baseline::load_from_file(&invalid_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_directory_nonexistent_path() {
+        // Test path that is neither file nor directory
+        let result = Baseline::from_directory(Path::new("/nonexistent/path"));
+        // Should succeed with empty file_hashes since path doesn't exist
+        assert!(result.is_ok());
+        let baseline = result.unwrap();
+        assert_eq!(baseline.file_count, 0);
+    }
+
+    #[test]
+    fn test_is_relevant_file_no_extension() {
+        // Test file without extension that is not a known name
+        assert!(!Baseline::is_relevant_file(Path::new("random_file_no_ext")));
+    }
+
+    #[test]
+    fn test_drift_entry_serialization() {
+        let entry = DriftEntry {
+            path: "test.md".to_string(),
+            baseline_hash: "abc".to_string(),
+            current_hash: "def".to_string(),
+        };
+
+        let json = serde_json::to_string(&entry).unwrap();
+        let parsed: DriftEntry = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(entry.path, parsed.path);
+        assert_eq!(entry.baseline_hash, parsed.baseline_hash);
+        assert_eq!(entry.current_hash, parsed.current_hash);
+    }
+
+    #[test]
+    fn test_drift_report_serialization() {
+        let report = DriftReport {
+            modified: vec![],
+            added: vec!["new.md".to_string()],
+            removed: vec![],
+            has_drift: true,
+        };
+
+        let json = serde_json::to_string(&report).unwrap();
+        let parsed: DriftReport = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(report.has_drift, parsed.has_drift);
+        assert_eq!(report.added, parsed.added);
+    }
+
+    #[test]
+    fn test_file_hash_serialization() {
+        let hash = FileHash {
+            hash: "abc123".to_string(),
+            size: 42,
+        };
+
+        let json = serde_json::to_string(&hash).unwrap();
+        let parsed: FileHash = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(hash.hash, parsed.hash);
+        assert_eq!(hash.size, parsed.size);
+    }
 }

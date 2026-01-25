@@ -1,5 +1,5 @@
 use crate::reporter::Reporter;
-use crate::rules::{Category, ScanResult, Severity};
+use crate::rules::{Category, RuleSeverity, ScanResult, Severity};
 use serde::Serialize;
 
 pub struct SarifReporter;
@@ -210,7 +210,7 @@ impl SarifReport {
             .iter()
             .map(|f| SarifResult {
                 rule_id: f.id.clone(),
-                level: Self::severity_to_level(&f.severity),
+                level: Self::rule_severity_to_level(&f.rule_severity, &f.severity),
                 message: SarifMessage {
                     text: format!(
                         "{}\n\nCode: {}\n\nRecommendation: {}",
@@ -338,6 +338,20 @@ impl SarifReport {
         }
     }
 
+    /// Convert RuleSeverity to SARIF level.
+    /// If RuleSeverity is set, use it; otherwise fall back to detection severity.
+    fn rule_severity_to_level(
+        rule_severity: &Option<RuleSeverity>,
+        detection_severity: &Severity,
+    ) -> String {
+        match rule_severity {
+            Some(RuleSeverity::Error) => "error".to_string(),
+            Some(RuleSeverity::Warn) => "warning".to_string(),
+            // If not set, fall back to detection severity
+            None => Self::severity_to_level(detection_severity),
+        }
+    }
+
     fn severity_to_score(severity: &Severity) -> String {
         match severity {
             Severity::Critical => "9.0".to_string(),
@@ -409,6 +423,7 @@ mod tests {
             recommendation: "Review the command".to_string(),
             fix_hint: None,
             cwe_ids: vec!["CWE-200".to_string()],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -475,6 +490,7 @@ mod tests {
             recommendation: "Fix".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         };
         let finding2 = Finding {
             id: "EX-001".to_string(),
@@ -492,6 +508,7 @@ mod tests {
             recommendation: "Fix".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding1, finding2]);
         let output = reporter.report(&result);
@@ -560,6 +577,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "H-001".to_string(),
@@ -577,6 +595,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "M-001".to_string(),
@@ -594,6 +613,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -611,6 +631,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
         ];
         let result = create_test_result(findings);
@@ -681,6 +702,7 @@ mod tests {
             recommendation: "test".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -764,6 +786,7 @@ mod tests {
                 "CWE-94".to_string(),
                 "CWE-250".to_string(),
             ],
+            rule_severity: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);

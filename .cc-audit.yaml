@@ -1,7 +1,33 @@
 # cc-audit Configuration File
 # Place this file as .cc-audit.yaml in your project root
 
-# Scan configuration (CLI options can be set here as defaults)
+# =============================================================================
+# RULE SEVERITY CONFIGURATION (v0.5.0)
+# =============================================================================
+# Controls how findings affect CI exit code.
+# - error: Causes CI failure (exit 1) - DEFAULT for all rules
+# - warn: Report only, does not cause CI failure (exit 0)
+# - ignore: Completely skip the rule (no report)
+#
+# Priority: ignore > warn > default
+
+# severity:
+#   # Default severity for all rules
+#   default: error
+#
+#   # Rules to treat as warnings only (report but don't fail CI)
+#   warn:
+#     - PI-001    # Prompt injection patterns
+#     - PI-002
+#     - OB-001    # Obfuscation patterns
+#
+#   # Rules to completely ignore (no report)
+#   ignore:
+#     - OP-001    # Overpermission
+
+# =============================================================================
+# SCAN CONFIGURATION
+# =============================================================================
 scan:
   # Output format: terminal, json, sarif, html
   # format: terminal
@@ -9,7 +35,7 @@ scan:
   # Strict mode: show medium/low severity findings and treat warnings as errors
   strict: false
 
-  # Scan type: skill, hook, mcp, command, rules, docker, dependency
+  # Scan type: skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   # scan_type: skill
 
   # Recursive scan
@@ -33,7 +59,46 @@ scan:
   # Disable malware signature scanning
   no_malware_scan: false
 
-# Watch mode configuration
+  # Watch mode: continuously monitor files for changes
+  watch: false
+
+  # Path to a custom malware signatures database (JSON)
+  # malware_db: ./custom-malware.json
+
+  # Path to a custom rules file (YAML format)
+  # custom_rules: ./custom-rules.yaml
+
+  # Output file path (for HTML/JSON/SARIF output)
+  # output: ./report.html
+
+  # Enable deep scan with deobfuscation
+  deep_scan: false
+
+  # Auto-fix issues (where possible)
+  fix: false
+
+  # Preview auto-fix changes without applying them
+  fix_dry_run: false
+
+# =============================================================================
+# BASELINE CONFIGURATION (Drift Detection / Rug Pull Prevention)
+# =============================================================================
+# baseline:
+#   # Create a baseline snapshot when scanning
+#   enabled: false
+#
+#   # Check for drift against saved baseline
+#   check_drift: false
+#
+#   # Path to save baseline to
+#   save_to: ./.cc-audit-baseline.json
+#
+#   # Path to baseline file to compare against
+#   compare_with: ./.cc-audit-baseline.json
+
+# =============================================================================
+# WATCH MODE CONFIGURATION
+# =============================================================================
 watch:
   # Debounce duration in milliseconds
   debounce_ms: 300
@@ -41,7 +106,9 @@ watch:
   # Poll interval in milliseconds
   poll_interval_ms: 500
 
-# Ignore configuration for scanning
+# =============================================================================
+# IGNORE CONFIGURATION
+# =============================================================================
 ignore:
   # Directories to ignore (overwrites defaults if specified)
   # directories:
@@ -64,6 +131,10 @@ ignore:
 
   # Include vendor directories in scan
   include_vendor: false
+
+# =============================================================================
+# RULE CONFIGURATION
+# =============================================================================
 
 # Rule IDs to disable
 # disabled_rules:

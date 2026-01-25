@@ -493,6 +493,7 @@ impl McpServer {
             recommendation: rule.recommendation.to_string(),
             fix_hint: rule.fix_hint.map(|s| s.to_string()),
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
+            rule_severity: None,
         };
 
         let fixer = AutoFixer::new(true);

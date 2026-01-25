@@ -1,4 +1,5 @@
 use crate::malware_db::MalwareSignature;
+use crate::rules::RuleSeverity;
 use crate::rules::custom::YamlRule;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -17,6 +18,12 @@ pub struct Config {
     pub text_files: TextFilesConfig,
     /// Ignore configuration for scanning
     pub ignore: IgnoreConfig,
+    /// Baseline configuration for drift detection
+    #[serde(default)]
+    pub baseline: BaselineConfig,
+    /// Rule severity configuration (v0.5.0)
+    #[serde(default)]
+    pub severity: SeverityConfig,
     /// Rule IDs to disable
     #[serde(default)]
     pub disabled_rules: HashSet<String>,
@@ -28,6 +35,59 @@ pub struct Config {
     pub malware_signatures: Vec<MalwareSignature>,
 }
 
+/// Rule severity configuration - controls how findings affect CI exit code.
+///
+/// Priority: ignore > warn > default
+///
+/// Example:
+/// ```yaml
+/// severity:
+///   default: error      # All rules are errors by default
+///   warn:
+///     - PI-001          # Treat as warning only
+///     - PI-002
+///   ignore:
+///     - OP-001          # Completely ignore
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SeverityConfig {
+    /// Default severity for all rules (error by default)
+    pub default: RuleSeverity,
+    /// Rule IDs to treat as warnings (report only, exit 0)
+    #[serde(default)]
+    pub warn: HashSet<String>,
+    /// Rule IDs to ignore completely (no report)
+    /// Note: These are merged with disabled_rules
+    #[serde(default)]
+    pub ignore: HashSet<String>,
+}
+
+impl Default for SeverityConfig {
+    fn default() -> Self {
+        Self {
+            default: RuleSeverity::Error,
+            warn: HashSet::new(),
+            ignore: HashSet::new(),
+        }
+    }
+}
+
+impl SeverityConfig {
+    /// Get the effective RuleSeverity for a rule ID.
+    /// Returns None if the rule should be ignored.
+    pub fn get_rule_severity(&self, rule_id: &str) -> Option<RuleSeverity> {
+        // Priority: ignore > warn > default
+        if self.ignore.contains(rule_id) {
+            return None; // Ignore this rule
+        }
+        if self.warn.contains(rule_id) {
+            return Some(RuleSeverity::Warn);
+        }
+        Some(self.default)
+    }
+}
+
 /// Scan configuration (corresponds to CLI options)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -36,7 +96,7 @@ pub struct ScanConfig {
     pub format: Option<String>,
     /// Strict mode: show medium/low severity findings and treat warnings as errors
     pub strict: bool,
-    /// Scan type: "skill", "hook", "mcp", "command", "rules", "docker", "dependency"
+    /// Scan type: "skill", "hook", "mcp", "command", "rules", "docker", "dependency", "subagent", "plugin"
     pub scan_type: Option<String>,
     /// Recursive scan
     pub recursive: bool,
@@ -52,6 +112,20 @@ pub struct ScanConfig {
     pub fix_hint: bool,
     /// Disable malware signature scanning
     pub no_malware_scan: bool,
+    /// Watch mode: continuously monitor files for changes
+    pub watch: bool,
+    /// Path to a custom malware signatures database (JSON)
+    pub malware_db: Option<String>,
+    /// Path to a custom rules file (YAML format)
+    pub custom_rules: Option<String>,
+    /// Output file path (for HTML/JSON/SARIF output)
+    pub output: Option<String>,
+    /// Enable deep scan with deobfuscation
+    pub deep_scan: bool,
+    /// Auto-fix issues (where possible)
+    pub fix: bool,
+    /// Preview auto-fix changes without applying them
+    pub fix_dry_run: bool,
 }
 
 impl Config {
@@ -128,12 +202,58 @@ impl Config {
         Self::default()
     }
 
+    /// Get the effective set of disabled rules (merges severity.ignore and disabled_rules)
+    pub fn effective_disabled_rules(&self) -> HashSet<String> {
+        let mut disabled = self.disabled_rules.clone();
+        disabled.extend(self.severity.ignore.iter().cloned());
+        disabled
+    }
+
+    /// Check if a rule should be ignored based on both disabled_rules and severity.ignore
+    pub fn is_rule_disabled(&self, rule_id: &str) -> bool {
+        self.disabled_rules.contains(rule_id) || self.severity.ignore.contains(rule_id)
+    }
+
+    /// Get the RuleSeverity for a rule, considering both severity config and disabled_rules
+    pub fn get_rule_severity(&self, rule_id: &str) -> Option<crate::rules::RuleSeverity> {
+        if self.is_rule_disabled(rule_id) {
+            return None;
+        }
+        self.severity.get_rule_severity(rule_id)
+    }
+
     /// Generate a YAML configuration template with comments
     pub fn generate_template() -> String {
         r#"# cc-audit Configuration File
 # Place this file as .cc-audit.yaml in your project root
 
-# Scan configuration (CLI options can be set here as defaults)
+# =============================================================================
+# RULE SEVERITY CONFIGURATION (v0.5.0)
+# =============================================================================
+# Controls how findings affect CI exit code.
+# - error: Causes CI failure (exit 1) - DEFAULT for all rules
+# - warn: Report only, does not cause CI failure (exit 0)
+# - ignore: Completely skip the rule (no report)
+#
+# Priority: ignore > warn > default
+
+severity:
+  # Default severity for all rules
+  default: error
+
+  # Rules to treat as warnings only (report but don't fail CI)
+  # warn:
+  #   - PI-001    # Prompt injection patterns
+  #   - PI-002
+  #   - OB-001    # Obfuscation patterns
+
+  # Rules to completely ignore (no report)
+  # ignore:
+  #   - OP-001    # Overpermission
+
+# =============================================================================
+# SCAN CONFIGURATION
+# =============================================================================
 scan:
   # Output format: terminal, json, sarif, html
   # format: terminal
@@ -141,7 +261,7 @@ scan:
   # Strict mode: show medium/low severity findings and treat warnings as errors
   strict: false
 
-  # Scan type: skill, hook, mcp, command, rules, docker, dependency
+  # Scan type: skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   # scan_type: skill
 
   # Recursive scan
@@ -165,7 +285,46 @@ scan:
   # Disable malware signature scanning
   no_malware_scan: false
 
-# Watch mode configuration
+  # Watch mode: continuously monitor files for changes
+  watch: false
+
+  # Path to a custom malware signatures database (JSON)
+  # malware_db: ./custom-malware.json
+
+  # Path to a custom rules file (YAML format)
+  # custom_rules: ./custom-rules.yaml
+
+  # Output file path (for HTML/JSON/SARIF output)
+  # output: ./report.html
+
+  # Enable deep scan with deobfuscation
+  deep_scan: false
+
+  # Auto-fix issues (where possible)
+  fix: false
+
+  # Preview auto-fix changes without applying them
+  fix_dry_run: false
+
+# =============================================================================
+# BASELINE CONFIGURATION (Drift Detection / Rug Pull Prevention)
+# =============================================================================
+baseline:
+  # Create a baseline snapshot when scanning
+  enabled: false
+
+  # Check for drift against saved baseline
+  check_drift: false
+
+  # Path to save baseline to
+  # save_to: ./.cc-audit-baseline.json
+
+  # Path to baseline file to compare against
+  # compare_with: ./.cc-audit-baseline.json
+
+# =============================================================================
+# WATCH MODE CONFIGURATION
+# =============================================================================
 watch:
   # Debounce duration in milliseconds
   debounce_ms: 300
@@ -173,7 +332,9 @@ watch:
   # Poll interval in milliseconds
   poll_interval_ms: 500
 
-# Ignore configuration for scanning
+# =============================================================================
+# IGNORE CONFIGURATION
+# =============================================================================
 ignore:
   # Directories to ignore (overwrites defaults if specified)
   # directories:
@@ -196,6 +357,10 @@ ignore:
 
   # Include vendor directories in scan
   include_vendor: false
+
+# =============================================================================
+# RULE CONFIGURATION
+# =============================================================================
 
 # Rule IDs to disable
 # disabled_rules:
@@ -256,6 +421,20 @@ impl Default for WatchConfig {
             poll_interval_ms: 500,
         }
     }
+}
+
+/// Baseline configuration for drift detection (rug pull prevention)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BaselineConfig {
+    /// Create a baseline snapshot when scanning
+    pub enabled: bool,
+    /// Check for drift against saved baseline
+    pub check_drift: bool,
+    /// Path to save baseline to
+    pub save_to: Option<String>,
+    /// Path to baseline file to compare against
+    pub compare_with: Option<String>,
 }
 
 /// Text file detection configuration
@@ -933,6 +1112,14 @@ ignore:
         assert!(!config.skip_comments);
         assert!(!config.fix_hint);
         assert!(!config.no_malware_scan);
+        // New fields
+        assert!(!config.watch);
+        assert!(config.malware_db.is_none());
+        assert!(config.custom_rules.is_none());
+        assert!(config.output.is_none());
+        assert!(!config.deep_scan);
+        assert!(!config.fix);
+        assert!(!config.fix_dry_run);
     }
 
     #[test]
@@ -953,6 +1140,13 @@ scan:
   skip_comments: true
   fix_hint: true
   no_malware_scan: true
+  watch: true
+  malware_db: ./custom-malware.json
+  custom_rules: ./custom-rules.yaml
+  output: ./report.html
+  deep_scan: true
+  fix: true
+  fix_dry_run: true
 "#,
         )
         .unwrap();
@@ -968,6 +1162,20 @@ scan:
         assert!(config.scan.skip_comments);
         assert!(config.scan.fix_hint);
         assert!(config.scan.no_malware_scan);
+        // New fields
+        assert!(config.scan.watch);
+        assert_eq!(
+            config.scan.malware_db,
+            Some("./custom-malware.json".to_string())
+        );
+        assert_eq!(
+            config.scan.custom_rules,
+            Some("./custom-rules.yaml".to_string())
+        );
+        assert_eq!(config.scan.output, Some("./report.html".to_string()));
+        assert!(config.scan.deep_scan);
+        assert!(config.scan.fix);
+        assert!(config.scan.fix_dry_run);
     }
 
     #[test]
@@ -1012,6 +1220,8 @@ scan:
         let template = Config::generate_template();
         // Check that template contains key sections
         assert!(template.contains("# cc-audit Configuration File"));
+        assert!(template.contains("severity:"));
+        assert!(template.contains("default: error"));
         assert!(template.contains("scan:"));
         assert!(template.contains("watch:"));
         assert!(template.contains("ignore:"));
@@ -1026,5 +1236,241 @@ scan:
         // The template should be parseable as YAML (comments are ignored)
         let result: Result<Config, _> = serde_yaml::from_str(&template);
         assert!(result.is_ok(), "Template should be valid YAML");
+    }
+
+    // ========== SeverityConfig Tests ==========
+
+    #[test]
+    fn test_severity_config_default() {
+        let config = SeverityConfig::default();
+        assert_eq!(config.default, crate::rules::RuleSeverity::Error);
+        assert!(config.warn.is_empty());
+        assert!(config.ignore.is_empty());
+    }
+
+    #[test]
+    fn test_severity_config_get_rule_severity_default() {
+        let config = SeverityConfig::default();
+        assert_eq!(
+            config.get_rule_severity("EX-001"),
+            Some(crate::rules::RuleSeverity::Error)
+        );
+    }
+
+    #[test]
+    fn test_severity_config_get_rule_severity_warn() {
+        let mut config = SeverityConfig::default();
+        config.warn.insert("PI-001".to_string());
+
+        assert_eq!(
+            config.get_rule_severity("PI-001"),
+            Some(crate::rules::RuleSeverity::Warn)
+        );
+        assert_eq!(
+            config.get_rule_severity("EX-001"),
+            Some(crate::rules::RuleSeverity::Error)
+        );
+    }
+
+    #[test]
+    fn test_severity_config_get_rule_severity_ignore() {
+        let mut config = SeverityConfig::default();
+        config.ignore.insert("OP-001".to_string());
+
+        assert_eq!(config.get_rule_severity("OP-001"), None);
+        assert_eq!(
+            config.get_rule_severity("EX-001"),
+            Some(crate::rules::RuleSeverity::Error)
+        );
+    }
+
+    #[test]
+    fn test_severity_config_priority_ignore_over_warn() {
+        let mut config = SeverityConfig::default();
+        config.warn.insert("RULE-001".to_string());
+        config.ignore.insert("RULE-001".to_string());
+
+        // ignore takes priority over warn
+        assert_eq!(config.get_rule_severity("RULE-001"), None);
+    }
+
+    #[test]
+    fn test_config_severity_parsing() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+severity:
+  default: warn
+  warn:
+    - PI-001
+    - PI-002
+  ignore:
+    - OP-001
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert_eq!(config.severity.default, crate::rules::RuleSeverity::Warn);
+        assert!(config.severity.warn.contains("PI-001"));
+        assert!(config.severity.warn.contains("PI-002"));
+        assert!(config.severity.ignore.contains("OP-001"));
+    }
+
+    #[test]
+    fn test_config_effective_disabled_rules() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+disabled_rules:
+  - RULE-A
+  - RULE-B
+severity:
+  ignore:
+    - RULE-C
+    - RULE-D
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        let effective = config.effective_disabled_rules();
+
+        // Both disabled_rules and severity.ignore should be merged
+        assert!(effective.contains("RULE-A"));
+        assert!(effective.contains("RULE-B"));
+        assert!(effective.contains("RULE-C"));
+        assert!(effective.contains("RULE-D"));
+        assert_eq!(effective.len(), 4);
+    }
+
+    #[test]
+    fn test_config_is_rule_disabled() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+disabled_rules:
+  - RULE-A
+severity:
+  ignore:
+    - RULE-B
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert!(config.is_rule_disabled("RULE-A"));
+        assert!(config.is_rule_disabled("RULE-B"));
+        assert!(!config.is_rule_disabled("RULE-C"));
+    }
+
+    #[test]
+    fn test_config_get_rule_severity() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+disabled_rules:
+  - RULE-A
+severity:
+  default: error
+  warn:
+    - RULE-B
+  ignore:
+    - RULE-C
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+
+        // RULE-A is in disabled_rules
+        assert_eq!(config.get_rule_severity("RULE-A"), None);
+
+        // RULE-B is in severity.warn
+        assert_eq!(
+            config.get_rule_severity("RULE-B"),
+            Some(crate::rules::RuleSeverity::Warn)
+        );
+
+        // RULE-C is in severity.ignore
+        assert_eq!(config.get_rule_severity("RULE-C"), None);
+
+        // RULE-D uses default (error)
+        assert_eq!(
+            config.get_rule_severity("RULE-D"),
+            Some(crate::rules::RuleSeverity::Error)
+        );
+    }
+
+    // ========== BaselineConfig Tests ==========
+
+    #[test]
+    fn test_baseline_config_default() {
+        let config = BaselineConfig::default();
+        assert!(!config.enabled);
+        assert!(!config.check_drift);
+        assert!(config.save_to.is_none());
+        assert!(config.compare_with.is_none());
+    }
+
+    #[test]
+    fn test_config_with_baseline_settings() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+baseline:
+  enabled: true
+  check_drift: true
+  save_to: ./.cc-audit-baseline.json
+  compare_with: ./previous-baseline.json
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert!(config.baseline.enabled);
+        assert!(config.baseline.check_drift);
+        assert_eq!(
+            config.baseline.save_to,
+            Some("./.cc-audit-baseline.json".to_string())
+        );
+        assert_eq!(
+            config.baseline.compare_with,
+            Some("./previous-baseline.json".to_string())
+        );
+    }
+
+    #[test]
+    fn test_default_config_has_default_baseline() {
+        let config = Config::default();
+        assert!(!config.baseline.enabled);
+        assert!(!config.baseline.check_drift);
+        assert!(config.baseline.save_to.is_none());
+        assert!(config.baseline.compare_with.is_none());
+    }
+
+    #[test]
+    fn test_generate_template_contains_new_sections() {
+        let template = Config::generate_template();
+        // Check that template contains new sections
+        assert!(template.contains("baseline:"));
+        assert!(template.contains("deep_scan:"));
+        assert!(template.contains("fix:"));
+        assert!(template.contains("fix_dry_run:"));
+        assert!(template.contains("malware_db:"));
+        assert!(template.contains("custom_rules:"));
+        assert!(template.contains("output:"));
+        assert!(template.contains("subagent"));
+        assert!(template.contains("plugin"));
     }
 }

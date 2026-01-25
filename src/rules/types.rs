@@ -1,7 +1,48 @@
 use crate::scoring::RiskScore;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+/// Rule severity level - determines how findings affect CI exit code.
+/// This is separate from detection Severity (Critical/High/Medium/Low).
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    Default,
+    clap::ValueEnum,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleSeverity {
+    /// Warning: Report only, does not cause CI failure (exit 0)
+    Warn,
+    /// Error: Causes CI failure (exit 1)
+    #[default]
+    Error,
+}
+
+impl RuleSeverity {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RuleSeverity::Warn => "warn",
+            RuleSeverity::Error => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for RuleSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str().to_uppercase())
+    }
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, clap::ValueEnum,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
     Low,
@@ -138,6 +179,10 @@ pub struct Finding {
     /// CWE IDs associated with this finding
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub cwe_ids: Vec<String>,
+    /// Rule severity level (error/warn) - determines CI exit code behavior.
+    /// This is assigned based on configuration, not the rule definition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rule_severity: Option<RuleSeverity>,
 }
 
 impl Finding {
@@ -154,6 +199,7 @@ impl Finding {
             recommendation: rule.recommendation.to_string(),
             fix_hint: rule.fix_hint.map(|s| s.to_string()),
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
+            rule_severity: None, // Assigned later based on config
         }
     }
 }
@@ -165,9 +211,18 @@ pub struct Summary {
     pub medium: usize,
     pub low: usize,
     pub passed: bool,
+    /// Number of findings with RuleSeverity::Error
+    #[serde(default)]
+    pub errors: usize,
+    /// Number of findings with RuleSeverity::Warn
+    #[serde(default)]
+    pub warnings: usize,
 }
 
 impl Summary {
+    /// Creates a Summary from findings.
+    /// Note: This method does not set errors/warnings counts.
+    /// Use `from_findings_with_rule_severity` when rule_severity is assigned.
     pub fn from_findings(findings: &[Finding]) -> Self {
         let (critical, high, medium, low) =
             findings
@@ -185,6 +240,39 @@ impl Summary {
             medium,
             low,
             passed: critical == 0 && high == 0,
+            errors: 0,
+            warnings: 0,
+        }
+    }
+
+    /// Creates a Summary from findings with rule_severity counts.
+    /// The `passed` field is determined by whether there are any errors.
+    pub fn from_findings_with_rule_severity(findings: &[Finding]) -> Self {
+        let (critical, high, medium, low, errors, warnings) =
+            findings
+                .iter()
+                .fold((0, 0, 0, 0, 0, 0), |(c, h, m, l, e, w), f| {
+                    let (new_c, new_h, new_m, new_l) = match f.severity {
+                        Severity::Critical => (c + 1, h, m, l),
+                        Severity::High => (c, h + 1, m, l),
+                        Severity::Medium => (c, h, m + 1, l),
+                        Severity::Low => (c, h, m, l + 1),
+                    };
+                    let (new_e, new_w) = match f.rule_severity {
+                        Some(RuleSeverity::Error) | None => (e + 1, w), // Default to error
+                        Some(RuleSeverity::Warn) => (e, w + 1),
+                    };
+                    (new_c, new_h, new_m, new_l, new_e, new_w)
+                });
+
+        Self {
+            critical,
+            high,
+            medium,
+            low,
+            passed: errors == 0, // Pass only if no errors
+            errors,
+            warnings,
         }
     }
 }
@@ -271,6 +359,7 @@ mod tests {
             recommendation: "test".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         }];
         let summary = Summary::from_findings(&findings);
         assert_eq!(summary.critical, 1);
@@ -296,6 +385,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "H-001".to_string(),
@@ -313,6 +403,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "M-001".to_string(),
@@ -330,6 +421,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -347,6 +439,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -376,6 +469,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -393,6 +487,7 @@ mod tests {
                 recommendation: "test".to_string(),
                 fix_hint: None,
                 cwe_ids: vec![],
+                rule_severity: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -511,5 +606,149 @@ mod tests {
         };
         let json = serde_json::to_string(&location).unwrap();
         assert!(json.contains("\"column\":5"));
+    }
+
+    // ========== RuleSeverity Tests ==========
+
+    #[test]
+    fn test_rule_severity_default_is_error() {
+        assert_eq!(RuleSeverity::default(), RuleSeverity::Error);
+    }
+
+    #[test]
+    fn test_rule_severity_as_str() {
+        assert_eq!(RuleSeverity::Error.as_str(), "error");
+        assert_eq!(RuleSeverity::Warn.as_str(), "warn");
+    }
+
+    #[test]
+    fn test_rule_severity_display() {
+        assert_eq!(format!("{}", RuleSeverity::Error), "ERROR");
+        assert_eq!(format!("{}", RuleSeverity::Warn), "WARN");
+    }
+
+    #[test]
+    fn test_rule_severity_ordering() {
+        // Warn < Error (warn is less severe)
+        assert!(RuleSeverity::Warn < RuleSeverity::Error);
+    }
+
+    #[test]
+    fn test_rule_severity_serialization() {
+        let error = RuleSeverity::Error;
+        let json = serde_json::to_string(&error).unwrap();
+        assert_eq!(json, "\"error\"");
+
+        let warn = RuleSeverity::Warn;
+        let json = serde_json::to_string(&warn).unwrap();
+        assert_eq!(json, "\"warn\"");
+
+        let deserialized: RuleSeverity = serde_json::from_str("\"error\"").unwrap();
+        assert_eq!(deserialized, RuleSeverity::Error);
+
+        let deserialized: RuleSeverity = serde_json::from_str("\"warn\"").unwrap();
+        assert_eq!(deserialized, RuleSeverity::Warn);
+    }
+
+    // ========== Summary with RuleSeverity Tests ==========
+
+    fn create_test_finding(
+        id: &str,
+        severity: Severity,
+        rule_severity: Option<RuleSeverity>,
+    ) -> Finding {
+        Finding {
+            id: id.to_string(),
+            severity,
+            category: Category::Exfiltration,
+            confidence: Confidence::Firm,
+            name: "Test".to_string(),
+            location: Location {
+                file: "test.sh".to_string(),
+                line: 1,
+                column: None,
+            },
+            code: "test".to_string(),
+            message: "test".to_string(),
+            recommendation: "test".to_string(),
+            fix_hint: None,
+            cwe_ids: vec![],
+            rule_severity,
+        }
+    }
+
+    #[test]
+    fn test_summary_with_rule_severity_empty() {
+        let findings: Vec<Finding> = vec![];
+        let summary = Summary::from_findings_with_rule_severity(&findings);
+        assert_eq!(summary.errors, 0);
+        assert_eq!(summary.warnings, 0);
+        assert!(summary.passed);
+    }
+
+    #[test]
+    fn test_summary_with_rule_severity_all_errors() {
+        let findings = vec![
+            create_test_finding("E-001", Severity::Critical, Some(RuleSeverity::Error)),
+            create_test_finding("E-002", Severity::High, Some(RuleSeverity::Error)),
+        ];
+        let summary = Summary::from_findings_with_rule_severity(&findings);
+        assert_eq!(summary.errors, 2);
+        assert_eq!(summary.warnings, 0);
+        assert!(!summary.passed);
+    }
+
+    #[test]
+    fn test_summary_with_rule_severity_all_warnings() {
+        let findings = vec![
+            create_test_finding("W-001", Severity::Critical, Some(RuleSeverity::Warn)),
+            create_test_finding("W-002", Severity::High, Some(RuleSeverity::Warn)),
+        ];
+        let summary = Summary::from_findings_with_rule_severity(&findings);
+        assert_eq!(summary.errors, 0);
+        assert_eq!(summary.warnings, 2);
+        assert!(summary.passed); // No errors, so passed
+    }
+
+    #[test]
+    fn test_summary_with_rule_severity_mixed() {
+        let findings = vec![
+            create_test_finding("E-001", Severity::Critical, Some(RuleSeverity::Error)),
+            create_test_finding("W-001", Severity::High, Some(RuleSeverity::Warn)),
+            create_test_finding("W-002", Severity::Medium, Some(RuleSeverity::Warn)),
+        ];
+        let summary = Summary::from_findings_with_rule_severity(&findings);
+        assert_eq!(summary.errors, 1);
+        assert_eq!(summary.warnings, 2);
+        assert!(!summary.passed); // Has errors, so failed
+        // Also check severity counts
+        assert_eq!(summary.critical, 1);
+        assert_eq!(summary.high, 1);
+        assert_eq!(summary.medium, 1);
+    }
+
+    #[test]
+    fn test_summary_with_rule_severity_none_defaults_to_error() {
+        let findings = vec![
+            create_test_finding("N-001", Severity::Low, None), // None defaults to Error
+        ];
+        let summary = Summary::from_findings_with_rule_severity(&findings);
+        assert_eq!(summary.errors, 1);
+        assert_eq!(summary.warnings, 0);
+        assert!(!summary.passed);
+    }
+
+    #[test]
+    fn test_finding_rule_severity_not_serialized_when_none() {
+        let finding = create_test_finding("TEST-001", Severity::High, None);
+        let json = serde_json::to_string(&finding).unwrap();
+        assert!(!json.contains("rule_severity"));
+    }
+
+    #[test]
+    fn test_finding_rule_severity_serialized_when_some() {
+        let finding = create_test_finding("TEST-001", Severity::High, Some(RuleSeverity::Warn));
+        let json = serde_json::to_string(&finding).unwrap();
+        assert!(json.contains("\"rule_severity\":\"warn\""));
     }
 }

@@ -9,12 +9,18 @@ default:
 # ============================================================================
 
 # Setup development environment
-setup:
+setup: setup-hooks
     @echo "Installing required tools..."
     rustup component add clippy rustfmt llvm-tools-preview
     cargo install cargo-llvm-cov cargo-audit cargo-deny cargo-vet cargo-outdated \
         cargo-semver-checks cargo-msrv cargo-mutants
     @echo "Setup complete!"
+
+# Setup git hooks for commit message linting
+setup-hooks:
+    @echo "Setting up git hooks..."
+    git config core.hooksPath .githooks
+    @echo "Git hooks configured! Commits will be validated against Conventional Commits format."
 
 # Setup all tools including nightly-only tools (fuzz)
 setup-all: setup

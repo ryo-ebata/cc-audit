@@ -1,8 +1,9 @@
 use crate::{
     Cli, CommandScanner, Confidence, Config, CustomRuleLoader, Deobfuscator, DependencyScanner,
     DockerScanner, DynamicRule, Finding, HookScanner, IgnoreFilter, JsonReporter, MalwareDatabase,
-    McpScanner, OutputFormat, PluginScanner, Reporter, RiskScore, RulesDirScanner, SarifReporter,
-    ScanResult, ScanType, Scanner, SkillScanner, SubagentScanner, Summary, TerminalReporter,
+    McpScanner, OutputFormat, PluginScanner, Reporter, RiskScore, RuleSeverity, RulesDirScanner,
+    SarifReporter, ScanResult, ScanType, Scanner, Severity, SkillScanner, SubagentScanner, Summary,
+    TerminalReporter,
 };
 use chrono::Utc;
 use std::fs;
@@ -14,6 +15,9 @@ use walkdir::WalkDir;
 pub struct EffectiveConfig {
     pub format: OutputFormat,
     pub strict: bool,
+    pub warn_only: bool,
+    pub min_severity: Option<Severity>,
+    pub min_rule_severity: Option<RuleSeverity>,
     pub scan_type: ScanType,
     pub recursive: bool,
     pub ci: bool,
@@ -23,12 +27,19 @@ pub struct EffectiveConfig {
     pub fix_hint: bool,
     pub no_malware_scan: bool,
     pub deep_scan: bool,
+    pub watch: bool,
+    pub output: Option<String>,
+    pub fix: bool,
+    pub fix_dry_run: bool,
+    pub malware_db: Option<String>,
+    pub custom_rules: Option<String>,
 }
 
 impl EffectiveConfig {
     /// Merge CLI options with config file settings
     /// Boolean flags: CLI OR config (either can enable)
     /// Enum options: config provides defaults, CLI always takes precedence
+    /// Path options: CLI takes precedence, fallback to config
     pub fn from_cli_and_config(cli: &Cli, config: &Config) -> Self {
         // Parse format from config if available
         let format = parse_output_format(config.scan.format.as_deref()).unwrap_or(cli.format);
@@ -40,10 +51,32 @@ impl EffectiveConfig {
         let min_confidence =
             parse_confidence(config.scan.min_confidence.as_deref()).unwrap_or(cli.min_confidence);
 
+        // Path options: CLI takes precedence, fallback to config
+        let malware_db = cli
+            .malware_db
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .or_else(|| config.scan.malware_db.clone());
+
+        let custom_rules = cli
+            .custom_rules
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .or_else(|| config.scan.custom_rules.clone());
+
+        let output = cli
+            .output
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .or_else(|| config.scan.output.clone());
+
         Self {
             format,
             // Boolean flags: OR operation (config can enable, CLI can enable)
             strict: cli.strict || config.scan.strict,
+            warn_only: cli.warn_only,
+            min_severity: cli.min_severity,
+            min_rule_severity: cli.min_rule_severity,
             scan_type,
             recursive: cli.recursive || config.scan.recursive,
             ci: cli.ci || config.scan.ci,
@@ -52,7 +85,13 @@ impl EffectiveConfig {
             skip_comments: cli.skip_comments || config.scan.skip_comments,
             fix_hint: cli.fix_hint || config.scan.fix_hint,
             no_malware_scan: cli.no_malware_scan || config.scan.no_malware_scan,
-            deep_scan: cli.deep_scan,
+            deep_scan: cli.deep_scan || config.scan.deep_scan,
+            watch: cli.watch || config.scan.watch,
+            fix: cli.fix || config.scan.fix,
+            fix_dry_run: cli.fix_dry_run || config.scan.fix_dry_run,
+            output,
+            malware_db,
+            custom_rules,
         }
     }
 }
@@ -91,25 +130,24 @@ fn parse_confidence(s: Option<&str>) -> Option<Confidence> {
     }
 }
 
-/// Load custom rules from CLI option if provided
-fn load_custom_rules(cli: &Cli) -> Vec<DynamicRule> {
-    match &cli.custom_rules {
-        Some(path) => match CustomRuleLoader::load_from_file(path) {
-            Ok(rules) => {
-                if !rules.is_empty() {
-                    eprintln!(
-                        "Loaded {} custom rule(s) from {}",
-                        rules.len(),
-                        path.display()
-                    );
+/// Load custom rules from effective config (CLI or config file)
+fn load_custom_rules_from_effective(effective: &EffectiveConfig) -> Vec<DynamicRule> {
+    match &effective.custom_rules {
+        Some(path_str) => {
+            let path = Path::new(path_str);
+            match CustomRuleLoader::load_from_file(path) {
+                Ok(rules) => {
+                    if !rules.is_empty() {
+                        eprintln!("Loaded {} custom rule(s) from {}", rules.len(), path_str);
+                    }
+                    rules
                 }
-                rules
+                Err(e) => {
+                    eprintln!("Warning: Failed to load custom rules: {}", e);
+                    Vec::new()
+                }
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to load custom rules: {}", e);
-                Vec::new()
-            }
-        },
+        }
         None => Vec::new(),
     }
 }
@@ -156,12 +194,12 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
     // Merge CLI options with config file settings
     let effective = EffectiveConfig::from_cli_and_config(cli, &config);
 
-    // Load custom rules: merge CLI rules with config file rules
-    let mut custom_rules = load_custom_rules(cli);
+    // Load custom rules: merge effective config rules with config file inline rules
+    let mut custom_rules = load_custom_rules_from_effective(&effective);
 
-    // Add rules from config file
+    // Add rules from config file (inline rules section)
     if !config.rules.is_empty() {
-        match CustomRuleLoader::convert_yaml_rules(config.rules) {
+        match CustomRuleLoader::convert_yaml_rules(config.rules.clone()) {
             Ok(config_rules) => {
                 let config_rules_count = config_rules.len();
                 custom_rules.extend(config_rules);
@@ -180,22 +218,25 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
 
     // Load malware database if enabled (using effective config)
     let malware_db = if !effective.no_malware_scan {
-        let mut db = match &cli.malware_db {
-            Some(path) => match MalwareDatabase::from_file(path) {
-                Ok(db) => db,
-                Err(e) => {
-                    eprintln!("Warning: Failed to load custom malware database: {}", e);
-                    eprintln!("Falling back to built-in database.");
-                    MalwareDatabase::default()
+        let mut db = match &effective.malware_db {
+            Some(path_str) => {
+                let path = Path::new(path_str);
+                match MalwareDatabase::from_file(path) {
+                    Ok(db) => db,
+                    Err(e) => {
+                        eprintln!("Warning: Failed to load custom malware database: {}", e);
+                        eprintln!("Falling back to built-in database.");
+                        MalwareDatabase::default()
+                    }
                 }
-            },
+            }
             None => MalwareDatabase::default(),
         };
 
-        // Add malware signatures from config file
+        // Add malware signatures from config file (inline signatures section)
         if !config.malware_signatures.is_empty() {
             let sig_count = config.malware_signatures.len();
-            if let Err(e) = db.add_signatures(config.malware_signatures) {
+            if let Err(e) = db.add_signatures(config.malware_signatures.clone()) {
                 eprintln!(
                     "Warning: Failed to load malware signatures from config file: {}",
                     e
@@ -314,13 +355,36 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
     }
 
     // Filter findings by minimum confidence level (using effective config) and disabled rules
-    let filtered_findings: Vec<_> = all_findings
+    // Also apply RuleSeverity based on config
+    let mut filtered_findings: Vec<_> = all_findings
         .into_iter()
         .filter(|f| f.confidence >= effective.min_confidence)
-        .filter(|f| !config.disabled_rules.contains(&f.id))
+        // Filter out disabled rules (from disabled_rules AND severity.ignore)
+        .filter(|f| !config.is_rule_disabled(&f.id))
+        // Filter by min_severity if specified
+        .filter(|f| {
+            if let Some(min_sev) = effective.min_severity {
+                f.severity >= min_sev
+            } else {
+                true
+            }
+        })
         .collect();
 
-    let summary = Summary::from_findings(&filtered_findings);
+    // Apply RuleSeverity to each finding
+    for finding in &mut filtered_findings {
+        let rule_severity = if effective.warn_only {
+            // --warn-only: treat all findings as warnings
+            RuleSeverity::Warn
+        } else if let Some(severity) = config.get_rule_severity(&finding.id) {
+            severity
+        } else {
+            RuleSeverity::Error
+        };
+        finding.rule_severity = Some(rule_severity);
+    }
+
+    let summary = Summary::from_findings_with_rule_severity(&filtered_findings);
     let risk_score = RiskScore::from_findings(&filtered_findings);
     Some(ScanResult {
         version: env!("CARGO_PKG_VERSION").to_string(),
@@ -530,6 +594,9 @@ mod tests {
             scan_type: ScanType::Skill,
             format: OutputFormat::Terminal,
             strict: false,
+            warn_only: false,
+            min_severity: None,
+            min_rule_severity: None,
             verbose: false,
             recursive: true,
             ci: false,
@@ -1448,6 +1515,72 @@ malware_signatures:
     }
 
     #[test]
+    fn test_effective_config_new_fields_from_config() {
+        let cli = create_test_cli(vec![PathBuf::from("./")]);
+
+        let mut config = Config::default();
+        config.scan.deep_scan = true;
+        config.scan.watch = true;
+        config.scan.fix = true;
+        config.scan.fix_dry_run = true;
+        config.scan.malware_db = Some("./custom-malware.json".to_string());
+        config.scan.custom_rules = Some("./custom-rules.yaml".to_string());
+        config.scan.output = Some("./report.html".to_string());
+
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        assert!(effective.deep_scan);
+        assert!(effective.watch);
+        assert!(effective.fix);
+        assert!(effective.fix_dry_run);
+        assert_eq!(
+            effective.malware_db,
+            Some("./custom-malware.json".to_string())
+        );
+        assert_eq!(
+            effective.custom_rules,
+            Some("./custom-rules.yaml".to_string())
+        );
+        assert_eq!(effective.output, Some("./report.html".to_string()));
+    }
+
+    #[test]
+    fn test_effective_config_cli_overrides_config_paths() {
+        let mut cli = create_test_cli(vec![PathBuf::from("./")]);
+        cli.malware_db = Some(PathBuf::from("./cli-malware.json"));
+        cli.custom_rules = Some(PathBuf::from("./cli-rules.yaml"));
+        cli.output = Some(PathBuf::from("./cli-output.html"));
+
+        let mut config = Config::default();
+        config.scan.malware_db = Some("./config-malware.json".to_string());
+        config.scan.custom_rules = Some("./config-rules.yaml".to_string());
+        config.scan.output = Some("./config-output.html".to_string());
+
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        // CLI should take precedence
+        assert_eq!(effective.malware_db, Some("./cli-malware.json".to_string()));
+        assert_eq!(effective.custom_rules, Some("./cli-rules.yaml".to_string()));
+        assert_eq!(effective.output, Some("./cli-output.html".to_string()));
+    }
+
+    #[test]
+    fn test_effective_config_default_new_fields() {
+        let cli = create_test_cli(vec![PathBuf::from("./")]);
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        // New fields should have default values
+        assert!(!effective.deep_scan);
+        assert!(!effective.watch);
+        assert!(!effective.fix);
+        assert!(!effective.fix_dry_run);
+        assert!(effective.malware_db.is_none());
+        assert!(effective.custom_rules.is_none());
+        assert!(effective.output.is_none());
+    }
+
+    #[test]
     fn test_run_scan_with_config_scan_settings() {
         let temp_dir = TempDir::new().unwrap();
         let skill_md = temp_dir.path().join("SKILL.md");
@@ -1854,6 +1987,9 @@ disabled_rules:
         let effective = EffectiveConfig {
             format: OutputFormat::Json,
             strict: false,
+            warn_only: false,
+            min_severity: None,
+            min_rule_severity: None,
             scan_type: ScanType::Skill,
             recursive: true,
             ci: false,
@@ -1863,6 +1999,12 @@ disabled_rules:
             fix_hint: false,
             no_malware_scan: false,
             deep_scan: false,
+            watch: false,
+            output: None,
+            fix: false,
+            fix_dry_run: false,
+            malware_db: None,
+            custom_rules: None,
         };
 
         let result = ScanResult {

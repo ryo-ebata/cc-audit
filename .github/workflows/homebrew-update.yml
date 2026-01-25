@@ -1,0 +1,95 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  update-formula:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release version
+        id: version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download SHA256 checksums
+        run: |
+          gh release download ${{ github.ref_name }} \
+            --repo ${{ github.repository }} \
+            --pattern "*.sha256" \
+            --dir ./checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Parse checksums
+        id: checksums
+        run: |
+          cd checksums
+          echo "darwin_arm64=$(grep aarch64-apple-darwin *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_x64=$(grep x86_64-apple-darwin *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm64=$(grep aarch64-unknown-linux-gnu *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_x64=$(grep x86_64-unknown-linux-gnu *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: ryo-ebata/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update Formula
+        run: |
+          cat > homebrew-tap/Formula/cc-audit.rb << 'EOF'
+          class CcAudit < Formula
+            desc "Security auditor for Claude Code skills, hooks, and MCP servers"
+            homepage "https://github.com/ryo-ebata/cc-audit"
+            version "${{ steps.version.outputs.version }}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/ryo-ebata/cc-audit/releases/download/${{ steps.version.outputs.tag }}/cc-audit-${{ steps.version.outputs.tag }}-aarch64-apple-darwin.tar.gz"
+                sha256 "${{ steps.checksums.outputs.darwin_arm64 }}"
+              end
+              on_intel do
+                url "https://github.com/ryo-ebata/cc-audit/releases/download/${{ steps.version.outputs.tag }}/cc-audit-${{ steps.version.outputs.tag }}-x86_64-apple-darwin.tar.gz"
+                sha256 "${{ steps.checksums.outputs.darwin_x64 }}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/ryo-ebata/cc-audit/releases/download/${{ steps.version.outputs.tag }}/cc-audit-${{ steps.version.outputs.tag }}-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.checksums.outputs.linux_arm64 }}"
+              end
+              on_intel do
+                url "https://github.com/ryo-ebata/cc-audit/releases/download/${{ steps.version.outputs.tag }}/cc-audit-${{ steps.version.outputs.tag }}-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.checksums.outputs.linux_x64 }}"
+              end
+            end
+
+            def install
+              bin.install "cc-audit"
+            end
+
+            test do
+              assert_match "cc-audit", shell_output("#{bin}/cc-audit --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/cc-audit.rb
+          git commit -m "Update cc-audit to ${{ steps.version.outputs.version }}"
+          git push

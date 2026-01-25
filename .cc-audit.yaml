@@ -52,9 +52,22 @@ ignore:
   #   - build
 
   # Glob patterns to ignore
-  # patterns:
-  #   - "*.log"
-  #   - "temp/**"
+  # These directories contain intentionally malicious test content
+  patterns:
+    - "examples/bypass-attempts/**"
+    - "examples/exfiltration/**"
+    - "examples/obfuscation/**"
+    - "examples/overpermission/**"
+    - "examples/persistence/**"
+    - "examples/privilege-escalation/**"
+    - "examples/prompt-injection/**"
+    - "examples/secrets/**"
+    - "examples/supply-chain/**"
+    - "examples/edge-cases/**"
+    - "examples/false-positives/**"
+    - "examples/docker/**"
+    - "examples/plugin/**"
+    - "examples/subagent/**"
 
   # Include test directories in scan
   include_tests: false

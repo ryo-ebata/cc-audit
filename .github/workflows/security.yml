@@ -20,7 +20,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       should_run: ${{ github.event_name == 'schedule' || steps.filter.outputs.rust == 'true' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
         id: filter
         if: github.event_name != 'schedule'
@@ -39,7 +39,7 @@ jobs:
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -53,7 +53,7 @@ jobs:
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
@@ -65,7 +65,7 @@ jobs:
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -81,7 +81,7 @@ jobs:
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: rustsec/audit-check@v2
         with:
@@ -93,7 +93,7 @@ jobs:
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 

@@ -22,7 +22,7 @@ jobs:
       infra: ${{ steps.filter.outputs.infra }}
       directories: ${{ steps.find.outputs.directories }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dorny/paths-filter@v3
         id: filter
@@ -51,7 +51,7 @@ jobs:
       matrix:
         directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -79,7 +79,7 @@ jobs:
       matrix:
         directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -103,9 +103,9 @@ jobs:
       matrix:
         directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
 
@@ -128,7 +128,7 @@ jobs:
       matrix:
         directory: ${{ fromJson(needs.changes.outputs.directories) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: tfsec
         uses: aquasecurity/tfsec-action@v1.0.3
@@ -149,7 +149,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -167,7 +167,7 @@ jobs:
         continue-on-error: true
 
       - name: Post Plan to PR
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         if: github.event_name == 'pull_request'
         with:
           script: |

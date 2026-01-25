@@ -13,10 +13,5 @@ variable "repository_name" {
 variable "required_status_checks" {
   description = "List of required CI status checks"
   type        = list(string)
-  default = [
-    "test",
-    "lint",
-    "clippy",
-    "fmt"
-  ]
+  default = []
 }

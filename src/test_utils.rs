@@ -44,6 +44,7 @@ pub mod fixtures {
             recommendation: "test recommendation".to_string(),
             fix_hint: None,
             cwe_ids: vec![],
+            rule_severity: None,
         }
     }
 

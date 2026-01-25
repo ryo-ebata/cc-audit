@@ -111,7 +111,7 @@ mod cli_options {
             .clone();
 
         let json: serde_json::Value = serde_json::from_slice(&output).unwrap();
-        assert_eq!(json["version"], "0.4.1");
+        assert_eq!(json["version"], "0.5.0");
         assert!(json["summary"]["passed"].as_bool().unwrap());
     }
 
@@ -178,7 +178,7 @@ mod cli_options {
             .arg("--version")
             .assert()
             .success()
-            .stdout(predicate::str::contains("0.4.1"));
+            .stdout(predicate::str::contains("0.5.0"));
     }
 
     #[test]
@@ -433,7 +433,8 @@ mod scan_types {
     fn test_scan_docker_type() {
         let dir = TempDir::new().unwrap();
         let dockerfile = dir.path().join("Dockerfile");
-        fs::write(&dockerfile, "FROM alpine:latest\nRUN echo hello").unwrap();
+        // Use pinned version to avoid DK-005 (latest tag) finding
+        fs::write(&dockerfile, "FROM alpine:3.19.0\nRUN echo hello").unwrap();
 
         cmd()
             .arg("--type")
@@ -521,7 +522,7 @@ mod scan_types {
         )
         .unwrap();
 
-        // DEP-003 is medium severity, so it passes in normal mode but is detected
+        // DEP-003 is medium severity. In v0.5.0+, all findings cause exit code 1 by default.
         cmd()
             .arg("--type")
             .arg("dependency")
@@ -529,7 +530,8 @@ mod scan_types {
             .arg("json")
             .arg(dir.path())
             .assert()
-            .success()
+            .failure()
+            .code(1)
             .stdout(predicate::str::contains("DEP-003"));
     }
 
@@ -1638,26 +1640,28 @@ rules:
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\nmedium_unique_pattern_xyz").unwrap();
 
-        // Without strict mode, medium severity is hidden in terminal output
+        // In v0.5.0+, all findings cause exit code 1 by default
+        // Without strict mode, medium severity is hidden in terminal output but still causes failure
         let non_strict = cmd()
             .arg(dir.path())
             .assert()
-            .success()
+            .failure()
+            .code(1)
             .get_output()
             .stdout
             .clone();
         let non_strict_str = String::from_utf8_lossy(&non_strict);
 
-        // Without strict, terminal doesn't show medium findings (but they're still in summary)
-        // Result is still PASS because only critical/high cause failure
-        assert!(non_strict_str.contains("PASS"));
+        // Without strict, terminal doesn't show medium findings (but they cause FAIL)
+        assert!(non_strict_str.contains("FAIL"));
 
-        // With strict mode, medium findings are shown
+        // With strict mode, medium findings are shown in output
         let strict_output = cmd()
             .arg("--strict")
             .arg(dir.path())
             .assert()
-            .success() // Still passes (pass/fail is based on critical/high only)
+            .failure()
+            .code(1)
             .get_output()
             .stdout
             .clone();
@@ -1665,6 +1669,31 @@ rules:
 
         // Strict mode shows medium findings in output
         assert!(strict_str.contains("[MEDIUM]") || strict_str.contains("TEST-MED"));
+    }
+
+    #[test]
+    fn test_warn_only_mode() {
+        let dir = TempDir::new().unwrap();
+
+        // Create config with medium severity rule
+        let config = r#"
+rules:
+  - id: "TEST-MED"
+    name: "Medium test"
+    severity: "medium"
+    category: "exfiltration"
+    patterns:
+      - "warn_only_test_pattern"
+    message: "Medium finding"
+    recommendation: "Fix"
+"#;
+        fs::write(dir.path().join(".cc-audit.yaml"), config).unwrap();
+
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Test\nwarn_only_test_pattern").unwrap();
+
+        // With --warn-only, all findings are treated as warnings (exit 0)
+        cmd().arg("--warn-only").arg(dir.path()).assert().success();
     }
 }
 

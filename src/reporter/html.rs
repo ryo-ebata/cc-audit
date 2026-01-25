@@ -513,4 +513,97 @@ mod tests {
         let output = reporter.report(&result);
         assert!(output.contains("cc-audit"));
     }
+
+    #[test]
+    fn test_format_category_all_variants() {
+        // Test that all Category variants are properly formatted
+        assert_eq!(format_category(&Category::Exfiltration), "Exfiltration");
+        assert_eq!(
+            format_category(&Category::PromptInjection),
+            "Prompt Injection"
+        );
+        assert_eq!(format_category(&Category::Persistence), "Persistence");
+        assert_eq!(
+            format_category(&Category::PrivilegeEscalation),
+            "Privilege Escalation"
+        );
+        assert_eq!(format_category(&Category::Obfuscation), "Obfuscation");
+        assert_eq!(format_category(&Category::SupplyChain), "Supply Chain");
+        assert_eq!(format_category(&Category::SecretLeak), "Secret Leak");
+        assert_eq!(format_category(&Category::Overpermission), "Overpermission");
+    }
+
+    #[test]
+    fn test_html_output_with_all_categories() {
+        let reporter = HtmlReporter::new();
+        let findings = vec![
+            create_finding(
+                "PI-001",
+                Severity::Critical,
+                Category::PromptInjection,
+                "Prompt injection",
+                "test.md",
+                1,
+            ),
+            create_finding(
+                "PS-001",
+                Severity::High,
+                Category::Persistence,
+                "Persistence",
+                "test.sh",
+                2,
+            ),
+            create_finding(
+                "PE-001",
+                Severity::High,
+                Category::PrivilegeEscalation,
+                "Privilege escalation",
+                "test.sh",
+                3,
+            ),
+            create_finding(
+                "OB-001",
+                Severity::Medium,
+                Category::Obfuscation,
+                "Obfuscation",
+                "test.js",
+                4,
+            ),
+            create_finding(
+                "SC-001",
+                Severity::Critical,
+                Category::SupplyChain,
+                "Supply chain",
+                "package.json",
+                5,
+            ),
+            create_finding(
+                "SL-001",
+                Severity::Critical,
+                Category::SecretLeak,
+                "Secret leak",
+                "config.yaml",
+                6,
+            ),
+            create_finding(
+                "OP-001",
+                Severity::Medium,
+                Category::Overpermission,
+                "Overpermission",
+                "mcp.json",
+                7,
+            ),
+        ];
+        let result = create_test_result(findings);
+        let output = reporter.report(&result);
+
+        // Check that all categories are displayed
+        assert!(output.contains("Prompt Injection"));
+        assert!(output.contains("Persistence"));
+        assert!(output.contains("Privilege Escalation"));
+        assert!(output.contains("Obfuscation"));
+        assert!(output.contains("Supply Chain"));
+        assert!(output.contains("Secret Leak"));
+        assert!(output.contains("Overpermission"));
+    }
 }

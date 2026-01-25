@@ -1,4 +1,4 @@
-use crate::rules::Confidence;
+use crate::rules::{Confidence, RuleSeverity, Severity};
 use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
@@ -46,6 +46,18 @@ pub struct Cli {
     /// Strict mode: show medium/low severity findings and treat warnings as errors
     #[arg(short, long)]
     pub strict: bool,
+
+    /// Warn-only mode: treat all findings as warnings (exit code 0)
+    #[arg(long)]
+    pub warn_only: bool,
+
+    /// Minimum severity level to include in output (critical, high, medium, low)
+    #[arg(long, value_enum)]
+    pub min_severity: Option<Severity>,
+
+    /// Minimum rule severity to treat as errors (error, warn)
+    #[arg(long, value_enum)]
+    pub min_rule_severity: Option<RuleSeverity>,
 
     /// Scan type
     #[arg(short = 't', long = "type", value_enum, default_value_t = ScanType::Skill)]
@@ -167,7 +179,7 @@ pub struct Cli {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rules::Confidence;
+    use crate::rules::{Confidence, RuleSeverity, Severity};
     use clap::CommandFactory;
 
     #[test]
@@ -469,5 +481,77 @@ mod tests {
     fn test_default_init_false() {
         let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
         assert!(!cli.init);
+    }
+
+    #[test]
+    fn test_parse_warn_only() {
+        let cli = Cli::try_parse_from(["cc-audit", "--warn-only", "./skill/"]).unwrap();
+        assert!(cli.warn_only);
+    }
+
+    #[test]
+    fn test_default_warn_only_false() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(!cli.warn_only);
+    }
+
+    #[test]
+    fn test_parse_min_severity_critical() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "--min-severity", "critical", "./skill/"]).unwrap();
+        assert_eq!(cli.min_severity, Some(Severity::Critical));
+    }
+
+    #[test]
+    fn test_parse_min_severity_high() {
+        let cli = Cli::try_parse_from(["cc-audit", "--min-severity", "high", "./skill/"]).unwrap();
+        assert_eq!(cli.min_severity, Some(Severity::High));
+    }
+
+    #[test]
+    fn test_parse_min_severity_medium() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "--min-severity", "medium", "./skill/"]).unwrap();
+        assert_eq!(cli.min_severity, Some(Severity::Medium));
+    }
+
+    #[test]
+    fn test_parse_min_severity_low() {
+        let cli = Cli::try_parse_from(["cc-audit", "--min-severity", "low", "./skill/"]).unwrap();
+        assert_eq!(cli.min_severity, Some(Severity::Low));
+    }
+
+    #[test]
+    fn test_default_min_severity_none() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(cli.min_severity.is_none());
+    }
+
+    #[test]
+    fn test_parse_min_rule_severity_error() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "--min-rule-severity", "error", "./skill/"]).unwrap();
+        assert_eq!(cli.min_rule_severity, Some(RuleSeverity::Error));
+    }
+
+    #[test]
+    fn test_parse_min_rule_severity_warn() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "--min-rule-severity", "warn", "./skill/"]).unwrap();
+        assert_eq!(cli.min_rule_severity, Some(RuleSeverity::Warn));
+    }
+
+    #[test]
+    fn test_default_min_rule_severity_none() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(cli.min_rule_severity.is_none());
+    }
+
+    #[test]
+    fn test_warn_only_with_strict_conflict() {
+        // Both options can be parsed, but logic will determine behavior
+        let cli = Cli::try_parse_from(["cc-audit", "--warn-only", "--strict", "./skill/"]).unwrap();
+        assert!(cli.warn_only);
+        assert!(cli.strict);
     }
 }

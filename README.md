@@ -34,17 +34,39 @@ This creates a significant security gap. Users must trust third-party artifacts 
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
 ```bash
-# From crates.io (Recommended)
-cargo install cc-audit
-
-# From source
-git clone https://github.com/ryo-ebata/cc-audit.git
-cd cc-audit && cargo install --path .
-
-# Homebrew (macOS/Linux)
 brew install ryo-ebata/tap/cc-audit
 ```
+
+### Cargo (Rust)
+
+```bash
+cargo install cc-audit
+```
+
+### npm (Node.js)
+
+```bash
+# Run directly
+npx @cc-audit/cc-audit ./my-skill/
+
+# Or install globally
+npm install -g @cc-audit/cc-audit
+cc-audit ./my-skill/
+```
+
+### From Source
+
+```bash
+git clone https://github.com/ryo-ebata/cc-audit.git
+cd cc-audit && cargo install --path .
+```
+
+### Direct Download
+
+Download binaries from [GitHub Releases](https://github.com/ryo-ebata/cc-audit/releases).
 
 ## Quick Start
 
@@ -74,7 +96,7 @@ cc-audit --init ./
 ## Example Output
 
 ```
-cc-audit v0.4.0 - Claude Code Security Auditor
+cc-audit v0.4.1 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 

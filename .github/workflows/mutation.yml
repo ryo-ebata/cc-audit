@@ -23,7 +23,7 @@ jobs:
     # For PRs, only run if explicitly requested via label
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mutation-test')
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -84,7 +84,7 @@ jobs:
           fi
 
       - name: Upload mutation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: mutation-results

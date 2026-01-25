@@ -10,11 +10,30 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'src/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+
   msrv-check:
     name: MSRV Check
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install cargo-msrv
         run: cargo install cargo-msrv --locked
@@ -34,6 +53,8 @@ jobs:
 
   msrv-verify:
     name: Verify MSRV (${{ matrix.rust }})
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -43,7 +64,7 @@ jobs:
           - stable
           - beta
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -61,3 +82,22 @@ jobs:
 
       - name: Test
         run: cargo test --all-features
+
+  msrv-result:
+    name: MSRV Result
+    needs: [changes, msrv-check, msrv-verify]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
+            echo "No relevant changes detected, skipping MSRV checks"
+            exit 0
+          fi
+          if [[ "${{ needs.msrv-check.result }}" == "failure" || \
+                "${{ needs.msrv-verify.result }}" == "failure" ]]; then
+            echo "MSRV check failed"
+            exit 1
+          fi
+          echo "MSRV checks passed"

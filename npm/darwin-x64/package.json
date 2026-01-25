@@ -1,0 +1,13 @@
+{
+  "name": "@cc-audit/darwin-x64",
+  "version": "0.4.1",
+  "description": "cc-audit binary for macOS x64 (Intel)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryo-ebata/cc-audit.git"
+  },
+  "os": ["darwin"],
+  "cpu": ["x64"],
+  "files": ["bin"]
+}

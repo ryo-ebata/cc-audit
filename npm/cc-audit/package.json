@@ -1,0 +1,42 @@
+{
+  "name": "@cc-audit/cc-audit",
+  "version": "0.4.1",
+  "description": "Security auditor for Claude Code skills, hooks, and MCP servers",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "security",
+    "audit",
+    "mcp",
+    "skills"
+  ],
+  "author": "Ryo Ebata",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryo-ebata/cc-audit.git"
+  },
+  "homepage": "https://github.com/ryo-ebata/cc-audit",
+  "bugs": {
+    "url": "https://github.com/ryo-ebata/cc-audit/issues"
+  },
+  "bin": {
+    "cc-audit": "./bin/cc-audit"
+  },
+  "main": "./src/index.js",
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@cc-audit/darwin-arm64": "0.4.1",
+    "@cc-audit/darwin-x64": "0.4.1",
+    "@cc-audit/linux-arm64": "0.4.1",
+    "@cc-audit/linux-x64": "0.4.1",
+    "@cc-audit/linux-x64-musl": "0.4.1",
+    "@cc-audit/win32-x64": "0.4.1"
+  }
+}

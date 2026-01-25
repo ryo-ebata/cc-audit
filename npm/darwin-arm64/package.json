@@ -1,0 +1,13 @@
+{
+  "name": "@cc-audit/darwin-arm64",
+  "version": "0.4.1",
+  "description": "cc-audit binary for macOS ARM64 (Apple Silicon)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryo-ebata/cc-audit.git"
+  },
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin"]
+}

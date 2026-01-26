@@ -117,7 +117,14 @@ fn sl_003() -> Rule {
             Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample")
                 .expect("SL-003: invalid regex"),
             // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
-            Regex::new(r"sha1|sha256|commit").expect("SL-003: invalid regex"),
+            Regex::new(r"(?i)sha1|sha256|sha384|sha512|commit|hash|digest|checksum")
+                .expect("SL-003: invalid regex"),
+            // SHA-1 hash pattern (40 lowercase hex characters)
+            Regex::new(r"\b[0-9a-f]{40}\b").expect("SL-003: invalid regex"),
+            // SHA-256 hash pattern (64 lowercase hex characters)
+            Regex::new(r"\b[0-9a-f]{64}\b").expect("SL-003: invalid regex"),
+            // Git commit references
+            Regex::new(r"(?i)commit\s+[0-9a-f]{7,40}").expect("SL-003: invalid regex"),
             // OpenAI/Anthropic dummy keys (placeholder patterns with x's)
             Regex::new(r"sk-[xX]{32,}").expect("SL-003: invalid regex"),
             Regex::new(r"sk-proj-[xX]{32,}").expect("SL-003: invalid regex"),
@@ -169,8 +176,16 @@ fn sl_004() -> Rule {
             // Test/example patterns
             Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample|your[_-]?")
                 .expect("SL-004: invalid regex"),
-            // Common password prompts/labels
-            Regex::new(r"(?i)enter.*password|password.*prompt|password.*input")
+            // Common password prompts/labels/UI text
+            Regex::new(r"(?i)enter\s+(your\s+)?password|password\s*(prompt|input|field|label)")
+                .expect("SL-004: invalid regex"),
+            Regex::new(r"(?i)type\s+your\s+password|password\s*:$").expect("SL-004: invalid regex"),
+            // JSON schema definitions (password as a field type, not a value)
+            Regex::new(r#""type"\s*:\s*"string""#).expect("SL-004: invalid regex"),
+            Regex::new(r#"["']password["']\s*[,:]\s*\{"#).expect("SL-004: invalid regex"),
+            Regex::new(r#"["']password["']\s*:\s*\["#).expect("SL-004: invalid regex"),
+            // Schema/definition contexts
+            Regex::new(r"(?i)schema|definition|spec|interface|type\s+\w+\s*=")
                 .expect("SL-004: invalid regex"),
             // Stripe test keys (sk_test_*, pk_test_*, rk_test_*)
             Regex::new(r"(?:sk|pk|rk)_test_[A-Za-z0-9]{24}").expect("SL-004: invalid regex"),
@@ -183,6 +198,9 @@ fn sl_004() -> Rule {
             // All X's or zeros (common placeholders)
             Regex::new(r#"["'][xX]{16,}["']"#).expect("SL-004: invalid regex"),
             Regex::new(r#"["']0{16,}["']"#).expect("SL-004: invalid regex"),
+            // Documentation comments
+            Regex::new(r"(?i)//.*password|/\*.*password|\*.*password|#.*password")
+                .expect("SL-004: invalid regex"),
         ],
         message: "Hardcoded secret detected. Storing credentials in code is a security risk.",
         recommendation: "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control.",

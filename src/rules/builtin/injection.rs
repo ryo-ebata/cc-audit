@@ -20,7 +20,7 @@ fn pi_001() -> Rule {
         description: "Detects prompt injection attempts using 'ignore previous instructions' patterns",
         severity: Severity::High,
         category: Category::PromptInjection,
-        confidence: Confidence::Firm,
+        confidence: Confidence::Tentative,
         patterns: vec![
             Regex::new(
                 r"(?i)ignore\s+(all\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)",
@@ -42,7 +42,25 @@ fn pi_001() -> Rule {
             Regex::new(r"(?i)new\s+instructions?:").expect("PI-001: invalid regex"),
             Regex::new(r"(?i)system\s*:\s*you\s+are").expect("PI-001: invalid regex"),
         ],
-        exclusions: vec![],
+        exclusions: vec![
+            // Security documentation/warnings about prompt injection
+            Regex::new(r"(?i)warning.*ignore|caution.*ignore|do\s+not\s+ignore")
+                .expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)should\s+not\s+ignore|never\s+ignore").expect("PI-001: invalid regex"),
+            // Safe to ignore contexts
+            Regex::new(r"(?i)can\s+safely\s+ignore|safe\s+to\s+ignore")
+                .expect("PI-001: invalid regex"),
+            // Examples/demonstrations of prompt injection
+            Regex::new(r"(?i)example.*:.*ignore|attacker.*ignore|malicious.*ignore")
+                .expect("PI-001: invalid regex"),
+            // Code blocks in documentation
+            Regex::new(r"```").expect("PI-001: invalid regex"),
+            // Quoted examples
+            Regex::new(r#"["'].*ignore.*["']"#).expect("PI-001: invalid regex"),
+            // Security research/educational content
+            Regex::new(r"(?i)injection\s+(attack|attempt|example|pattern)")
+                .expect("PI-001: invalid regex"),
+        ],
         message: "Potential prompt injection: instruction override pattern detected",
         recommendation: "Remove or escape prompt injection patterns from skill content",
         fix_hint: Some("Remove phrases like 'ignore previous instructions'. Use clear, direct instructions"),
@@ -69,7 +87,27 @@ fn pi_002() -> Rule {
                 .expect("PI-002: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"<!--\s*(TODO|FIXME|NOTE|HACK|XXX):?").expect("PI-002: invalid regex"),
+            // Common development markers
+            Regex::new(r"<!--\s*(TODO|FIXME|NOTE|HACK|XXX|BUG|WARN|INFO):?")
+                .expect("PI-002: invalid regex"),
+            // License and metadata comments
+            Regex::new(r"(?i)<!--.*copyright|license|author|version|revision")
+                .expect("PI-002: invalid regex"),
+            // Date/year comments
+            Regex::new(r"<!--.*\d{4}").expect("PI-002: invalid regex"),
+            // Code folding/regions
+            Regex::new(r"(?i)<!--\s*(region|endregion|section|end)\b")
+                .expect("PI-002: invalid regex"),
+            // Short single-word comments (e.g., <!-- nav -->)
+            Regex::new(r"<!--\s*[a-z]{1,10}\s*-->").expect("PI-002: invalid regex"),
+            // UI/layout description comments
+            Regex::new(r"(?i)should\s+be\s+(visible|hidden|shown|displayed)")
+                .expect("PI-002: invalid regex"),
+            Regex::new(r"(?i)must\s+be\s+(updated|changed|modified|reviewed)")
+                .expect("PI-002: invalid regex"),
+            // Conditional rendering comments
+            Regex::new(r"(?i)<!--\s*if\s|<!--\s*else\s|<!--\s*endif")
+                .expect("PI-002: invalid regex"),
         ],
         message: "Potential prompt injection: suspicious content in HTML comment",
         recommendation: "Review HTML comments for hidden instructions",
@@ -87,17 +125,22 @@ fn pi_003() -> Rule {
         description: "Detects invisible Unicode characters that could hide malicious content",
         severity: Severity::High,
         category: Category::PromptInjection,
-        confidence: Confidence::Firm,
+        confidence: Confidence::Tentative,
         patterns: vec![
-            // Zero-width characters
+            // Zero-width characters (high risk - truly invisible)
             Regex::new(r"[\u200B\u200C\u200D\u2060\uFEFF]").expect("PI-003: invalid regex"),
-            // Right-to-left override and other directional overrides
+            // Right-to-left override and other directional overrides (high risk - text manipulation)
             Regex::new(r"[\u202A-\u202E\u2066-\u2069]").expect("PI-003: invalid regex"),
-            // Homoglyph attacks using confusable characters
-            Regex::new(r"[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]")
-                .expect("PI-003: invalid regex"),
+            // Homoglyph attacks using confusable whitespace characters
+            // Note: \u00A0 (non-breaking space) removed from main pattern as it's commonly legitimate
+            Regex::new(r"[\u1680\u2000-\u200A\u202F\u205F\u3000]").expect("PI-003: invalid regex"),
         ],
-        exclusions: vec![],
+        exclusions: vec![
+            // Documentation and markdown files often have legitimate Unicode
+            Regex::new(r"\.md$|\.rst$|\.txt$|\.adoc$").expect("PI-003: invalid regex"),
+            // Localization files may contain special characters
+            Regex::new(r"(?i)locale|i18n|l10n|translations?").expect("PI-003: invalid regex"),
+        ],
         message: "Potential prompt injection: invisible Unicode characters detected",
         recommendation: "Remove invisible Unicode characters and verify content integrity",
         fix_hint: Some("Use: cat -v file.md to reveal invisible chars, then remove them"),
@@ -289,8 +332,10 @@ mod tests {
             ("test\u{200C}string", true),
             // Right-to-left override
             ("normal\u{202E}text", true),
-            // Non-breaking space (common homoglyph)
-            ("word\u{00A0}word", true),
+            // Non-breaking space - removed from main patterns as it's commonly legitimate
+            ("word\u{00A0}word", false),
+            // Other suspicious whitespace (en quad, em quad, etc.)
+            ("word\u{2000}word", true),
             // Normal text
             ("Hello World", false),
             ("Normal text with spaces", false),

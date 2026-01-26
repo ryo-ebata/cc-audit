@@ -32,7 +32,26 @@ fn ex_001() -> Rule {
             Regex::new(r"(curl|wget)\s+.*\$\{[A-Z_][A-Z0-9_]*\}").expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
+            // Local/internal hosts
             Regex::new(r"localhost|127\.0\.0\.1|::1|\[::1\]").expect("EX-001: invalid regex"),
+            // Major Git hosting platforms (common in CI/CD)
+            Regex::new(r"(?i)github\.com|gitlab\.com|bitbucket\.org|api\.github\.com")
+                .expect("EX-001: invalid regex"),
+            // Container registries
+            Regex::new(r"(?i)docker\.io|gcr\.io|quay\.io|registry\.|\.azurecr\.io|\.ecr\.")
+                .expect("EX-001: invalid regex"),
+            // Package registries
+            Regex::new(r"(?i)registry\.npmjs\.org|pypi\.org|crates\.io|rubygems\.org")
+                .expect("EX-001: invalid regex"),
+            // Proxy environment variables (legitimate use)
+            Regex::new(r"(?i)\$HTTP_PROXY|\$HTTPS_PROXY|\$NO_PROXY|\$ALL_PROXY")
+                .expect("EX-001: invalid regex"),
+            // Authorization headers (common API pattern)
+            Regex::new(r#"-H\s*["']Authorization:"#).expect("EX-001: invalid regex"),
+            // Version/tag variables (common in CI)
+            Regex::new(r"(?i)\$VERSION|\$TAG|\$BRANCH|\$BUILD").expect("EX-001: invalid regex"),
+            // CI/CD service URLs
+            Regex::new(r"(?i)circleci|travis-ci|jenkins|actions/").expect("EX-001: invalid regex"),
         ],
         message: "Potential data exfiltration: network request with environment variable detected",
         recommendation: "Review the command and ensure no sensitive data is being sent externally",

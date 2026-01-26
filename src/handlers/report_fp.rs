@@ -6,6 +6,22 @@ use colored::Colorize;
 use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
+/// Maximum input length to prevent memory exhaustion attacks.
+const MAX_INPUT_LENGTH: usize = 10_000;
+
+/// Read a line with length limit to prevent DoS.
+fn read_line_limited(stdin: &io::Stdin, max_len: usize) -> io::Result<String> {
+    let mut line = String::new();
+    stdin.lock().read_line(&mut line)?;
+
+    // Truncate if too long
+    if line.len() > max_len {
+        line.truncate(max_len);
+    }
+
+    Ok(line)
+}
+
 /// Handle the --report-fp command.
 pub fn handle_report_fp(cli: &Cli) -> ExitCode {
     println!("{}", "False Positive Report".bold());
@@ -27,13 +43,18 @@ pub fn handle_report_fp(cli: &Cli) -> ExitCode {
 
     // 1. Rule ID (required)
     print!("Rule ID (e.g., SL-001): ");
-    stdout.flush().unwrap();
-    let mut rule_id = String::new();
-    if stdin.lock().read_line(&mut rule_id).is_err() || rule_id.trim().is_empty() {
-        eprintln!("{}", "Error: Rule ID is required".red());
+    if stdout.flush().is_err() {
+        eprintln!("{}", "Error: Failed to write to stdout".red());
         return ExitCode::from(2);
     }
-    let rule_id = rule_id.trim().to_uppercase();
+
+    let rule_id = match read_line_limited(&stdin, 100) {
+        Ok(line) if !line.trim().is_empty() => line.trim().to_uppercase(),
+        _ => {
+            eprintln!("{}", "Error: Rule ID is required".red());
+            return ExitCode::from(2);
+        }
+    };
 
     // Validate rule ID format
     if !is_valid_rule_id(&rule_id) {
@@ -46,28 +67,21 @@ pub fn handle_report_fp(cli: &Cli) -> ExitCode {
 
     // 2. File extension (optional)
     print!("File extension (optional, e.g., js, py): ");
-    stdout.flush().unwrap();
-    let mut extension = String::new();
-    let _ = stdin.lock().read_line(&mut extension);
-    let extension = extension.trim();
-    let extension = if extension.is_empty() {
-        None
-    } else {
-        Some(extension.trim_start_matches('.').to_string())
-    };
+    let _ = stdout.flush();
+    let extension = read_line_limited(&stdin, 50)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim_start_matches('.').to_string());
 
     // 3. Description (optional)
     println!("Description (why is this a false positive?):");
     print!("> ");
-    stdout.flush().unwrap();
-    let mut description = String::new();
-    let _ = stdin.lock().read_line(&mut description);
-    let description = description.trim();
-    let description = if description.is_empty() {
-        None
-    } else {
-        Some(description.to_string())
-    };
+    let _ = stdout.flush();
+    let description = read_line_limited(&stdin, MAX_INPUT_LENGTH)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     // Build the report
     let mut report = FalsePositiveReport::new(&rule_id);
@@ -93,10 +107,10 @@ pub fn handle_report_fp(cli: &Cli) -> ExitCode {
 
     // Confirm submission
     print!("Submit this report? [y/N]: ");
-    stdout.flush().unwrap();
-    let mut confirm = String::new();
-    let _ = stdin.lock().read_line(&mut confirm);
-    let confirm = confirm.trim().to_lowercase();
+    let _ = stdout.flush();
+    let confirm = read_line_limited(&stdin, 10)
+        .map(|s| s.trim().to_lowercase())
+        .unwrap_or_default();
 
     if confirm != "y" && confirm != "yes" {
         println!("{}", "Report cancelled.".yellow());
@@ -191,5 +205,11 @@ mod tests {
         assert!(!is_valid_rule_id("ABCDE-001")); // Too long prefix
         assert!(!is_valid_rule_id("SL-12345")); // Too long suffix
         assert!(!is_valid_rule_id("SL-ABC")); // Non-numeric suffix
+    }
+
+    #[test]
+    fn test_max_input_length_constant() {
+        // Verify the constant is reasonable
+        assert_eq!(MAX_INPUT_LENGTH, 10_000);
     }
 }

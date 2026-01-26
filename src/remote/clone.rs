@@ -1,7 +1,9 @@
 use super::error::RemoteError;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use tempfile::TempDir;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use tempfile::{NamedTempFile, TempDir};
 
 /// Result of a successful clone operation
 pub struct ClonedRepo {
@@ -74,6 +76,8 @@ impl GitCloner {
     /// - Uses shallow clone (depth=1)
     /// - Disables git hooks (template and local)
     /// - Uses temporary directory that is automatically cleaned up
+    /// - Token is passed via GIT_ASKPASS (not embedded in URL)
+    /// - Clone has configurable timeout
     pub fn clone(&self, url: &str, git_ref: &str) -> Result<ClonedRepo, RemoteError> {
         // Validate URL format
         self.validate_url(url)?;
@@ -85,11 +89,8 @@ impl GitCloner {
         let temp_dir = TempDir::new().map_err(|e| RemoteError::TempDir(e.to_string()))?;
         let repo_path = temp_dir.path().to_path_buf();
 
-        // Build clone URL with auth token if provided
-        let clone_url = self.build_clone_url(url)?;
-
-        // Execute git clone with security measures
-        self.execute_clone(&clone_url, &repo_path, git_ref)?;
+        // Execute git clone with security measures (token via env, not URL)
+        self.execute_clone(url, &repo_path, git_ref)?;
 
         // Get commit SHA
         let commit_sha = self.get_commit_sha(&repo_path).ok();
@@ -139,27 +140,80 @@ impl GitCloner {
         Ok(())
     }
 
-    /// Build clone URL with authentication if needed
-    fn build_clone_url(&self, url: &str) -> Result<String, RemoteError> {
-        if let Some(ref token) = self.auth_token {
-            // Insert token into HTTPS URL
-            if url.starts_with("https://github.com/") {
-                return Ok(url.replace(
-                    "https://github.com/",
-                    &format!("https://{}@github.com/", token),
-                ));
-            }
+    /// Create a temporary GIT_ASKPASS script that returns the token.
+    /// This is more secure than embedding the token in the URL because:
+    /// - Token is not visible in process list (ps aux)
+    /// - Token is not logged in git error messages
+    /// - Script is automatically cleaned up
+    fn create_askpass_script(&self) -> Result<Option<NamedTempFile>, RemoteError> {
+        let Some(ref token) = self.auth_token else {
+            return Ok(None);
+        };
+
+        let mut script = NamedTempFile::new().map_err(|e| RemoteError::TempDir(e.to_string()))?;
+
+        // Write a shell script that outputs the token
+        // The script receives the prompt as an argument but we ignore it
+        writeln!(script, "#!/bin/sh").map_err(|e| RemoteError::TempDir(e.to_string()))?;
+        writeln!(script, "echo '{}'", token.replace('\'', "'\"'\"'"))
+            .map_err(|e| RemoteError::TempDir(e.to_string()))?;
+
+        // Make the script executable (Unix only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let path = script.path();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+                .map_err(|e| RemoteError::TempDir(e.to_string()))?;
         }
-        Ok(url.to_string())
+
+        Ok(Some(script))
     }
 
-    /// Execute git clone command with security measures
+    /// Sanitize error messages to remove any potential token leakage.
+    fn sanitize_error_message(&self, message: &str) -> String {
+        let mut sanitized = message.to_string();
+
+        // Remove any token-like patterns from error messages
+        if let Some(ref token) = self.auth_token {
+            sanitized = sanitized.replace(token, "[REDACTED]");
+        }
+
+        // Remove patterns that look like tokens embedded in URLs
+        // Pattern: https://TOKEN@github.com or similar
+        let token_pattern = regex::Regex::new(r"https://[^@\s]+@")
+            .unwrap_or_else(|_| regex::Regex::new("^$").unwrap());
+        sanitized = token_pattern
+            .replace_all(&sanitized, "https://[REDACTED]@")
+            .to_string();
+
+        // Also redact Bearer tokens
+        let bearer_pattern =
+            regex::Regex::new(r"Bearer\s+\S+").unwrap_or_else(|_| regex::Regex::new("^$").unwrap());
+        sanitized = bearer_pattern
+            .replace_all(&sanitized, "Bearer [REDACTED]")
+            .to_string();
+
+        sanitized
+    }
+
+    /// Execute git clone command with security measures and timeout.
     fn execute_clone(&self, url: &str, path: &Path, git_ref: &str) -> Result<(), RemoteError> {
+        // Create askpass script for secure token handling
+        let askpass_script = self.create_askpass_script()?;
+
         // Build the git clone command with security measures
         let mut cmd = Command::new("git");
 
         // Disable hooks for security
         cmd.env("GIT_TEMPLATE_DIR", "");
+
+        // Set up authentication via GIT_ASKPASS if we have a token
+        if let Some(ref script) = askpass_script {
+            cmd.env("GIT_ASKPASS", script.path());
+            // Disable terminal prompts to force use of ASKPASS
+            cmd.env("GIT_TERMINAL_PROMPT", "0");
+        }
 
         // Clone with shallow depth
         cmd.args([
@@ -182,33 +236,75 @@ impl GitCloner {
         cmd.arg(url);
         cmd.arg(path);
 
-        // Execute with timeout
-        let output = cmd.output().map_err(|e| RemoteError::CloneFailed {
+        // Execute with timeout using a child process
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(|e| RemoteError::CloneFailed {
             url: url.to_string(),
-            message: e.to_string(),
+            message: self.sanitize_error_message(&e.to_string()),
         })?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        // Wait with timeout
+        let timeout = Duration::from_secs(self.timeout_secs);
+        let start = std::time::Instant::now();
 
-            // Check for common error patterns
-            if stderr.contains("Repository not found") || stderr.contains("404") {
-                return Err(RemoteError::NotFound(url.to_string()));
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    // Process finished
+                    let output =
+                        child
+                            .wait_with_output()
+                            .map_err(|e| RemoteError::CloneFailed {
+                                url: url.to_string(),
+                                message: self.sanitize_error_message(&e.to_string()),
+                            })?;
+
+                    if !status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        let sanitized_stderr = self.sanitize_error_message(&stderr);
+
+                        // Check for common error patterns
+                        if stderr.contains("Repository not found") || stderr.contains("404") {
+                            return Err(RemoteError::NotFound(url.to_string()));
+                        }
+
+                        if stderr.contains("Authentication failed")
+                            || stderr.contains("could not read Username")
+                        {
+                            return Err(RemoteError::AuthRequired(url.to_string()));
+                        }
+
+                        return Err(RemoteError::CloneFailed {
+                            url: url.to_string(),
+                            message: sanitized_stderr,
+                        });
+                    }
+
+                    return Ok(());
+                }
+                Ok(None) => {
+                    // Process still running, check timeout
+                    if start.elapsed() > timeout {
+                        // Kill the process
+                        let _ = child.kill();
+                        return Err(RemoteError::CloneFailed {
+                            url: url.to_string(),
+                            message: format!("Clone timed out after {} seconds", self.timeout_secs),
+                        });
+                    }
+                    // Sleep briefly before checking again
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                Err(e) => {
+                    return Err(RemoteError::CloneFailed {
+                        url: url.to_string(),
+                        message: self.sanitize_error_message(&e.to_string()),
+                    });
+                }
             }
-
-            if stderr.contains("Authentication failed")
-                || stderr.contains("could not read Username")
-            {
-                return Err(RemoteError::AuthRequired(url.to_string()));
-            }
-
-            return Err(RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: stderr.to_string(),
-            });
         }
-
-        Ok(())
     }
 
     /// Get the commit SHA of HEAD
@@ -298,20 +394,76 @@ mod tests {
     }
 
     #[test]
-    fn test_build_clone_url_with_token() {
-        let cloner = GitCloner::new().with_auth_token(Some("ghp_token123".to_string()));
-        let url = cloner
-            .build_clone_url("https://github.com/owner/repo")
-            .unwrap();
-        assert_eq!(url, "https://ghp_token123@github.com/owner/repo");
+    fn test_sanitize_error_message() {
+        let cloner = GitCloner::new().with_auth_token(Some("ghp_secret123".to_string()));
+
+        // Test direct token replacement
+        let msg = "failed with ghp_secret123 in message";
+        assert_eq!(
+            cloner.sanitize_error_message(msg),
+            "failed with [REDACTED] in message"
+        );
+
+        // Test URL token pattern
+        let msg = "failed: https://token123@github.com/repo";
+        assert!(cloner.sanitize_error_message(msg).contains("[REDACTED]"));
+        assert!(!cloner.sanitize_error_message(msg).contains("token123"));
     }
 
     #[test]
-    fn test_build_clone_url_without_token() {
+    fn test_sanitize_error_message_no_token() {
         let cloner = GitCloner::new();
-        let url = cloner
-            .build_clone_url("https://github.com/owner/repo")
-            .unwrap();
-        assert_eq!(url, "https://github.com/owner/repo");
+
+        // Without token, message should still sanitize URL patterns
+        let msg = "failed: https://sometoken@github.com/repo";
+        let sanitized = cloner.sanitize_error_message(msg);
+        assert!(sanitized.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_sanitize_bearer_token() {
+        let cloner = GitCloner::new();
+
+        let msg = "Authorization: Bearer ghp_secret123456";
+        let sanitized = cloner.sanitize_error_message(msg);
+        assert!(!sanitized.contains("ghp_secret123456"));
+        assert!(sanitized.contains("[REDACTED]"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_create_askpass_script() {
+        let cloner = GitCloner::new().with_auth_token(Some("test_token".to_string()));
+        let script = cloner.create_askpass_script().unwrap();
+
+        assert!(script.is_some());
+        let script = script.unwrap();
+
+        // Verify script exists and is executable
+        let path = script.path();
+        assert!(path.exists());
+
+        let metadata = std::fs::metadata(path).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(metadata.permissions().mode() & 0o700, 0o700);
+    }
+
+    #[test]
+    fn test_create_askpass_script_no_token() {
+        let cloner = GitCloner::new();
+        let script = cloner.create_askpass_script().unwrap();
+        assert!(script.is_none());
+    }
+
+    #[test]
+    fn test_cloner_with_timeout() {
+        let cloner = GitCloner::new().with_timeout(60);
+        assert_eq!(cloner.timeout_secs, 60);
+    }
+
+    #[test]
+    fn test_cloner_with_max_size() {
+        let cloner = GitCloner::new().with_max_size(100);
+        assert_eq!(cloner.max_size_mb, 100);
     }
 }

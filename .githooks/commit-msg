@@ -19,8 +19,8 @@ fi
 
 # Conventional Commits pattern
 # type(scope)?: subject
-# type!: subject (breaking change)
-PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?\!?: .+"
+# NOTE: Breaking changes (!) are NOT allowed - major releases are done manually
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"
 
 FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
 
@@ -47,10 +47,36 @@ if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
     echo "  feat: add user authentication"
     echo "  fix(parser): handle empty input"
     echo "  docs: update README with examples"
-    echo "  feat!: change API response format (breaking change)"
+    echo ""
+    echo "NOTE: Breaking changes (feat!, fix!, etc.) are NOT allowed."
+    echo "      Major version releases are done manually."
     echo ""
     echo "Your commit message:"
     echo "  $FIRST_LINE"
+    echo ""
+    exit 1
+fi
+
+# Check for breaking change indicator (!) in header
+if echo "$FIRST_LINE" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?\!:"; then
+    echo ""
+    echo "ERROR: Breaking changes (!) are not allowed in commit messages."
+    echo ""
+    echo "Major version releases must be done manually."
+    echo "Use 'feat:' instead of 'feat!:' for new features."
+    echo ""
+    echo "Your commit message:"
+    echo "  $FIRST_LINE"
+    echo ""
+    exit 1
+fi
+
+# Check for BREAKING CHANGE footer
+if echo "$COMMIT_MSG" | grep -qiE "^BREAKING[ -]CHANGE:"; then
+    echo ""
+    echo "ERROR: BREAKING CHANGE footer is not allowed."
+    echo ""
+    echo "Major version releases must be done manually."
     echo ""
     exit 1
 fi

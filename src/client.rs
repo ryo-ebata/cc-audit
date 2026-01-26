@@ -383,4 +383,111 @@ mod tests {
         let ct: ClientType = serde_json::from_str("\"vscode\"").unwrap();
         assert_eq!(ct, ClientType::Vscode);
     }
+
+    #[test]
+    fn test_client_type_from_str() {
+        use std::str::FromStr;
+
+        // Standard names
+        assert_eq!(
+            <ClientType as FromStr>::from_str("claude").unwrap(),
+            ClientType::Claude
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("cursor").unwrap(),
+            ClientType::Cursor
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("windsurf").unwrap(),
+            ClientType::Windsurf
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("vscode").unwrap(),
+            ClientType::Vscode
+        );
+
+        // Alternate names
+        assert_eq!(
+            <ClientType as FromStr>::from_str("claudecode").unwrap(),
+            ClientType::Claude
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("claude-code").unwrap(),
+            ClientType::Claude
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("claude_desktop").unwrap(),
+            ClientType::Claude
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("code").unwrap(),
+            ClientType::Vscode
+        );
+
+        // Case insensitive
+        assert_eq!(
+            <ClientType as FromStr>::from_str("CLAUDE").unwrap(),
+            ClientType::Claude
+        );
+        assert_eq!(
+            <ClientType as FromStr>::from_str("Cursor").unwrap(),
+            ClientType::Cursor
+        );
+
+        // Invalid
+        assert!(<ClientType as FromStr>::from_str("invalid").is_err());
+        assert!(<ClientType as FromStr>::from_str("").is_err());
+    }
+
+    #[test]
+    fn test_client_type_all_variants() {
+        let all = ClientType::all();
+        assert_eq!(all.len(), 4);
+        assert!(all.contains(&ClientType::Claude));
+        assert!(all.contains(&ClientType::Cursor));
+        assert!(all.contains(&ClientType::Windsurf));
+        assert!(all.contains(&ClientType::Vscode));
+    }
+
+    #[test]
+    fn test_client_type_home_dir() {
+        // Home dir should return Some on most systems
+        let claude_home = ClientType::Claude.home_dir();
+        let cursor_home = ClientType::Cursor.home_dir();
+        let windsurf_home = ClientType::Windsurf.home_dir();
+        let vscode_home = ClientType::Vscode.home_dir();
+
+        // These should all succeed on a normal system
+        assert!(claude_home.is_some());
+        assert!(cursor_home.is_some());
+        assert!(windsurf_home.is_some());
+        assert!(vscode_home.is_some());
+    }
+
+    #[test]
+    fn test_client_type_display_name_all() {
+        assert_eq!(ClientType::Claude.display_name(), "Claude");
+        assert_eq!(ClientType::Cursor.display_name(), "Cursor");
+        assert_eq!(ClientType::Windsurf.display_name(), "Windsurf");
+        assert_eq!(ClientType::Vscode.display_name(), "VS Code");
+    }
+
+    #[test]
+    fn test_windsurf_home_dir() {
+        // Specific test for windsurf
+        let home = ClientType::Windsurf.home_dir();
+        assert!(home.is_some());
+        #[cfg(not(target_os = "windows"))]
+        {
+            let path = home.unwrap();
+            assert!(path.to_string_lossy().contains(".windsurf"));
+        }
+    }
+
+    #[test]
+    fn test_vscode_home_dir() {
+        // Specific test for vscode
+        let home = ClientType::Vscode.home_dir();
+        assert!(home.is_some());
+    }
 }

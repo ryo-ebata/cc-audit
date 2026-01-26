@@ -206,4 +206,10 @@ mod tests {
         assert!(!is_valid_rule_id("SL-12345")); // Too long suffix
         assert!(!is_valid_rule_id("SL-ABC")); // Non-numeric suffix
     }
+
+    #[test]
+    fn test_max_input_length_constant() {
+        // Verify the constant is reasonable
+        assert_eq!(MAX_INPUT_LENGTH, 10_000);
+    }
 }

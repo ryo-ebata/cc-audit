@@ -450,4 +450,185 @@ echo "hello"
         let deserialized: ContentContext = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, ContentContext::Documentation);
     }
+
+    #[test]
+    fn test_content_context_display_all_variants() {
+        assert_eq!(format!("{}", ContentContext::Code), "code");
+        assert_eq!(
+            format!("{}", ContentContext::Documentation),
+            "documentation"
+        );
+        assert_eq!(
+            format!("{}", ContentContext::MarkdownCodeBlock),
+            "markdown_code_block"
+        );
+        assert_eq!(
+            format!("{}", ContentContext::YamlDescription),
+            "yaml_description"
+        );
+        assert_eq!(format!("{}", ContentContext::JsonString), "json_string");
+        assert_eq!(format!("{}", ContentContext::Comment), "comment");
+    }
+
+    #[test]
+    fn test_context_detector_new() {
+        let detector = ContextDetector::new();
+        // Just verify it can be created
+        assert!(!detector.should_reduce_confidence(ContentContext::Code));
+    }
+
+    #[test]
+    fn test_detect_context_yaml_file() {
+        let detector = ContextDetector::new();
+        let yaml_content = r#"name: test
+description: This is a test description with curl command
+version: 1.0
+"#;
+        // Line 2 is the description line
+        let ctx = detector.detect_context("config.yaml", yaml_content, 2);
+        assert_eq!(ctx, ContentContext::YamlDescription);
+    }
+
+    #[test]
+    fn test_detect_context_json_file() {
+        let detector = ContextDetector::new();
+        let json_content = r#"{
+  "name": "test",
+  "description": "A test with curl",
+  "version": "1.0"
+}"#;
+        // Line 3 is inside a JSON string
+        let ctx = detector.detect_context("config.json", json_content, 3);
+        assert_eq!(ctx, ContentContext::JsonString);
+    }
+
+    #[test]
+    fn test_detect_context_code_with_comment() {
+        let detector = ContextDetector::new();
+        let code_content = r#"fn main() {
+    // This is a comment with curl
+    let x = 5;
+}"#;
+        // Line 2 is a comment
+        let ctx = detector.detect_context("main.rs", code_content, 2);
+        assert_eq!(ctx, ContentContext::Comment);
+
+        // Line 3 is code
+        let ctx = detector.detect_context("main.rs", code_content, 3);
+        assert_eq!(ctx, ContentContext::Code);
+    }
+
+    #[test]
+    fn test_is_in_json_string_value() {
+        let detector = ContextDetector::new();
+        let json_content = r#"{
+  "name": "test",
+  "script": "curl http://example.com",
+  "nested": {
+    "value": "inner"
+  }
+}"#;
+        assert!(detector.is_in_json_string_value(json_content, 3)); // Inside script string
+        assert!(detector.is_in_json_string_value(json_content, 5)); // Inside nested value
+        assert!(!detector.is_in_json_string_value(json_content, 1)); // Just opening brace
+    }
+
+    #[test]
+    fn test_is_in_yaml_description_multiline() {
+        let detector = ContextDetector::new();
+        let yaml_content = r#"name: test
+description: |
+  This is a multiline
+  description block
+version: 1.0
+"#;
+        // Line 3 is inside multiline description
+        assert!(detector.is_in_yaml_description(yaml_content, 3));
+        // Line 5 is not in description
+        assert!(!detector.is_in_yaml_description(yaml_content, 5));
+    }
+
+    #[test]
+    fn test_markdown_code_block_boundary() {
+        let detector = ContextDetector::new();
+        let content = r#"# Header
+
+```bash
+echo "hello"
+```
+
+Some text
+"#;
+        assert!(!detector.is_in_markdown_code_block(content, 1)); // Header
+        assert!(!detector.is_in_markdown_code_block(content, 0)); // Invalid line
+        assert!(!detector.is_in_markdown_code_block(content, 100)); // Out of range
+        assert!(detector.is_in_markdown_code_block(content, 4)); // Inside code block
+    }
+
+    #[test]
+    fn test_is_in_block_comment_rust() {
+        let detector = ContextDetector::new();
+        let content = r#"fn main() {
+    /* start
+    middle
+    end */
+    code();
+}"#;
+        assert!(!detector.is_in_block_comment(content, 1));
+        assert!(detector.is_in_block_comment(content, 2));
+        assert!(detector.is_in_block_comment(content, 3));
+        assert!(!detector.is_in_block_comment(content, 5));
+    }
+
+    #[test]
+    fn test_is_in_comment_c_style() {
+        let detector = ContextDetector::new();
+        let content = "// This is a comment\ncode();\n";
+        assert!(detector.is_in_comment(content, 1));
+        assert!(!detector.is_in_comment(content, 2));
+    }
+
+    #[test]
+    fn test_is_in_comment_python() {
+        let detector = ContextDetector::new();
+        let content = "# comment\ncode\n";
+        assert!(detector.is_in_comment(content, 1));
+        assert!(!detector.is_in_comment(content, 2));
+    }
+
+    #[test]
+    fn test_json_string_edge_cases() {
+        let detector = ContextDetector::new();
+
+        // Empty content
+        assert!(!detector.is_in_json_string_value("", 1));
+
+        // Invalid line number
+        assert!(!detector.is_in_json_string_value("{}", 0));
+        assert!(!detector.is_in_json_string_value("{}", 100));
+    }
+
+    #[test]
+    fn test_yaml_description_edge_cases() {
+        let detector = ContextDetector::new();
+
+        // Empty content
+        assert!(!detector.is_in_yaml_description("", 1));
+
+        // Invalid line number
+        assert!(!detector.is_in_yaml_description("name: test", 0));
+        assert!(!detector.is_in_yaml_description("name: test", 100));
+    }
+
+    #[test]
+    fn test_block_comment_edge_cases() {
+        let detector = ContextDetector::new();
+
+        // Empty content
+        assert!(!detector.is_in_block_comment("", 1));
+
+        // Invalid line number
+        assert!(!detector.is_in_block_comment("code", 0));
+        assert!(!detector.is_in_block_comment("code", 100));
+    }
 }

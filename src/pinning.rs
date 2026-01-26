@@ -727,4 +727,79 @@ mod tests {
 
         assert_eq!(mismatch.name, parsed.name);
     }
+
+    #[test]
+    fn test_from_mcp_config_file_not_found() {
+        let result = ToolPins::from_mcp_config(Path::new("/nonexistent/mcp.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_mcp_content_invalid_json() {
+        let result = ToolPins::from_mcp_content("invalid json {", Path::new("test.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_mcp_content_no_mcp_servers() {
+        let content = r#"{"otherField": "value"}"#;
+        let pins = ToolPins::from_mcp_content(content, Path::new("test.json")).unwrap();
+        assert!(pins.tools.is_empty());
+    }
+
+    #[test]
+    fn test_save_and_load_with_file_path() {
+        use std::io::Write;
+        let temp_dir = TempDir::new().unwrap();
+        let mcp_config = temp_dir.path().join("mcp.json");
+
+        // Create a dummy MCP config file
+        let mut file = fs::File::create(&mcp_config).unwrap();
+        file.write_all(br#"{"mcpServers": {}}"#).unwrap();
+
+        // Create pins from MCP config
+        let pins = ToolPins::from_mcp_config(&mcp_config).unwrap();
+
+        // Save using file path (should save to parent dir)
+        pins.save(&mcp_config).unwrap();
+
+        // Load using file path
+        let loaded = ToolPins::load(&mcp_config).unwrap();
+        assert_eq!(pins.version, loaded.version);
+    }
+
+    #[test]
+    fn test_exists_with_file_path() {
+        use std::io::Write;
+        let temp_dir = TempDir::new().unwrap();
+        let mcp_config = temp_dir.path().join("mcp.json");
+
+        // Create a dummy file
+        let mut file = fs::File::create(&mcp_config).unwrap();
+        file.write_all(br#"{"mcpServers": {}}"#).unwrap();
+
+        // Initially no pins exist
+        assert!(!ToolPins::exists(&mcp_config));
+
+        // Create and save pins
+        let pins = ToolPins::from_mcp_config(&mcp_config).unwrap();
+        pins.save(&mcp_config).unwrap();
+
+        // Now pins should exist
+        assert!(ToolPins::exists(&mcp_config));
+    }
+
+    #[test]
+    fn test_load_from_file_invalid_json() {
+        use std::io::Write;
+        let temp_dir = TempDir::new().unwrap();
+        let pin_file = temp_dir.path().join(PINNING_FILENAME);
+
+        // Write invalid JSON
+        let mut file = fs::File::create(&pin_file).unwrap();
+        file.write_all(b"not valid json").unwrap();
+
+        let result = ToolPins::load_from_file(&pin_file);
+        assert!(result.is_err());
+    }
 }

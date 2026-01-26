@@ -381,4 +381,66 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_output_path_parent_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().unwrap();
+        let real_dir = temp_dir.path().join("real_dir");
+        let link_dir = temp_dir.path().join("link_dir");
+
+        // Create real directory
+        fs::create_dir(&real_dir).unwrap();
+        // Create symlink to directory
+        symlink(&real_dir, &link_dir).unwrap();
+
+        // Try to validate a path within the symlinked directory
+        let path = link_dir.join("output.json");
+        let result = validate_output_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("symbolic link"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_input_path_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().unwrap();
+        let target = temp_dir.path().join("target.json");
+        let link = temp_dir.path().join("link.json");
+
+        // Create target file
+        fs::write(&target, "[]").unwrap();
+        // Create symlink
+        symlink(&target, &link).unwrap();
+
+        // Should succeed (symlinks are allowed for reading but logged)
+        let result = validate_input_path(&link);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_empty_parent() {
+        // Test path with no parent (just a filename)
+        let path = PathBuf::from("output.json");
+        // This should be valid (empty parent means current directory)
+        let result = validate_output_path(&path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_existing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("existing.json");
+
+        // Create the file first
+        fs::write(&output_path, "{}").unwrap();
+
+        // Should be valid (existing regular file)
+        let result = validate_output_path(&output_path);
+        assert!(result.is_ok());
+    }
 }

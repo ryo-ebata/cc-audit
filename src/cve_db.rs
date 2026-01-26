@@ -350,4 +350,65 @@ mod tests {
         let db = CveDatabase::builtin().unwrap();
         assert_eq!(db.len(), 7); // 7 CVEs in built-in database
     }
+
+    #[test]
+    fn test_updated_at() {
+        let db = CveDatabase::builtin().unwrap();
+        let updated = db.updated_at();
+        // Should be a date string like "2025-01-XX"
+        assert!(!updated.is_empty());
+        assert!(updated.starts_with("2025-") || updated.starts_with("2024-"));
+    }
+
+    #[test]
+    fn test_entries() {
+        let db = CveDatabase::builtin().unwrap();
+        let entries = db.entries();
+        assert!(!entries.is_empty());
+        // First entry should have a CVE ID
+        assert!(entries[0].id.starts_with("CVE-"));
+    }
+
+    #[test]
+    fn test_from_file() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        // Create a temporary file with valid CVE database JSON
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let json = r#"{
+            "version": "1.0.0",
+            "updated_at": "2025-01-01",
+            "entries": []
+        }"#;
+        temp_file.write_all(json.as_bytes()).unwrap();
+
+        let db = CveDatabase::from_file(temp_file.path()).unwrap();
+        assert_eq!(db.version(), "1.0.0");
+        assert!(db.is_empty());
+    }
+
+    #[test]
+    fn test_from_file_invalid_path() {
+        let result = CveDatabase::from_file(Path::new("/nonexistent/file.json"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_version_comparison_greater_than_or_equal() {
+        // Test >= operator (line 140)
+        assert!(CveDatabase::version_matches(">= 1.5.0", "1.5.0"));
+        assert!(CveDatabase::version_matches(">= 1.5.0", "1.5.1"));
+        assert!(CveDatabase::version_matches(">= 1.5.0", "2.0.0"));
+        assert!(!CveDatabase::version_matches(">= 1.5.0", "1.4.9"));
+        assert!(!CveDatabase::version_matches(">= 1.5.0", "1.4.0"));
+    }
+
+    #[test]
+    fn test_version_comparison_exact_match_no_operator() {
+        // Test default exact match without operator (line 148)
+        assert!(CveDatabase::version_matches("1.5.0", "1.5.0"));
+        assert!(!CveDatabase::version_matches("1.5.0", "1.5.1"));
+        assert!(!CveDatabase::version_matches("1.5.0", "1.4.9"));
+    }
 }

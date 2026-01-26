@@ -914,4 +914,87 @@ mod tests {
         let json = serde_json::to_string(&finding).unwrap();
         assert!(json.contains("\"rule_severity\":\"warn\""));
     }
+
+    // ========== ParseEnumError Tests ==========
+
+    #[test]
+    fn test_parse_enum_error_invalid() {
+        let error = ParseEnumError::invalid("TestType", "bad_value");
+        assert_eq!(error.type_name, "TestType");
+        assert_eq!(error.value, "bad_value");
+    }
+
+    #[test]
+    fn test_parse_enum_error_display() {
+        let error = ParseEnumError::invalid("RuleSeverity", "unknown");
+        let display = format!("{}", error);
+        assert_eq!(display, "invalid RuleSeverity value: 'unknown'");
+    }
+
+    #[test]
+    fn test_parse_enum_error_debug() {
+        let error = ParseEnumError::invalid("TestType", "value");
+        let debug = format!("{:?}", error);
+        assert!(debug.contains("ParseEnumError"));
+        assert!(debug.contains("TestType"));
+        assert!(debug.contains("value"));
+    }
+
+    #[test]
+    fn test_parse_enum_error_is_error() {
+        let error = ParseEnumError::invalid("Test", "val");
+        // Verify it implements std::error::Error
+        let _: &dyn std::error::Error = &error;
+    }
+
+    // ========== RuleSeverity FromStr Tests ==========
+
+    #[test]
+    fn test_rule_severity_from_str_valid() {
+        use std::str::FromStr;
+
+        // Standard names
+        assert_eq!(RuleSeverity::from_str("warn").unwrap(), RuleSeverity::Warn);
+        assert_eq!(
+            RuleSeverity::from_str("error").unwrap(),
+            RuleSeverity::Error
+        );
+
+        // Alternate names
+        assert_eq!(
+            RuleSeverity::from_str("warning").unwrap(),
+            RuleSeverity::Warn
+        );
+        assert_eq!(RuleSeverity::from_str("err").unwrap(), RuleSeverity::Error);
+
+        // Case insensitive
+        assert_eq!(RuleSeverity::from_str("WARN").unwrap(), RuleSeverity::Warn);
+        assert_eq!(
+            RuleSeverity::from_str("ERROR").unwrap(),
+            RuleSeverity::Error
+        );
+        assert_eq!(
+            RuleSeverity::from_str("Warning").unwrap(),
+            RuleSeverity::Warn
+        );
+    }
+
+    #[test]
+    fn test_rule_severity_from_str_invalid() {
+        use std::str::FromStr;
+
+        let result = RuleSeverity::from_str("invalid");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.type_name, "RuleSeverity");
+        assert_eq!(error.value, "invalid");
+
+        // Empty string
+        let result = RuleSeverity::from_str("");
+        assert!(result.is_err());
+
+        // Random value
+        let result = RuleSeverity::from_str("critical");
+        assert!(result.is_err());
+    }
 }

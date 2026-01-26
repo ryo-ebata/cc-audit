@@ -141,3 +141,27 @@ Includes:
 - Interactive filtering and search
 - Code snippets with syntax highlighting
 - Fix recommendations
+
+---
+
+## CVE Database
+
+cc-audit includes a built-in database of known CVEs affecting AI coding tools, MCP servers, and related products.
+
+### Detected Products
+
+- Claude Code (VSCode, JetBrains extensions)
+- MCP (Model Context Protocol) tools
+- Cursor IDE
+- GitHub Copilot
+- And more...
+
+### How It Works
+
+When scanning, cc-audit automatically checks for known vulnerabilities in detected products and versions. If a vulnerable version is found, it reports the CVE with remediation advice.
+
+### Automatic Updates
+
+The CVE database is automatically updated daily via GitHub Actions. New CVEs are fetched from the [NVD API](https://nvd.nist.gov/developers/vulnerabilities) and submitted as pull requests.
+
+For details on the update process, see [CVE-UPDATE.md](./CVE-UPDATE.md).

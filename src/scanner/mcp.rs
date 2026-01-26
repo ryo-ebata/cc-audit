@@ -1,5 +1,5 @@
 use crate::error::{AuditError, Result};
-use crate::rules::{DynamicRule, Finding};
+use crate::rules::Finding;
 use crate::scanner::{Scanner, ScannerConfig};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -28,23 +28,9 @@ pub struct McpScanner {
     config: ScannerConfig,
 }
 
+impl_scanner_builder!(McpScanner);
+
 impl McpScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
-        self
-    }
-
     pub fn scan_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
         let config: McpConfig =
             serde_json::from_str(content).map_err(|e| AuditError::ParseError {
@@ -130,12 +116,6 @@ impl Scanner for McpScanner {
         }
 
         Ok(findings)
-    }
-}
-
-impl Default for McpScanner {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

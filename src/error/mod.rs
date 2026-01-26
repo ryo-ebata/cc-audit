@@ -1,7 +1,23 @@
+//! Error types for cc-audit.
+//!
+//! This module provides a unified error handling system with:
+//! - `CcAuditError`: The new unified error type with full context preservation
+//! - `AuditError`: Legacy error type for backwards compatibility
+//! - Context types for better error messages
+
+mod audit;
+mod context;
+
+pub use audit::CcAuditError;
+pub use context::{IoOperation, ParseFormat};
+
 use crate::hooks::HookError;
 use crate::malware_db::MalwareDbError;
 use thiserror::Error;
 
+/// Legacy error type for backwards compatibility.
+///
+/// New code should prefer using `CcAuditError` for better error context.
 #[derive(Error, Debug)]
 pub enum AuditError {
     #[error("File not found: {0}")]
@@ -49,7 +65,46 @@ pub enum AuditError {
     Config(String),
 }
 
+/// Result type alias for operations using the legacy AuditError.
 pub type Result<T> = std::result::Result<T, AuditError>;
+
+/// Result type alias for operations using the new CcAuditError.
+pub type CcResult<T> = std::result::Result<T, CcAuditError>;
+
+/// Convert from CcAuditError to AuditError for backwards compatibility.
+impl From<CcAuditError> for AuditError {
+    fn from(err: CcAuditError) -> Self {
+        match err {
+            CcAuditError::Io { path, source, .. } => AuditError::ReadError {
+                path: path.display().to_string(),
+                source,
+            },
+            CcAuditError::Parse { path, .. } => AuditError::ParseError {
+                path: path.display().to_string(),
+                message: "parse error".to_string(),
+            },
+            CcAuditError::FileNotFound(path) => {
+                AuditError::FileNotFound(path.display().to_string())
+            }
+            CcAuditError::NotADirectory(path) => {
+                AuditError::NotADirectory(path.display().to_string())
+            }
+            CcAuditError::NotAFile(path) => AuditError::NotADirectory(path.display().to_string()),
+            CcAuditError::InvalidFormat { path, message } => AuditError::ParseError {
+                path: path.display().to_string(),
+                message,
+            },
+            CcAuditError::Regex(e) => AuditError::RegexError(e),
+            CcAuditError::Hook(e) => AuditError::Hook(e),
+            CcAuditError::MalwareDb(e) => AuditError::MalwareDb(e),
+            CcAuditError::Watch(e) => AuditError::Watch(e),
+            CcAuditError::Config(s) => AuditError::Config(s),
+            CcAuditError::YamlParse { path, source } => AuditError::YamlParseError { path, source },
+            CcAuditError::InvalidSkillFormat(s) => AuditError::InvalidSkillFormat(s),
+            CcAuditError::Json(e) => AuditError::JsonError(e),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -116,5 +171,12 @@ mod tests {
     fn test_error_display_config() {
         let err = AuditError::Config("invalid value".to_string());
         assert_eq!(err.to_string(), "Configuration error: invalid value");
+    }
+
+    #[test]
+    fn test_cc_audit_error_to_audit_error() {
+        let cc_err = CcAuditError::FileNotFound(std::path::PathBuf::from("/test/path"));
+        let audit_err: AuditError = cc_err.into();
+        assert!(audit_err.to_string().contains("/test/path"));
     }
 }

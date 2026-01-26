@@ -1,32 +1,18 @@
 use crate::error::{AuditError, Result};
-use crate::rules::{DynamicRule, Finding};
-use crate::scanner::{Scanner, ScannerConfig};
+use crate::rules::Finding;
+use crate::scanner::{DirectoryWalker, Scanner, ScannerConfig, WalkConfig};
 use std::fs;
 use std::path::Path;
-use walkdir::WalkDir;
+use tracing::{debug, warn};
 
 /// Scanner for Claude Code subagent definitions in .claude/agents/
 pub struct SubagentScanner {
     config: ScannerConfig,
 }
 
+impl_scanner_builder!(SubagentScanner);
+
 impl SubagentScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
-        self
-    }
-
     pub fn scan_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
@@ -90,22 +76,16 @@ impl Scanner for SubagentScanner {
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
-        // Look for .claude/agents/ directory
-        let agents_dir = dir.join(".claude").join("agents");
-        if agents_dir.exists() && agents_dir.is_dir() {
-            for entry in WalkDir::new(&agents_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-            {
-                let path = entry.path();
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if matches!(ext, "md" | "yaml" | "yml" | "json") {
-                    match self.scan_file(path) {
-                        Ok(f) => findings.extend(f),
-                        Err(e) => eprintln!("Warning: Failed to scan {}: {}", path.display(), e),
-                    }
-                }
+        // Look for .claude/agents/ directory using DirectoryWalker
+        let walker_config =
+            WalkConfig::new([".claude/agents"]).with_extensions(&["md", "yaml", "yml", "json"]);
+        let walker = DirectoryWalker::new(walker_config);
+
+        for path in walker.walk(dir) {
+            debug!(path = %path.display(), "Scanning agent file");
+            match self.scan_file(&path) {
+                Ok(f) => findings.extend(f),
+                Err(e) => warn!(path = %path.display(), error = %e, "Failed to scan agent file"),
             }
         }
 
@@ -113,20 +93,17 @@ impl Scanner for SubagentScanner {
         for pattern in &["agent.md", "agent.yaml", "agent.yml", "AGENT.md"] {
             let agent_file = dir.join(pattern);
             if agent_file.exists() {
+                debug!(path = %agent_file.display(), "Scanning root agent file");
                 match self.scan_file(&agent_file) {
                     Ok(f) => findings.extend(f),
-                    Err(e) => eprintln!("Warning: Failed to scan {}: {}", agent_file.display(), e),
+                    Err(e) => {
+                        warn!(path = %agent_file.display(), error = %e, "Failed to scan root agent file")
+                    }
                 }
             }
         }
 
         Ok(findings)
-    }
-}
-
-impl Default for SubagentScanner {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

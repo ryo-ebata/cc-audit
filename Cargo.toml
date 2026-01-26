@@ -12,7 +12,7 @@ keywords = ["claude", "security", "audit", "mcp", "skills"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
@@ -29,6 +29,9 @@ toml = "0.8"
 dirs = "6.0.0"
 sha2 = "0.10.9"
 base64 = "0.22.1"
+tempfile = "3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [dev-dependencies]
 assert_cmd = "2"

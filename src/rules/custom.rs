@@ -43,6 +43,7 @@ impl DynamicRule {
             fix_hint: self.fix_hint.clone(),
             cwe_ids: self.cwe_ids.clone(),
             rule_severity: None,
+            client: None,
         }
     }
 }

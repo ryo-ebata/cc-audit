@@ -3,8 +3,8 @@ use std::fs;
 use tempfile::TempDir;
 
 use cc_audit::{
-    Cli, Confidence, HookScanner, McpScanner, OutputFormat, ScanType, Scanner, SkillScanner,
-    run_scan,
+    BadgeFormat, Cli, Confidence, HookScanner, McpScanner, OutputFormat, ScanType, Scanner,
+    SkillScanner, run_scan,
 };
 
 fn create_test_cli(path: std::path::PathBuf) -> Cli {
@@ -29,6 +29,8 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         skip_comments: false,
         fix_hint: false,
         no_malware_scan: true,
+        cve_db: None,
+        no_cve_scan: true,
         malware_db: None,
         custom_rules: None,
         baseline: false,
@@ -44,6 +46,17 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         deep_scan: false,
         profile: None,
         save_profile: None,
+        remote: None,
+        git_ref: "HEAD".to_string(),
+        remote_auth: None,
+        remote_list: None,
+        awesome_claude_code: false,
+        parallel_clones: 4,
+        badge: false,
+        badge_format: BadgeFormat::Markdown,
+        summary: false,
+        all_clients: false,
+        client: None,
     }
 }
 

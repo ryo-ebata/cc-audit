@@ -90,18 +90,24 @@ impl McpServer {
                             data: None,
                         }),
                     };
-                    let _ = writeln!(
-                        stdout,
-                        "{}",
-                        serde_json::to_string(&error_response).unwrap()
-                    );
+                    // SAFETY: JsonRpcResponse contains only simple, serializable types.
+                    // This unwrap_or_else provides a fallback for the unlikely case of serialization failure.
+                    let json = serde_json::to_string(&error_response)
+                        .unwrap_or_else(|_| r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"}}"#.to_string());
+                    let _ = writeln!(stdout, "{}", json);
                     let _ = stdout.flush();
                     continue;
                 }
             };
 
             let response = self.handle_request(request);
-            let _ = writeln!(stdout, "{}", serde_json::to_string(&response).unwrap());
+            // SAFETY: JsonRpcResponse contains only simple, serializable types.
+            // This unwrap_or_else provides a fallback for the unlikely case of serialization failure.
+            let json = serde_json::to_string(&response).unwrap_or_else(|_| {
+                r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"}}"#
+                    .to_string()
+            });
+            let _ = writeln!(stdout, "{}", json);
             let _ = stdout.flush();
         }
 
@@ -494,6 +500,7 @@ impl McpServer {
             fix_hint: rule.fix_hint.map(|s| s.to_string()),
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
             rule_severity: None,
+            client: None,
         };
 
         let fixer = AutoFixer::new(true);

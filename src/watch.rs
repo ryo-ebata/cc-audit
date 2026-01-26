@@ -3,6 +3,7 @@ use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
 use std::time::Duration;
+use tracing::warn;
 
 pub struct FileWatcher {
     watcher: RecommendedWatcher,
@@ -58,7 +59,7 @@ impl FileWatcher {
                     }
                 }
                 Ok(Err(e)) => {
-                    eprintln!("Watch error: {}", e);
+                    warn!(error = %e, "File watch error");
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Debounce period complete or timeout
@@ -75,7 +76,15 @@ impl FileWatcher {
     }
 }
 
+/// Note: The `Default` implementation for `FileWatcher` may panic if the underlying
+/// file watcher cannot be created. Prefer using `FileWatcher::new()` for production
+/// code to properly handle potential errors.
 impl Default for FileWatcher {
+    /// Creates a new `FileWatcher` with default settings.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the file watcher cannot be created (e.g., due to OS limitations).
     fn default() -> Self {
         Self::new().expect("Failed to create file watcher")
     }

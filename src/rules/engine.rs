@@ -2,6 +2,7 @@ use crate::rules::builtin;
 use crate::rules::custom::DynamicRule;
 use crate::rules::types::{Finding, Location, Rule};
 use crate::suppression::{SuppressionType, parse_inline_suppression, parse_next_line_suppression};
+use tracing::trace;
 
 pub struct RuleEngine {
     rules: &'static [Rule],
@@ -43,6 +44,14 @@ impl RuleEngine {
     }
 
     pub fn check_content(&self, content: &str, file_path: &str) -> Vec<Finding> {
+        trace!(
+            file = file_path,
+            lines = content.lines().count(),
+            rules = self.rules.len(),
+            dynamic_rules = self.dynamic_rules.len(),
+            "Checking content against rules"
+        );
+
         let mut findings = Vec::new();
         let mut next_line_suppression: Option<SuppressionType> = None;
         let mut disabled_rules: Option<SuppressionType> = None;

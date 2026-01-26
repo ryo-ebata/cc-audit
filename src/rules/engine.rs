@@ -1,6 +1,7 @@
 use crate::rules::builtin;
 use crate::rules::custom::DynamicRule;
-use crate::rules::types::{Finding, Location, Rule};
+use crate::rules::heuristics::FileHeuristics;
+use crate::rules::types::{Category, Finding, Location, Rule};
 use crate::suppression::{SuppressionType, parse_inline_suppression, parse_next_line_suppression};
 use tracing::trace;
 
@@ -8,6 +9,8 @@ pub struct RuleEngine {
     rules: &'static [Rule],
     dynamic_rules: Vec<DynamicRule>,
     skip_comments: bool,
+    /// When true, disable heuristics that downgrade confidence for test files
+    strict_secrets: bool,
 }
 
 impl RuleEngine {
@@ -16,11 +19,18 @@ impl RuleEngine {
             rules: builtin::all_rules(),
             dynamic_rules: Vec::new(),
             skip_comments: false,
+            strict_secrets: false,
         }
     }
 
     pub fn with_skip_comments(mut self, skip: bool) -> Self {
         self.skip_comments = skip;
+        self
+    }
+
+    /// Enable strict secrets mode (disable test file heuristics)
+    pub fn with_strict_secrets(mut self, strict: bool) -> Self {
+        self.strict_secrets = strict;
         self
     }
 
@@ -94,7 +104,18 @@ impl RuleEngine {
                     continue;
                 }
 
-                if let Some(finding) = Self::check_line(rule, line, file_path, line_num + 1) {
+                if let Some(mut finding) = Self::check_line(rule, line, file_path, line_num + 1) {
+                    // Apply heuristics for secret leak detection (unless strict_secrets is enabled)
+                    if !self.strict_secrets && rule.category == Category::SecretLeak {
+                        // Downgrade confidence for test files
+                        if FileHeuristics::is_test_file(file_path) {
+                            finding.confidence = finding.confidence.downgrade();
+                        }
+                        // Downgrade confidence for lines with dummy variable names
+                        if FileHeuristics::contains_dummy_variable(line) {
+                            finding.confidence = finding.confidence.downgrade();
+                        }
+                    }
                     findings.push(finding);
                 }
             }
@@ -108,8 +129,20 @@ impl RuleEngine {
                     continue;
                 }
 
-                if let Some(finding) = Self::check_dynamic_line(rule, line, file_path, line_num + 1)
+                if let Some(mut finding) =
+                    Self::check_dynamic_line(rule, line, file_path, line_num + 1)
                 {
+                    // Apply heuristics for secret leak detection (unless strict_secrets is enabled)
+                    if !self.strict_secrets && finding.category == Category::SecretLeak {
+                        // Downgrade confidence for test files
+                        if FileHeuristics::is_test_file(file_path) {
+                            finding.confidence = finding.confidence.downgrade();
+                        }
+                        // Downgrade confidence for lines with dummy variable names
+                        if FileHeuristics::contains_dummy_variable(line) {
+                            finding.confidence = finding.confidence.downgrade();
+                        }
+                    }
                     findings.push(finding);
                 }
             }

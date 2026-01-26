@@ -3,8 +3,8 @@ use cc_audit::{
     handlers::{
         handle_baseline, handle_check_drift, handle_compare, handle_fix, handle_hook_mode,
         handle_init_config, handle_init_hook, handle_mcp_server, handle_pin, handle_pin_verify,
-        handle_remove_hook, handle_save_baseline, handle_save_profile, handle_show_profile,
-        run_normal_mode, run_watch_mode,
+        handle_proxy, handle_remove_hook, handle_report_fp, handle_save_baseline,
+        handle_save_profile, handle_sbom, handle_show_profile, run_normal_mode, run_watch_mode,
     },
 };
 use clap::Parser;
@@ -91,6 +91,21 @@ fn main() -> ExitCode {
     // Handle --save-profile
     if let Some(ref profile_name) = cli.save_profile {
         return handle_save_profile(&cli, profile_name);
+    }
+
+    // Handle --report-fp (false positive reporting)
+    if cli.report_fp {
+        return handle_report_fp(&cli);
+    }
+
+    // Handle --sbom (SBOM generation)
+    if cli.sbom {
+        return handle_sbom(&cli);
+    }
+
+    // Handle --proxy (proxy mode)
+    if cli.proxy {
+        return handle_proxy(&cli);
     }
 
     // Handle --profile (info mode when no paths to scan)

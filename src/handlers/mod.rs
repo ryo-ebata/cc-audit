@@ -11,7 +11,10 @@ mod hook;
 mod hook_mode;
 mod mcp;
 mod pin;
+mod proxy;
 mod remote;
+mod report_fp;
+mod sbom;
 mod scan;
 
 use std::process::ExitCode;
@@ -27,7 +30,10 @@ pub use hook::{handle_init_hook, handle_remove_hook};
 pub use hook_mode::handle_hook_mode;
 pub use mcp::handle_mcp_server;
 pub use pin::{handle_pin, handle_pin_verify};
+pub use proxy::handle_proxy;
 pub use remote::{handle_awesome_claude_code_scan, handle_remote_list_scan, handle_remote_scan};
+pub use report_fp::handle_report_fp;
+pub use sbom::handle_sbom;
 pub use scan::{run_normal_mode, run_watch_mode};
 
 /// Result type for handler functions that can be tested.

@@ -33,18 +33,45 @@ cc-audit --init /path/to/project/
 
 # Scan settings
 scan:
-  format: terminal          # terminal, json, sarif, html
+  format: terminal          # terminal, json, sarif, html, markdown
   output: null              # Output file path
   strict: false             # Show medium/low severity findings
+  warn_only: false          # Treat all findings as warnings (always exit 0)
   scan_type: skill          # skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   recursive: false
   ci: false
   verbose: false
   min_confidence: tentative # tentative, firm, certain
+  min_severity: null        # Minimum severity: critical, high, medium, low
+  min_rule_severity: null   # Minimum rule severity: error, warn
   skip_comments: false
+  strict_secrets: false     # Disable dummy key heuristics for test files
   fix_hint: false
   deep_scan: false
   no_malware_scan: false
+  no_cve_scan: false        # Disable CVE vulnerability scanning
+  cve_db: null              # Path to custom CVE database (JSON)
+
+  # Remote scanning
+  remote: null              # Remote repository URL to scan
+  git_ref: null             # Git ref (branch, tag, commit)
+  remote_auth: null         # GitHub token (or use GITHUB_TOKEN env var)
+  parallel_clones: 4        # Number of parallel repository clones
+
+  # Client scanning
+  all_clients: false        # Scan all installed AI coding clients
+  client: null              # Specific client: claude, cursor, windsurf, vscode
+
+  # Badge generation
+  badge: false              # Generate security badge
+  badge_format: markdown    # Badge format: url, markdown, html
+  summary: false            # Show summary only
+
+  # SBOM generation
+  sbom: false               # Generate SBOM
+  sbom_format: null         # SBOM format: cyclonedx, spdx
+  sbom_npm: false           # Include npm dependencies
+  sbom_cargo: false         # Include Cargo dependencies
 
 # Baseline settings
 baseline:
@@ -180,7 +207,7 @@ Rule severity is applied in order: **ignore > warn > default**
 ## Example Output
 
 ```
-cc-audit v0.5.0 - Claude Code Security Auditor
+cc-audit v3.0.0 - Claude Code Security Auditor
 
 Scanning: ./my-skill/
 

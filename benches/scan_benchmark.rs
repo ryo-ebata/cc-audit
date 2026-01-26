@@ -27,6 +27,7 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         init_hook: false,
         remove_hook: false,
         skip_comments: false,
+        strict_secrets: false,
         fix_hint: false,
         no_malware_scan: true,
         cve_db: None,
@@ -63,6 +64,20 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         summary: false,
         all_clients: false,
         client: None,
+        report_fp: false,
+        report_fp_dry_run: false,
+        report_fp_endpoint: None,
+        no_telemetry: false,
+        sbom: false,
+        sbom_format: None,
+        sbom_npm: false,
+        sbom_cargo: false,
+        proxy: false,
+        proxy_port: None,
+        proxy_target: None,
+        proxy_tls: false,
+        proxy_block: false,
+        proxy_log: None,
     }
 }
 

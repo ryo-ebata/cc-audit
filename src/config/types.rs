@@ -97,6 +97,14 @@ pub struct ScanConfig {
     pub fix: bool,
     /// Preview auto-fix changes without applying them.
     pub fix_dry_run: bool,
+    /// Warn-only mode: treat all findings as warnings (always exit 0).
+    pub warn_only: bool,
+    /// Minimum severity level to include: "critical", "high", "medium", "low".
+    pub min_severity: Option<String>,
+    /// Minimum rule severity to treat as errors: "error", "warn".
+    pub min_rule_severity: Option<String>,
+    /// Strict secrets mode: disable dummy key heuristics for test files.
+    pub strict_secrets: bool,
 
     // ============ Remote Scanning Options (v1.1.0) ============
     /// Remote repository URL to scan.
@@ -107,6 +115,10 @@ pub struct ScanConfig {
     pub remote_auth: Option<String>,
     /// Number of parallel clones for batch scanning.
     pub parallel_clones: Option<usize>,
+    /// File containing list of repository URLs to scan.
+    pub remote_list: Option<String>,
+    /// Scan all repositories from awesome-claude-code.
+    pub awesome_claude_code: bool,
 
     // ============ Badge Options (v1.1.0) ============
     /// Generate a badge for the scan result.
@@ -127,6 +139,16 @@ pub struct ScanConfig {
     pub no_cve_scan: bool,
     /// Path to a custom CVE database (JSON).
     pub cve_db: Option<String>,
+
+    // ============ SBOM Options (v1.2.0) ============
+    /// Generate SBOM (Software Bill of Materials).
+    pub sbom: bool,
+    /// SBOM output format: "cyclonedx", "spdx".
+    pub sbom_format: Option<String>,
+    /// Include npm dependencies in SBOM.
+    pub sbom_npm: bool,
+    /// Include Cargo dependencies in SBOM.
+    pub sbom_cargo: bool,
 }
 
 /// Watch mode configuration.

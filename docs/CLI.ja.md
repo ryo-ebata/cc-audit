@@ -20,10 +20,13 @@ cc-audit [OPTIONS] <PATHS>...
 
 | オプション | 説明 |
 |------------|------|
-| `-f, --format <FORMAT>` | 出力形式: `terminal`（デフォルト）, `json`, `sarif`, `html` |
+| `-f, --format <FORMAT>` | 出力形式: `terminal`（デフォルト）, `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | 出力ファイルパス（HTML/JSON出力用） |
 | `-v, --verbose` | 詳細出力 |
 | `--ci` | CIモード: 非インタラクティブ出力 |
+| `--badge` | セキュリティバッジを生成 |
+| `--badge-format <FORMAT>` | バッジ出力形式: `url`, `markdown`（デフォルト）, `html` |
+| `--summary` | サマリーのみ表示（バッチスキャン用） |
 
 ### スキャンオプション
 
@@ -37,6 +40,7 @@ cc-audit [OPTIONS] <PATHS>...
 | `--min-rule-severity <LEVEL>` | エラー扱いする最小ルール深刻度: `error`, `warn` |
 | `--min-confidence <LEVEL>` | 最小信頼度レベル: `tentative`（デフォルト）, `firm`, `certain` |
 | `--skip-comments` | コメント行をスキップ |
+| `--strict-secrets` | 厳格シークレットモード: テストファイルでのダミーキーヒューリスティックを無効化 |
 | `--deep-scan` | 難読化解除付き深いスキャン |
 
 ### 含める/除外するオプション
@@ -68,13 +72,15 @@ cc-audit [OPTIONS] <PATHS>...
 | `--init-hook` | pre-commitフックをインストール |
 | `--remove-hook` | pre-commitフックを削除 |
 
-### カスタムルール & マルウェア
+### カスタムルール & データベース
 
 | オプション | 説明 |
 |------------|------|
 | `--custom-rules <PATH>` | カスタムルールファイルのパス（YAML形式） |
 | `--malware-db <PATH>` | カスタムマルウェアシグネチャDBのパス |
 | `--no-malware-scan` | マルウェアスキャンを無効化 |
+| `--cve-db <PATH>` | カスタムCVEデータベースのパス（JSON形式） |
+| `--no-cve-scan` | CVE脆弱性スキャンを無効化 |
 
 ### ベースライン & ドリフト検出
 
@@ -92,6 +98,69 @@ cc-audit [OPTIONS] <PATHS>...
 |------------|------|
 | `--profile <NAME>` | 名前付きプロファイルから設定を読み込む |
 | `--save-profile <NAME>` | 現在の設定を名前付きプロファイルとして保存 |
+
+### クライアントスキャン
+
+| オプション | 説明 |
+|------------|------|
+| `--all-clients` | インストール済みの全AIコーディングクライアントをスキャン（Claude, Cursor, Windsurf, VS Code） |
+| `--client <TYPE>` | 特定のクライアントをスキャン: `claude`, `cursor`, `windsurf`, `vscode` |
+
+### リモートスキャン
+
+| オプション | 説明 |
+|------------|------|
+| `--remote <URL>` | スキャンするリモートリポジトリURL（例: `https://github.com/user/repo`） |
+| `--git-ref <REF>` | リモートスキャン用のGit参照（ブランチ、タグ、コミット）（デフォルト: HEAD） |
+| `--remote-auth <TOKEN>` | 認証用GitHubトークン（または`GITHUB_TOKEN`環境変数を使用） |
+| `--remote-list <FILE>` | スキャンするリポジトリURLのリストファイル（1行に1URL） |
+| `--awesome-claude-code` | awesome-claude-codeの全リポジトリをスキャン |
+| `--parallel-clones <N>` | 並列クローンの最大数（デフォルト: 4） |
+
+### MCPピンニング（ラグプル検出）
+
+| オプション | 説明 |
+|------------|------|
+| `--pin` | ラグプル検出用にMCPツール設定をピン留め |
+| `--pin-verify` | 現在の設定に対してMCPツールピンを検証 |
+| `--pin-update` | 現在の設定でMCPツールピンを更新 |
+| `--pin-force` | 既存のピンを強制上書き |
+| `--ignore-pin` | スキャン中のピン検証をスキップ |
+
+### フックモード
+
+| オプション | 説明 |
+|------------|------|
+| `--hook-mode` | Claude Codeフックとして実行（stdinから読み取り、stdoutに出力） |
+
+### SBOM（ソフトウェア部品表）
+
+| オプション | 説明 |
+|------------|------|
+| `--sbom` | SBOMを生成 |
+| `--sbom-format <FORMAT>` | SBOM出力形式: `cyclonedx`, `spdx` |
+| `--sbom-npm` | npm依存関係をSBOMに含める |
+| `--sbom-cargo` | Cargo依存関係をSBOMに含める |
+
+### プロキシモード（MCPランタイム監視）
+
+| オプション | 説明 |
+|------------|------|
+| `--proxy` | MCPランタイム監視用のプロキシモードを有効化 |
+| `--proxy-port <PORT>` | プロキシリッスンポート（デフォルト: 8080） |
+| `--proxy-target <HOST:PORT>` | ターゲットMCPサーバーアドレス |
+| `--proxy-tls` | プロキシモードでTLS終端を有効化 |
+| `--proxy-block` | ブロックモードを有効化（検出結果のあるメッセージをブロック） |
+| `--proxy-log <FILE>` | プロキシトラフィックのログファイル（JSONL形式） |
+
+### 偽陽性報告
+
+| オプション | 説明 |
+|------------|------|
+| `--report-fp` | 偽陽性の検出結果を報告 |
+| `--report-fp-dry-run` | 偽陽性報告のドライラン（送信せずに表示） |
+| `--report-fp-endpoint <URL>` | 偽陽性報告用のカスタムエンドポイントURL |
+| `--no-telemetry` | テレメトリと偽陽性報告を無効化 |
 
 ### その他のオプション
 
@@ -152,4 +221,34 @@ cc-audit --ci --format sarif --strict ./
 
 # 高信頼度のみ
 cc-audit --min-confidence certain ./skill/
+
+# インストール済みの全AIクライアントをスキャン
+cc-audit --all-clients
+
+# 特定のクライアントをスキャン
+cc-audit --client cursor
+
+# リモートリポジトリをスキャン
+cc-audit --remote https://github.com/user/awesome-skill
+
+# 特定のブランチでリモートリポジトリをスキャン
+cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+
+# awesome-claude-codeの全リポジトリをスキャン
+cc-audit --awesome-claude-code --summary
+
+# セキュリティバッジを生成
+cc-audit ./skill/ --badge --badge-format markdown
+
+# MCPツール設定をピン留め
+cc-audit --type mcp ~/.claude/mcp.json --pin
+
+# MCPピンを検証
+cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+
+# SBOMを生成
+cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# ランタイム監視用にプロキシとして実行
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
 ```

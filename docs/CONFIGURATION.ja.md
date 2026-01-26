@@ -33,18 +33,45 @@ cc-audit --init /path/to/project/
 
 # スキャン設定
 scan:
-  format: terminal          # terminal, json, sarif, html
+  format: terminal          # terminal, json, sarif, html, markdown
   output: null              # 出力ファイルパス
   strict: false             # medium/low重大度の検出を表示
+  warn_only: false          # 全ての検出を警告扱い（常にexit 0）
   scan_type: skill          # skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   recursive: false
   ci: false
   verbose: false
   min_confidence: tentative # tentative, firm, certain
+  min_severity: null        # 最小深刻度: critical, high, medium, low
+  min_rule_severity: null   # 最小ルール深刻度: error, warn
   skip_comments: false
+  strict_secrets: false     # テストファイルのダミーキーヒューリスティックを無効化
   fix_hint: false
   deep_scan: false
   no_malware_scan: false
+  no_cve_scan: false        # CVE脆弱性スキャンを無効化
+  cve_db: null              # カスタムCVEデータベースのパス（JSON）
+
+  # リモートスキャン
+  remote: null              # リモートリポジトリURL
+  git_ref: null             # Git参照（ブランチ、タグ、コミット）
+  remote_auth: null         # GitHubトークン（またはGITHUB_TOKEN環境変数）
+  parallel_clones: 4        # 並列リポジトリクローン数
+
+  # クライアントスキャン
+  all_clients: false        # 全AIクライアントをスキャン
+  client: null              # 特定のクライアント: claude, cursor, windsurf, vscode
+
+  # バッジ生成
+  badge: false              # セキュリティバッジを生成
+  badge_format: markdown    # バッジ形式: url, markdown, html
+  summary: false            # サマリーのみ表示
+
+  # SBOM生成
+  sbom: false               # SBOMを生成
+  sbom_format: null         # SBOM形式: cyclonedx, spdx
+  sbom_npm: false           # npm依存関係を含める
+  sbom_cargo: false         # Cargo依存関係を含める
 
 # ベースライン設定
 baseline:
@@ -180,7 +207,7 @@ severity:
 ## 出力例
 
 ```
-cc-audit v0.5.0 - Claude Code Security Auditor
+cc-audit v3.0.0 - Claude Code Security Auditor
 
 Scanning: ./my-skill/
 

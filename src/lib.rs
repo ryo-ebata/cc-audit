@@ -64,11 +64,14 @@ pub mod runtime;
 pub mod types;
 
 // External integrations
+pub mod feedback;
 pub mod fix;
 pub mod hooks;
 pub mod mcp_server;
 pub mod pinning;
+pub mod proxy;
 pub mod remote;
+pub mod sbom;
 pub mod trusted_domains;
 pub mod watch;
 
@@ -142,11 +145,16 @@ pub use runtime::{HookRunner, Pipeline, PipelineStage, ScanContext, ScanExecutor
 
 // External Integrations
 pub use error::{AuditError, Result};
+pub use feedback::{FalsePositiveReport, ReportSubmitter, SubmitResult, SubmitTarget};
 pub use fix::{AutoFixer, Fix, FixResult};
 pub use hooks::{HookError, HookInstaller};
 pub use mcp_server::McpServer;
 pub use pinning::{PinMismatch, PinVerifyResult, PinnedTool, ToolPins};
+pub use proxy::{InterceptAction, MessageInterceptor, ProxyConfig, ProxyLogger, ProxyServer};
 pub use remote::{ClonedRepo, GitCloner, RemoteError, parse_github_url};
+pub use sbom::{
+    Component, ComponentType, CycloneDxBom, DependencyExtractor, SbomBuilder, SbomFormat,
+};
 pub use trusted_domains::{TrustedDomain, TrustedDomainMatcher};
 pub use types::{AuthToken, FileHash, GitRef, PathValidationError, RuleId, ScanTarget};
 pub use watch::FileWatcher;

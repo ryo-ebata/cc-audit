@@ -1,6 +1,6 @@
 {
   "name": "@cc-audit/linux-x64-musl",
-  "version": "0.4.1",
+  "version": "3.0.0",
   "description": "cc-audit binary for Linux x64 (musl/Alpine)",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@cc-audit/darwin-arm64",
-  "version": "0.4.1",
+  "version": "3.0.0",
   "description": "cc-audit binary for macOS ARM64 (Apple Silicon)",
   "license": "MIT",
   "repository": {

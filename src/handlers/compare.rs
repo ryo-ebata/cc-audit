@@ -48,6 +48,7 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             init_hook: false,
             remove_hook: false,
             skip_comments: cli.skip_comments,
+            strict_secrets: cli.strict_secrets,
             fix_hint: cli.fix_hint,
             no_malware_scan: cli.no_malware_scan,
             cve_db: cli.cve_db.clone(),
@@ -75,6 +76,20 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             save_profile: None,
             all_clients: false,
             client: None,
+            report_fp: false,
+            report_fp_dry_run: false,
+            report_fp_endpoint: None,
+            no_telemetry: cli.no_telemetry,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
+            proxy: false,
+            proxy_port: None,
+            proxy_target: None,
+            proxy_tls: false,
+            proxy_block: false,
+            proxy_log: None,
         }
     };
 

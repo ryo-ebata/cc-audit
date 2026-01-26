@@ -35,11 +35,16 @@ fn sl_001() -> Rule {
                 .expect("SL-001: invalid regex"),
         ],
         exclusions: vec![
-            // Example/placeholder keys
+            // AWS example keys from official documentation
             Regex::new(r"AKIAIOSFODNN7EXAMPLE").expect("SL-001: invalid regex"),
+            Regex::new(r"ASIAIOSFODNN7EXAMPLE").expect("SL-001: invalid regex"),
             Regex::new(r"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY").expect("SL-001: invalid regex"),
-            // Test files
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-001: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-001: invalid regex"),
+            // Generic placeholder patterns
+            Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|PUT_YOUR_|<[A-Z_]+>")
+                .expect("SL-001: invalid regex"),
         ],
         message: "AWS Access Key detected. This credential could allow unauthorized access to AWS resources.",
         recommendation: "Remove the key immediately, rotate it in AWS IAM console, and use environment variables or AWS Secrets Manager instead.",
@@ -75,7 +80,10 @@ fn sl_002() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-002: invalid regex"),
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-002: invalid regex"),
+            // Generic placeholder patterns
+            Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|<[A-Z_]+>").expect("SL-002: invalid regex"),
         ],
         message: "GitHub Token detected. This token could allow unauthorized access to repositories.",
         recommendation: "Revoke the token immediately in GitHub Settings > Developer settings > Personal access tokens, and use GitHub Actions secrets or environment variables instead.",
@@ -106,9 +114,17 @@ fn sl_003() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example|placeholder").expect("SL-003: invalid regex"),
+            Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample")
+                .expect("SL-003: invalid regex"),
             // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
             Regex::new(r"sha1|sha256|commit").expect("SL-003: invalid regex"),
+            // OpenAI/Anthropic dummy keys (placeholder patterns with x's)
+            Regex::new(r"sk-[xX]{32,}").expect("SL-003: invalid regex"),
+            Regex::new(r"sk-proj-[xX]{32,}").expect("SL-003: invalid regex"),
+            Regex::new(r"sk-ant-[xX]{32,}").expect("SL-003: invalid regex"),
+            Regex::new(r"sk-ant-api\d{2}-[xX]{32,}").expect("SL-003: invalid regex"),
+            // Generic placeholder patterns
+            Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|<[A-Z_]+>").expect("SL-003: invalid regex"),
         ],
         message: "AI API Key detected. This key could allow unauthorized API usage and incur costs.",
         recommendation: "Remove the key, rotate it in the respective service dashboard, and use environment variables instead.",
@@ -151,11 +167,22 @@ fn sl_004() -> Rule {
             Regex::new(r"process\.env\.[A-Z_]+").expect("SL-004: invalid regex"),
             Regex::new(r"os\.environ").expect("SL-004: invalid regex"),
             // Test/example patterns
-            Regex::new(r"test|mock|fake|dummy|example|placeholder|your[_-]?")
+            Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample|your[_-]?")
                 .expect("SL-004: invalid regex"),
             // Common password prompts/labels
-            Regex::new(r"enter.*password|password.*prompt|password.*input")
+            Regex::new(r"(?i)enter.*password|password.*prompt|password.*input")
                 .expect("SL-004: invalid regex"),
+            // Stripe test keys (sk_test_*, pk_test_*, rk_test_*)
+            Regex::new(r"(?:sk|pk|rk)_test_[A-Za-z0-9]{24}").expect("SL-004: invalid regex"),
+            // Generic placeholder patterns
+            Regex::new(r"(?i)YOUR_API_KEY|INSERT_API_KEY|REPLACE_WITH|PUT_YOUR|<[A-Z_]+>")
+                .expect("SL-004: invalid regex"),
+            // Dummy variable names
+            Regex::new(r"\b(?:EXAMPLE|TEST|DUMMY|SAMPLE|MOCK|FAKE|STUB)_[A-Z_]+")
+                .expect("SL-004: invalid regex"),
+            // All X's or zeros (common placeholders)
+            Regex::new(r#"["'][xX]{16,}["']"#).expect("SL-004: invalid regex"),
+            Regex::new(r#"["']0{16,}["']"#).expect("SL-004: invalid regex"),
         ],
         message: "Hardcoded secret detected. Storing credentials in code is a security risk.",
         recommendation: "Use environment variables, secret managers (AWS Secrets Manager, HashiCorp Vault), or configuration files excluded from version control.",
@@ -187,8 +214,9 @@ fn sl_005() -> Rule {
             Regex::new(r"-----BEGIN PGP PRIVATE KEY BLOCK-----").expect("SL-005: invalid regex"),
         ],
         exclusions: vec![
-            // Test/example files
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-005: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-005: invalid regex"),
         ],
         message: "Private key detected. Private keys should never be committed to version control.",
         recommendation: "Remove the key from the repository history using git filter-branch or BFG Repo-Cleaner. Store keys securely outside of version control.",
@@ -213,7 +241,9 @@ fn sl_006() -> Rule {
                 .expect("SL-006: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-006: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-006: invalid regex"),
         ],
         message: "Hardcoded JWT token detected. This token may grant unauthorized access.",
         recommendation: "Remove the JWT token and use environment variables or secure token generation.",
@@ -237,7 +267,9 @@ fn sl_007() -> Rule {
             .expect("SL-007: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-007: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-007: invalid regex"),
         ],
         message: "Slack webhook URL detected. Anyone with this URL can post to your Slack channel.",
         recommendation: "Rotate the webhook URL in Slack and use environment variables.",
@@ -259,7 +291,9 @@ fn sl_008() -> Rule {
                 .expect("SL-008: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-008: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-008: invalid regex"),
         ],
         message: "Discord webhook URL detected. Anyone with this URL can post to your Discord channel.",
         recommendation: "Regenerate the webhook in Discord and use environment variables.",
@@ -281,7 +315,9 @@ fn sl_009() -> Rule {
             Regex::new(r"\b\d{8,10}:[A-Za-z0-9_-]{35}\b").expect("SL-009: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|fake|dummy|example").expect("SL-009: invalid regex"),
+            // Test/example patterns
+            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-009: invalid regex"),
         ],
         message: "Telegram bot token detected. This token provides full control over the bot.",
         recommendation: "Revoke the token via @BotFather and use environment variables.",

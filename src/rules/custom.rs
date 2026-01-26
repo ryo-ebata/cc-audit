@@ -44,6 +44,7 @@ impl DynamicRule {
             cwe_ids: self.cwe_ids.clone(),
             rule_severity: None,
             client: None,
+            context: None,
         }
     }
 }

@@ -425,6 +425,7 @@ mod tests {
             cwe_ids: vec!["CWE-200".to_string()],
             rule_severity: None,
             client: None,
+            context: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -493,6 +494,7 @@ mod tests {
             cwe_ids: vec![],
             rule_severity: None,
             client: None,
+            context: None,
         };
         let finding2 = Finding {
             id: "EX-001".to_string(),
@@ -512,6 +514,7 @@ mod tests {
             cwe_ids: vec![],
             rule_severity: None,
             client: None,
+            context: None,
         };
         let result = create_test_result(vec![finding1, finding2]);
         let output = reporter.report(&result);
@@ -582,6 +585,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "H-001".to_string(),
@@ -601,6 +605,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "M-001".to_string(),
@@ -620,6 +625,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -639,6 +645,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
         ];
         let result = create_test_result(findings);
@@ -711,6 +718,7 @@ mod tests {
             cwe_ids: vec![],
             rule_severity: None,
             client: None,
+            context: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -796,6 +804,7 @@ mod tests {
             ],
             rule_severity: None,
             client: None,
+            context: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);

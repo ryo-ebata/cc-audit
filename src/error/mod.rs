@@ -179,4 +179,92 @@ mod tests {
         let audit_err: AuditError = cc_err.into();
         assert!(audit_err.to_string().contains("/test/path"));
     }
+
+    #[test]
+    fn test_cc_audit_error_io_to_audit_error() {
+        let cc_err = CcAuditError::Io {
+            path: std::path::PathBuf::from("/test/path"),
+            operation: IoOperation::Read,
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "not found"),
+        };
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::ReadError { .. }));
+    }
+
+    #[test]
+    fn test_cc_audit_error_parse_to_audit_error() {
+        let cc_err = CcAuditError::Parse {
+            path: std::path::PathBuf::from("/test/file.json"),
+            format: ParseFormat::Json,
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "syntax error",
+            )),
+        };
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::ParseError { .. }));
+    }
+
+    #[test]
+    fn test_cc_audit_error_not_a_directory() {
+        let cc_err = CcAuditError::NotADirectory(std::path::PathBuf::from("/test/file"));
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::NotADirectory(_)));
+    }
+
+    #[test]
+    fn test_cc_audit_error_not_a_file() {
+        let cc_err = CcAuditError::NotAFile(std::path::PathBuf::from("/test/dir"));
+        let audit_err: AuditError = cc_err.into();
+        // NotAFile maps to NotADirectory for backwards compat
+        assert!(matches!(audit_err, AuditError::NotADirectory(_)));
+    }
+
+    #[test]
+    fn test_cc_audit_error_invalid_format() {
+        let cc_err = CcAuditError::InvalidFormat {
+            path: std::path::PathBuf::from("/test/file"),
+            message: "invalid format".to_string(),
+        };
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::ParseError { .. }));
+    }
+
+    #[test]
+    #[allow(clippy::invalid_regex)]
+    fn test_cc_audit_error_regex() {
+        let regex_err = regex::Regex::new(r"[invalid\[").unwrap_err();
+        let cc_err = CcAuditError::Regex(regex_err);
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::RegexError(_)));
+    }
+
+    #[test]
+    fn test_cc_audit_error_config() {
+        let cc_err = CcAuditError::Config("bad config".to_string());
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::Config(_)));
+    }
+
+    #[test]
+    fn test_cc_audit_error_invalid_skill_format() {
+        let cc_err = CcAuditError::InvalidSkillFormat("missing frontmatter".to_string());
+        let audit_err: AuditError = cc_err.into();
+        assert!(matches!(audit_err, AuditError::InvalidSkillFormat(_)));
+    }
+
+    #[test]
+    #[allow(clippy::invalid_regex)]
+    fn test_error_from_regex_error() {
+        let regex_err = regex::Regex::new(r"[invalid\[").unwrap_err();
+        let err: AuditError = regex_err.into();
+        assert!(err.to_string().contains("Regex compilation error"));
+    }
+
+    #[test]
+    fn test_error_debug_trait() {
+        let err = AuditError::FileNotFound("/test".to_string());
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("FileNotFound"));
+    }
 }

@@ -77,7 +77,17 @@ impl std::str::FromStr for RuleSeverity {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, clap::ValueEnum,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    clap::ValueEnum,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {
@@ -268,6 +278,9 @@ pub struct Finding {
     /// Set when scanning with --all-clients or --client options.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<String>,
+    /// Content context (documentation, code block, etc.) for false positive reduction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<crate::context::ContentContext>,
 }
 
 impl Finding {
@@ -286,7 +299,14 @@ impl Finding {
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
             rule_severity: None, // Assigned later based on config
             client: None,        // Assigned later for client scans
+            context: None,       // Assigned by context-aware scanner
         }
+    }
+
+    /// Set the content context for this finding
+    pub fn with_context(mut self, context: crate::context::ContentContext) -> Self {
+        self.context = Some(context);
+        self
     }
 
     /// Set the client for this finding
@@ -453,6 +473,7 @@ mod tests {
             cwe_ids: vec![],
             rule_severity: None,
             client: None,
+            context: None,
         }];
         let summary = Summary::from_findings(&findings);
         assert_eq!(summary.critical, 1);
@@ -480,6 +501,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "H-001".to_string(),
@@ -499,6 +521,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "M-001".to_string(),
@@ -518,6 +541,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -537,6 +561,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -568,6 +593,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -587,6 +613,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: None,
                 client: None,
+                context: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -774,6 +801,7 @@ mod tests {
             cwe_ids: vec![],
             rule_severity,
             client: None,
+            context: None,
         }
     }
 

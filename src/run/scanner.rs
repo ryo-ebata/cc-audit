@@ -453,4 +453,209 @@ mod tests {
         let findings = run_deep_scan(temp_dir.path());
         assert!(findings.is_empty());
     }
+
+    #[test]
+    fn test_run_scan_with_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let config = Config::default();
+        let result = run_scan_with_config(&cli, config);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_hook() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("hooks.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+            "hooks": []
+        }}"#
+        )
+        .unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Hook, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_mcp() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("mcp.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+            "mcpServers": {{}}
+        }}"#
+        )
+        .unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Mcp, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_command() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("commands.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, "# Commands\nRun this command").unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Command, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_docker() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("Dockerfile");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, "FROM ubuntu:latest").unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Docker, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_dependency() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+            "dependencies": {{}}
+        }}"#
+        )
+        .unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result =
+            run_scanner_for_type(&ScanType::Dependency, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_subagent() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("subagent.yaml");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, "name: test").unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Subagent, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_plugin() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("plugin.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+            "name": "test-plugin"
+        }}"#
+        )
+        .unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Plugin, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_rules() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("rules.yaml");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, "rules: []").unwrap();
+
+        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let result = run_scanner_for_type(&ScanType::Rules, &file_path, &ignore_fn, false, &[]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_load_malware_database_disabled() {
+        let cli = Cli {
+            no_malware_scan: true,
+            ..Default::default()
+        };
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let db = load_malware_database(&effective, &config);
+        assert!(db.is_none());
+    }
+
+    #[test]
+    fn test_load_malware_database_default() {
+        let cli = Cli::default();
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let db = load_malware_database(&effective, &config);
+        assert!(db.is_some());
+    }
+
+    #[test]
+    fn test_load_cve_database_disabled() {
+        let cli = Cli {
+            no_cve_scan: true,
+            ..Default::default()
+        };
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let db = load_cve_database(&effective);
+        assert!(db.is_none());
+    }
+
+    #[test]
+    fn test_load_cve_database_default() {
+        let cli = Cli::default();
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let db = load_cve_database(&effective);
+        assert!(db.is_some());
+    }
+
+    #[test]
+    fn test_filter_and_process_findings_empty() {
+        let cli = Cli::default();
+        let config = Config::default();
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        let filtered = filter_and_process_findings(vec![], &cli, &config, &effective);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_run_deep_scan_nonexistent_path() {
+        let findings = run_deep_scan(Path::new("/nonexistent/path"));
+        assert!(findings.is_empty());
+    }
 }

@@ -1,6 +1,13 @@
-//! Configuration module for cc-audit.
+//! Configuration layer (L2) for cc-audit.
 //!
-//! This module provides configuration loading and management for the auditor.
+//! This module provides configuration loading, merging, and management for the auditor.
+//!
+//! ## Layers
+//! - `types`: Configuration type definitions
+//! - `loading`: File loading logic
+//! - `severity`: Severity configuration
+//! - `effective`: CLI + config + profile merging (from run/config.rs)
+//! - `profile`: Profile management (from profile.rs)
 
 mod error;
 mod loading;
@@ -12,6 +19,13 @@ mod types;
 pub use error::ConfigError;
 pub use severity::SeverityConfig;
 pub use types::{BaselineConfig, Config, IgnoreConfig, ScanConfig, TextFilesConfig, WatchConfig};
+
+// Re-export from other modules (will be moved here in Phase 10)
+pub use crate::profile::{Profile, profile_from_cli};
+pub use crate::run::config::{
+    EffectiveConfig, load_custom_rules_from_effective, parse_badge_format, parse_client_type,
+    parse_confidence, parse_output_format, parse_scan_type,
+};
 
 #[cfg(test)]
 mod tests {

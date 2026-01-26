@@ -101,7 +101,7 @@ impl std::str::FromStr for ScanType {
 )]
 pub struct Cli {
     /// Paths to scan (files or directories)
-    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "init", "all_clients", "client"])]
+    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "init", "all_clients", "client", "hook_mode", "mcp_server"])]
     pub paths: Vec<PathBuf>,
 
     /// Scan all installed AI coding clients (Claude, Cursor, Windsurf, VS Code)
@@ -280,6 +280,30 @@ pub struct Cli {
     #[arg(long)]
     pub mcp_server: bool,
 
+    /// Run as Claude Code Hook (reads from stdin, writes to stdout)
+    #[arg(long)]
+    pub hook_mode: bool,
+
+    /// Pin MCP tool configurations for rug-pull detection
+    #[arg(long)]
+    pub pin: bool,
+
+    /// Verify MCP tool pins against current configuration
+    #[arg(long)]
+    pub pin_verify: bool,
+
+    /// Update MCP tool pins with current configuration
+    #[arg(long)]
+    pub pin_update: bool,
+
+    /// Force overwrite existing pins
+    #[arg(long)]
+    pub pin_force: bool,
+
+    /// Skip pin verification during scan
+    #[arg(long)]
+    pub ignore_pin: bool,
+
     /// Enable deep scan with deobfuscation
     #[arg(long)]
     pub deep_scan: bool,
@@ -341,6 +365,12 @@ impl Default for Cli {
             fix: false,
             fix_dry_run: false,
             mcp_server: false,
+            hook_mode: false,
+            pin: false,
+            pin_verify: false,
+            pin_update: false,
+            pin_force: false,
+            ignore_pin: false,
             deep_scan: false,
             profile: None,
             save_profile: None,

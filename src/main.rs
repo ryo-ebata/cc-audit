@@ -1,9 +1,10 @@
 use cc_audit::{
     Cli,
     handlers::{
-        handle_baseline, handle_check_drift, handle_compare, handle_fix, handle_init_config,
-        handle_init_hook, handle_mcp_server, handle_remove_hook, handle_save_baseline,
-        handle_save_profile, handle_show_profile, run_normal_mode, run_watch_mode,
+        handle_baseline, handle_check_drift, handle_compare, handle_fix, handle_hook_mode,
+        handle_init_config, handle_init_hook, handle_mcp_server, handle_pin, handle_pin_verify,
+        handle_remove_hook, handle_save_baseline, handle_save_profile, handle_show_profile,
+        run_normal_mode, run_watch_mode,
     },
 };
 use clap::Parser;
@@ -70,6 +71,21 @@ fn main() -> ExitCode {
     // Handle --mcp-server
     if cli.mcp_server {
         return handle_mcp_server();
+    }
+
+    // Handle --hook-mode (Claude Code Hook integration)
+    if cli.hook_mode {
+        return handle_hook_mode();
+    }
+
+    // Handle --pin (create MCP tool pins)
+    if cli.pin || cli.pin_update {
+        return handle_pin(&cli);
+    }
+
+    // Handle --pin-verify (verify MCP tool pins)
+    if cli.pin_verify {
+        return handle_pin_verify(&cli);
     }
 
     // Handle --save-profile

@@ -325,6 +325,7 @@ impl Reporter for MarkdownReporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::context::ContentContext;
     use crate::rules::{Category, Finding, Location, Summary};
 
     fn create_test_result() -> ScanResult {
@@ -350,6 +351,7 @@ mod tests {
                 cwe_ids: vec![],
                 rule_severity: Some(RuleSeverity::Error),
                 client: None,
+                context: None,
             }],
             summary: Summary {
                 critical: 0,
@@ -408,5 +410,163 @@ mod tests {
         let output = reporter.report(&result);
 
         assert!(output.contains("No security issues found"));
+    }
+
+    #[test]
+    fn test_with_risk_score() {
+        let reporter = MarkdownReporter::new();
+        let result = ScanResult {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            scanned_at: "2024-01-01T00:00:00Z".to_string(),
+            target: "test".to_string(),
+            findings: vec![Finding {
+                id: "TEST-001".to_string(),
+                name: "Test Rule".to_string(),
+                severity: Severity::Critical,
+                category: Category::Exfiltration,
+                confidence: Confidence::Certain,
+                location: Location {
+                    file: "test.yaml".to_string(),
+                    line: 10,
+                    column: Some(5),
+                },
+                code: "test pattern".to_string(),
+                message: "Test finding description".to_string(),
+                recommendation: "Fix this issue".to_string(),
+                fix_hint: Some("Run: fix command".to_string()),
+                cwe_ids: vec!["CWE-200".to_string()],
+                rule_severity: Some(RuleSeverity::Error),
+                client: Some("Claude".to_string()),
+                context: Some(ContentContext::Comment),
+            }],
+            summary: Summary {
+                critical: 1,
+                high: 0,
+                medium: 0,
+                low: 0,
+                passed: false,
+                errors: 1,
+                warnings: 0,
+            },
+            risk_score: None,
+        };
+        // Calculate risk score from the findings
+        let mut result = result;
+        result.risk_score = Some(crate::scoring::RiskScore::from_findings(&result.findings));
+        let output = reporter.report(&result);
+
+        assert!(output.contains("Risk Score"));
+        assert!(output.contains("Critical"));
+    }
+
+    #[test]
+    fn test_all_severities() {
+        let reporter = MarkdownReporter::new();
+        let result = ScanResult {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            scanned_at: "2024-01-01T00:00:00Z".to_string(),
+            target: "test".to_string(),
+            findings: vec![
+                Finding {
+                    id: "CRIT-001".to_string(),
+                    name: "Critical Rule".to_string(),
+                    severity: Severity::Critical,
+                    category: Category::Exfiltration,
+                    confidence: Confidence::Certain,
+                    location: Location {
+                        file: "critical.yaml".to_string(),
+                        line: 1,
+                        column: None,
+                    },
+                    code: "critical".to_string(),
+                    message: "Critical issue".to_string(),
+                    recommendation: "Fix immediately".to_string(),
+                    fix_hint: None,
+                    cwe_ids: vec![],
+                    rule_severity: Some(RuleSeverity::Error),
+                    client: None,
+                    context: None,
+                },
+                Finding {
+                    id: "MED-001".to_string(),
+                    name: "Medium Rule".to_string(),
+                    severity: Severity::Medium,
+                    category: Category::Overpermission,
+                    confidence: Confidence::Firm,
+                    location: Location {
+                        file: "medium.yaml".to_string(),
+                        line: 5,
+                        column: Some(3),
+                    },
+                    code: "medium".to_string(),
+                    message: "Medium issue".to_string(),
+                    recommendation: "Consider fixing".to_string(),
+                    fix_hint: None,
+                    cwe_ids: vec![],
+                    rule_severity: Some(RuleSeverity::Warn),
+                    client: None,
+                    context: None,
+                },
+                Finding {
+                    id: "LOW-001".to_string(),
+                    name: "Low Rule".to_string(),
+                    severity: Severity::Low,
+                    category: Category::Persistence,
+                    confidence: Confidence::Tentative,
+                    location: Location {
+                        file: "low.yaml".to_string(),
+                        line: 10,
+                        column: None,
+                    },
+                    code: "low".to_string(),
+                    message: "Low issue".to_string(),
+                    recommendation: "May fix".to_string(),
+                    fix_hint: None,
+                    cwe_ids: vec![],
+                    rule_severity: None,
+                    client: None,
+                    context: None,
+                },
+            ],
+            summary: Summary {
+                critical: 1,
+                high: 0,
+                medium: 1,
+                low: 1,
+                passed: false,
+                errors: 1,
+                warnings: 1,
+            },
+            risk_score: None,
+        };
+        let output = reporter.report(&result);
+
+        assert!(output.contains("CRIT-001"));
+        assert!(output.contains("MED-001"));
+        assert!(output.contains("LOW-001"));
+    }
+
+    #[test]
+    fn test_badge_format() {
+        let reporter = MarkdownReporter::new().with_badge();
+        let mut result = create_test_result();
+        result.summary.passed = true;
+        result.summary.critical = 0;
+        result.summary.high = 0;
+        result.summary.medium = 0;
+        result.summary.low = 0;
+        result.findings.clear();
+        let output = reporter.report(&result);
+
+        // When no findings, badge shows "verified-brightgreen"
+        assert!(output.contains("verified-brightgreen"));
+    }
+
+    #[test]
+    fn test_reporter_default() {
+        let reporter = MarkdownReporter::default();
+        let result = create_test_result();
+        let output = reporter.report(&result);
+        assert!(output.contains("# Security Audit Report"));
     }
 }

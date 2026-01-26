@@ -8,7 +8,7 @@
 //! - Watch mode support
 
 mod client;
-mod config;
+pub mod config;
 mod cve;
 mod formatter;
 mod malware;

@@ -418,4 +418,118 @@ mod tests {
         let result = CompiledPattern::new(r"[invalid");
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_auth_token_is_empty() {
+        let empty = AuthToken::new("");
+        assert!(empty.is_empty());
+
+        let non_empty = AuthToken::new("token");
+        assert!(!non_empty.is_empty());
+    }
+
+    #[test]
+    fn test_auth_token_into_inner() {
+        let token = AuthToken::new("secret");
+        assert_eq!(token.into_inner(), "secret".to_string());
+    }
+
+    #[test]
+    fn test_auth_token_from_string() {
+        let token: AuthToken = String::from("token123").into();
+        assert_eq!(token.as_str(), "token123");
+
+        let token2: AuthToken = "token456".into();
+        assert_eq!(token2.as_str(), "token456");
+    }
+
+    #[test]
+    fn test_file_hash_into_inner() {
+        let hash = FileHash::new("abc123");
+        assert_eq!(hash.into_inner(), "abc123".to_string());
+    }
+
+    #[test]
+    fn test_file_hash_display() {
+        let hash = FileHash::new("sha256:abc123");
+        assert_eq!(format!("{}", hash), "sha256:abc123");
+    }
+
+    #[test]
+    fn test_file_hash_as_ref() {
+        let hash = FileHash::new("abc123");
+        let s: &str = hash.as_ref();
+        assert_eq!(s, "abc123");
+    }
+
+    #[test]
+    fn test_server_name_from_implementations() {
+        let name1: ServerName = "server1".into();
+        assert_eq!(name1.as_str(), "server1");
+
+        let name2: ServerName = String::from("server2").into();
+        assert_eq!(name2.as_str(), "server2");
+    }
+
+    #[test]
+    fn test_command_args_as_slice() {
+        let args = CommandArgs::new(["a", "b", "c"]);
+        assert_eq!(
+            args.as_slice(),
+            &["a".to_string(), "b".to_string(), "c".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_command_args_from_vec() {
+        let vec = vec!["x".to_string(), "y".to_string()];
+        let args: CommandArgs = vec.into();
+        assert_eq!(args.len(), 2);
+    }
+
+    #[test]
+    fn test_command_args_from_slice() {
+        let slice: &[&str] = &["p", "q", "r"];
+        let args: CommandArgs = slice.into();
+        assert_eq!(args.len(), 3);
+    }
+
+    #[test]
+    fn test_compiled_pattern_regex() {
+        let pattern = CompiledPattern::new(r"\d+").unwrap();
+        let regex = pattern.regex();
+        assert!(regex.is_match("123"));
+    }
+
+    #[test]
+    fn test_git_ref_as_ref() {
+        let git_ref = GitRef::new("main");
+        let s: &str = git_ref.as_ref();
+        assert_eq!(s, "main");
+    }
+
+    #[test]
+    fn test_git_ref_from_string() {
+        let git_ref: GitRef = String::from("develop").into();
+        assert_eq!(git_ref.as_str(), "develop");
+    }
+
+    #[test]
+    fn test_rule_id_as_ref() {
+        let rule_id = RuleId::new("PE-001");
+        let s: &str = rule_id.as_ref();
+        assert_eq!(s, "PE-001");
+    }
+
+    #[test]
+    fn test_rule_id_from_string() {
+        let rule_id: RuleId = String::from("EX-001").into();
+        assert_eq!(rule_id.as_str(), "EX-001");
+    }
+
+    #[test]
+    fn test_file_hash_from_owned_string() {
+        let hash: FileHash = String::from("hash123").into();
+        assert_eq!(hash.as_str(), "hash123");
+    }
 }

@@ -191,4 +191,107 @@ mod tests {
         let path_buf: PathBuf = target.into();
         assert_eq!(path_buf, dir.path());
     }
+
+    #[test]
+    fn test_scan_target_to_path_buf() {
+        let dir = tempdir().unwrap();
+        let target = ScanTarget::new(dir.path()).unwrap();
+        let path_buf = target.to_path_buf();
+        assert_eq!(path_buf, dir.path());
+    }
+
+    #[test]
+    fn test_scan_target_into_path_buf_method() {
+        let dir = tempdir().unwrap();
+        let target = ScanTarget::new(dir.path()).unwrap();
+        let path_buf = target.into_path_buf();
+        assert_eq!(path_buf, dir.path());
+    }
+
+    #[test]
+    fn test_scan_target_file_name() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        let target = ScanTarget::file(&file_path).unwrap();
+        assert_eq!(target.file_name().unwrap(), "test.txt");
+    }
+
+    #[test]
+    fn test_scan_target_parent() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("test.txt");
+        fs::write(&file_path, "test").unwrap();
+
+        let target = ScanTarget::file(&file_path).unwrap();
+        assert_eq!(target.parent().unwrap(), dir.path());
+    }
+
+    #[test]
+    fn test_scan_target_as_ref() {
+        let dir = tempdir().unwrap();
+        let target = ScanTarget::new(dir.path()).unwrap();
+        let path: &Path = target.as_ref();
+        assert_eq!(path, dir.path());
+    }
+
+    #[test]
+    fn test_scan_target_debug() {
+        let dir = tempdir().unwrap();
+        let target = ScanTarget::new(dir.path()).unwrap();
+        let debug_str = format!("{:?}", target);
+        assert!(debug_str.contains("ScanTarget"));
+    }
+
+    #[test]
+    fn test_scan_target_clone() {
+        let dir = tempdir().unwrap();
+        let target = ScanTarget::new(dir.path()).unwrap();
+        let cloned = target.clone();
+        assert_eq!(target.path(), cloned.path());
+    }
+
+    #[test]
+    fn test_path_validation_error_display() {
+        let err = PathValidationError::NotFound(PathBuf::from("/test"));
+        assert!(err.to_string().contains("/test"));
+
+        let err = PathValidationError::NotAFile(PathBuf::from("/test"));
+        assert!(err.to_string().contains("/test"));
+
+        let err = PathValidationError::NotADirectory(PathBuf::from("/test"));
+        assert!(err.to_string().contains("/test"));
+
+        let err = PathValidationError::NotReadable(PathBuf::from("/test"));
+        assert!(err.to_string().contains("/test"));
+    }
+
+    #[test]
+    fn test_path_validation_error_debug() {
+        let err = PathValidationError::NotFound(PathBuf::from("/test"));
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("NotFound"));
+    }
+
+    #[test]
+    fn test_path_validation_error_clone() {
+        let err = PathValidationError::NotFound(PathBuf::from("/test"));
+        let cloned = err.clone();
+        assert!(matches!(cloned, PathValidationError::NotFound(_)));
+    }
+
+    #[test]
+    fn test_scan_target_file_not_found() {
+        let result = ScanTarget::file("/nonexistent/file.txt");
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PathValidationError::NotFound(_))));
+    }
+
+    #[test]
+    fn test_scan_target_directory_not_found() {
+        let result = ScanTarget::directory("/nonexistent/dir");
+        assert!(result.is_err());
+        assert!(matches!(result, Err(PathValidationError::NotFound(_))));
+    }
 }

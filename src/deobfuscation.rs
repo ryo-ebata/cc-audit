@@ -305,6 +305,7 @@ impl Deobfuscator {
                     cwe_ids: vec!["CWE-116".to_string()],
                     rule_severity: None,
                     client: None,
+                    context: None,
                 });
             }
         }

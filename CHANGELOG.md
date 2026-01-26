@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0](https://github.com/ryo-ebata/cc-audit/compare/v3.0.0...v3.1.0) (2026-01-26)
+
+
+### Features
+
+* release v3.1.0 ([#33](https://github.com/ryo-ebata/cc-audit/issues/33)) ([a5cfdee](https://github.com/ryo-ebata/cc-audit/commit/a5cfdeefcc41bbbbab56e7c8de231d724844e126))
+
 ## [3.0.0](https://github.com/ryo-ebata/cc-audit/compare/v2.0.0...v3.0.0) (2026-01-26)
 
 

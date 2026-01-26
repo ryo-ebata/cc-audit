@@ -2,10 +2,68 @@
 
 use crate::{Cli, WatchModeResult, format_result, run_scan, setup_watch_mode, watch_iteration};
 use std::fs;
+use std::path::Path;
 use std::process::ExitCode;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use super::filter_against_baseline;
+
+/// Validate that a path is safe to write to.
+/// Prevents symlink attacks and path traversal issues.
+fn validate_output_path(path: &Path) -> Result<(), String> {
+    // Check for path traversal attempts
+    let path_str = path.to_string_lossy();
+    if path_str.contains("..") {
+        return Err("Path contains parent directory reference (..)".to_string());
+    }
+
+    // If path exists, check it's not a symlink
+    if path.exists() {
+        let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+        if metadata.file_type().is_symlink() {
+            return Err("Output path is a symbolic link".to_string());
+        }
+    }
+
+    // Check parent directory exists and is writable
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(format!(
+                "Parent directory does not exist: {}",
+                parent.display()
+            ));
+        }
+
+        // Check parent is not a symlink
+        if parent.exists() {
+            let metadata = std::fs::symlink_metadata(parent).map_err(|e| e.to_string())?;
+            if metadata.file_type().is_symlink() {
+                return Err("Parent directory is a symbolic link".to_string());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that a path is safe to read from.
+fn validate_input_path(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("Path does not exist: {}", path.display()));
+    }
+
+    // Check for symlinks to prevent symlink attacks
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() {
+        warn!(
+            path = %path.display(),
+            "Input path is a symbolic link, following symlink"
+        );
+        // We allow symlinks for reading but log a warning
+    }
+
+    Ok(())
+}
 
 /// Handle --watch command.
 pub fn run_watch_mode(cli: &Cli) -> ExitCode {
@@ -54,6 +112,23 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
 #[allow(clippy::comparison_to_empty)]
 pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     info!(paths = ?cli.paths, "Starting scan");
+
+    // Validate output path before scanning
+    if let Some(ref output_path) = cli.output
+        && let Err(e) = validate_output_path(output_path)
+    {
+        eprintln!("Invalid output path: {}", e);
+        return ExitCode::from(2);
+    }
+
+    // Validate baseline path if specified
+    if let Some(ref baseline_path) = cli.baseline_file
+        && let Err(e) = validate_input_path(baseline_path)
+    {
+        eprintln!("Invalid baseline path: {}", e);
+        return ExitCode::from(2);
+    }
+
     match run_scan(cli) {
         Some(mut result) => {
             // Filter against baseline if --baseline-file is specified
@@ -245,5 +320,65 @@ mod tests {
         let exit_code = run_normal_mode(&cli);
         // Should fail with exit code 2
         assert_eq!(exit_code, ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_validate_output_path_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_path = temp_dir.path().join("output.json");
+
+        assert!(validate_output_path(&output_path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_traversal() {
+        let path = PathBuf::from("/tmp/../etc/passwd");
+        let result = validate_output_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("parent directory reference"));
+    }
+
+    #[test]
+    fn test_validate_output_path_nonexistent_parent() {
+        let path = PathBuf::from("/nonexistent_dir_12345/output.json");
+        let result = validate_output_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_validate_output_path_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().unwrap();
+        let target = temp_dir.path().join("target.json");
+        let link = temp_dir.path().join("link.json");
+
+        // Create target file
+        fs::write(&target, "test").unwrap();
+        // Create symlink
+        symlink(&target, &link).unwrap();
+
+        let result = validate_output_path(&link);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("symbolic link"));
+    }
+
+    #[test]
+    fn test_validate_input_path_valid() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.json");
+        fs::write(&file_path, "[]").unwrap();
+
+        assert!(validate_input_path(&file_path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_input_path_nonexistent() {
+        let path = PathBuf::from("/nonexistent_file_12345.json");
+        let result = validate_input_path(&path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
     }
 }

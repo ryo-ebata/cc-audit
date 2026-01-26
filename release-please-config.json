@@ -1,10 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-  "last-release-sha": "07e4bf9a7b5944ea47965220a839bb4327df7954",
+  "last-release-sha": "88da83e9b0bb51e343fed33e2559a3dc0e114ec3",
   "packages": {
     ".": {
       "release-type": "rust",
-      "release-as": "1.2.0",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",

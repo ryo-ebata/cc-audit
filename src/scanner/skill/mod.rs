@@ -7,34 +7,20 @@ pub use frontmatter::FrontmatterParser;
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
-use crate::scanner::{Scanner, ScannerConfig};
+use crate::scanner::{DirectoryWalker, Scanner, ScannerConfig, WalkConfig};
 use std::collections::HashSet;
 use std::path::Path;
-use walkdir::WalkDir;
+use tracing::debug;
 
 pub struct SkillScanner {
     config: ScannerConfig,
 }
 
-impl SkillScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
+impl_scanner_builder!(SkillScanner);
 
+impl SkillScanner {
     pub fn with_ignore_filter(mut self, filter: IgnoreFilter) -> Self {
         self.config = self.config.with_ignore_filter(filter);
-        self
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<crate::rules::DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
         self
     }
 
@@ -75,6 +61,7 @@ impl Scanner for SkillScanner {
         // Check for SKILL.md
         let skill_md = dir.join("SKILL.md");
         if skill_md.exists() {
+            debug!(path = %skill_md.display(), "Scanning SKILL.md");
             findings.extend(self.scan_skill_md(&skill_md)?);
             scanned_files.insert(skill_md.canonicalize().unwrap_or(skill_md));
         }
@@ -82,6 +69,7 @@ impl Scanner for SkillScanner {
         // Check for CLAUDE.md (project instructions file)
         let claude_md = dir.join("CLAUDE.md");
         if claude_md.exists() {
+            debug!(path = %claude_md.display(), "Scanning CLAUDE.md");
             findings.extend(self.scan_skill_md(&claude_md)?);
             let canonical = claude_md.canonicalize().unwrap_or(claude_md);
             scanned_files.insert(canonical);
@@ -90,23 +78,22 @@ impl Scanner for SkillScanner {
         // Check for .claude/CLAUDE.md
         let dot_claude_md = dir.join(".claude").join("CLAUDE.md");
         if dot_claude_md.exists() {
+            debug!(path = %dot_claude_md.display(), "Scanning .claude/CLAUDE.md");
             findings.extend(self.scan_skill_md(&dot_claude_md)?);
             let canonical = dot_claude_md.canonicalize().unwrap_or(dot_claude_md);
             scanned_files.insert(canonical);
         }
 
-        // Scan scripts directory
+        // Scan scripts directory using DirectoryWalker
         let scripts_dir = dir.join("scripts");
         if scripts_dir.exists() && scripts_dir.is_dir() {
-            for entry in WalkDir::new(&scripts_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let path = entry.path();
-                if path.is_file() && !self.config.is_ignored(path) {
-                    let canonical = path.canonicalize().unwrap_or(path.to_path_buf());
+            let walker = DirectoryWalker::new(WalkConfig::default());
+            for path in walker.walk_single(&scripts_dir) {
+                if !self.config.is_ignored(&path) {
+                    let canonical = path.canonicalize().unwrap_or(path.clone());
                     if !scanned_files.contains(&canonical) {
-                        if let Ok(file_findings) = self.scan_file(path) {
+                        debug!(path = %path.display(), "Scanning script file");
+                        if let Ok(file_findings) = self.scan_file(&path) {
                             findings.extend(file_findings);
                         }
                         scanned_files.insert(canonical);
@@ -116,16 +103,13 @@ impl Scanner for SkillScanner {
         }
 
         // Scan any other files that might contain code (excluding already scanned)
-        for entry in WalkDir::new(dir)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            let path = entry.path();
-            if path.is_file() && self.should_scan_file(path) && !self.config.is_ignored(path) {
-                let canonical = path.canonicalize().unwrap_or(path.to_path_buf());
+        let walker = DirectoryWalker::new(WalkConfig::default().with_max_depth(3));
+        for path in walker.walk_single(dir) {
+            if self.should_scan_file(&path) && !self.config.is_ignored(&path) {
+                let canonical = path.canonicalize().unwrap_or(path.clone());
                 if !scanned_files.contains(&canonical) {
-                    if let Ok(file_findings) = self.scan_file(path) {
+                    debug!(path = %path.display(), "Scanning additional file");
+                    if let Ok(file_findings) = self.scan_file(&path) {
                         findings.extend(file_findings);
                     }
                     scanned_files.insert(canonical);
@@ -134,12 +118,6 @@ impl Scanner for SkillScanner {
         }
 
         Ok(findings)
-    }
-}
-
-impl Default for SkillScanner {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

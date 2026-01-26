@@ -89,6 +89,13 @@ cc-audit --type dependency ./
 # Watch mode for development
 cc-audit --watch ./my-skill/
 
+# Scan all installed AI coding clients
+cc-audit --all-clients
+
+# Scan a specific client
+cc-audit --client cursor
+cc-audit --client claude
+
 # Generate config file
 cc-audit --init ./
 ```
@@ -129,6 +136,8 @@ Result: FAIL (exit code 1)
 
 - **50+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
 - **Multiple Scan Types** — Skills, hooks, MCP servers, commands, Docker, dependencies, subagents, plugins
+- **Multi-Client Support** — Auto-detect and scan Claude, Cursor, Windsurf, VS Code configurations
+- **CVE Vulnerability Scanning** — Built-in database of known vulnerabilities in AI coding tools
 - **Risk Scoring** — 0-100 score with category breakdown
 - **Baseline/Drift Detection** — Prevent rug pull attacks
 - **Auto-Fix** — Automatically fix certain issues

@@ -172,6 +172,7 @@ mod tests {
             fix_hint: None,
             cwe_ids: vec![],
             rule_severity: None,
+            client: None,
         }
     }
 

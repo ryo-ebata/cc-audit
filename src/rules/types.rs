@@ -1,6 +1,30 @@
 use crate::scoring::RiskScore;
 use serde::{Deserialize, Serialize};
 
+/// Error type for parsing enum values from strings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseEnumError {
+    type_name: &'static str,
+    value: String,
+}
+
+impl ParseEnumError {
+    pub fn invalid(type_name: &'static str, value: &str) -> Self {
+        Self {
+            type_name,
+            value: value.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for ParseEnumError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid {} value: '{}'", self.type_name, self.value)
+    }
+}
+
+impl std::error::Error for ParseEnumError {}
+
 /// Rule severity level - determines how findings affect CI exit code.
 /// This is separate from detection Severity (Critical/High/Medium/Low).
 #[derive(
@@ -37,6 +61,18 @@ impl RuleSeverity {
 impl std::fmt::Display for RuleSeverity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str().to_uppercase())
+    }
+}
+
+impl std::str::FromStr for RuleSeverity {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "warn" | "warning" => Ok(RuleSeverity::Warn),
+            "error" | "err" => Ok(RuleSeverity::Error),
+            _ => Err(ParseEnumError::invalid("RuleSeverity", s)),
+        }
     }
 }
 
@@ -92,6 +128,19 @@ impl std::fmt::Display for Confidence {
     }
 }
 
+impl std::str::FromStr for Confidence {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "tentative" => Ok(Confidence::Tentative),
+            "firm" => Ok(Confidence::Firm),
+            "certain" => Ok(Confidence::Certain),
+            _ => Err(ParseEnumError::invalid("Confidence", s)),
+        }
+    }
+}
+
 impl Severity {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -106,6 +155,20 @@ impl Severity {
 impl std::fmt::Display for Severity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str().to_uppercase())
+    }
+}
+
+impl std::str::FromStr for Severity {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(Severity::Low),
+            "medium" | "med" => Ok(Severity::Medium),
+            "high" => Ok(Severity::High),
+            "critical" | "crit" => Ok(Severity::Critical),
+            _ => Err(ParseEnumError::invalid("Severity", s)),
+        }
     }
 }
 
@@ -133,6 +196,24 @@ impl Category {
             Category::Obfuscation => "obfuscation",
             Category::SupplyChain => "supply_chain",
             Category::SecretLeak => "secret_leak",
+        }
+    }
+}
+
+impl std::str::FromStr for Category {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().replace(['_', '-'], "").as_str() {
+            "exfiltration" | "exfil" => Ok(Category::Exfiltration),
+            "privilegeescalation" | "privesc" => Ok(Category::PrivilegeEscalation),
+            "persistence" => Ok(Category::Persistence),
+            "promptinjection" => Ok(Category::PromptInjection),
+            "overpermission" => Ok(Category::Overpermission),
+            "obfuscation" => Ok(Category::Obfuscation),
+            "supplychain" => Ok(Category::SupplyChain),
+            "secretleak" => Ok(Category::SecretLeak),
+            _ => Err(ParseEnumError::invalid("Category", s)),
         }
     }
 }
@@ -183,6 +264,10 @@ pub struct Finding {
     /// This is assigned based on configuration, not the rule definition.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rule_severity: Option<RuleSeverity>,
+    /// AI client that owns this configuration (Claude, Cursor, Windsurf, VS Code).
+    /// Set when scanning with --all-clients or --client options.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
 }
 
 impl Finding {
@@ -200,7 +285,14 @@ impl Finding {
             fix_hint: rule.fix_hint.map(|s| s.to_string()),
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
             rule_severity: None, // Assigned later based on config
+            client: None,        // Assigned later for client scans
         }
+    }
+
+    /// Set the client for this finding
+    pub fn with_client(mut self, client: Option<String>) -> Self {
+        self.client = client;
+        self
     }
 }
 
@@ -360,6 +452,7 @@ mod tests {
             fix_hint: None,
             cwe_ids: vec![],
             rule_severity: None,
+            client: None,
         }];
         let summary = Summary::from_findings(&findings);
         assert_eq!(summary.critical, 1);
@@ -386,6 +479,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
             Finding {
                 id: "H-001".to_string(),
@@ -404,6 +498,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
             Finding {
                 id: "M-001".to_string(),
@@ -422,6 +517,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -440,6 +536,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -470,6 +567,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
             Finding {
                 id: "L-001".to_string(),
@@ -488,6 +586,7 @@ mod tests {
                 fix_hint: None,
                 cwe_ids: vec![],
                 rule_severity: None,
+                client: None,
             },
         ];
         let summary = Summary::from_findings(&findings);
@@ -674,6 +773,7 @@ mod tests {
             fix_hint: None,
             cwe_ids: vec![],
             rule_severity,
+            client: None,
         }
     }
 

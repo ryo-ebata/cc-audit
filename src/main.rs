@@ -8,9 +8,25 @@ use cc_audit::{
 };
 use clap::Parser;
 use std::process::ExitCode;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+fn init_tracing(verbose: bool) {
+    let filter = if verbose {
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("cc_audit=debug"))
+    } else {
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("cc_audit=warn"))
+    };
+
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_target(true).with_level(true))
+        .with(filter)
+        .init();
+}
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+
+    init_tracing(cli.verbose);
 
     // Handle config initialization
     if cli.init {

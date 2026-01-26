@@ -1,17 +1,63 @@
-use crate::rules::{Confidence, RuleSeverity, Severity};
+use crate::client::ClientType;
+use crate::rules::{Confidence, ParseEnumError, RuleSeverity, Severity};
 use clap::{Parser, ValueEnum};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
     Terminal,
     Json,
     Sarif,
     Html,
+    Markdown,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq)]
+impl std::str::FromStr for OutputFormat {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "terminal" | "term" => Ok(OutputFormat::Terminal),
+            "json" => Ok(OutputFormat::Json),
+            "sarif" => Ok(OutputFormat::Sarif),
+            "html" => Ok(OutputFormat::Html),
+            "markdown" | "md" => Ok(OutputFormat::Markdown),
+            _ => Err(ParseEnumError::invalid("OutputFormat", s)),
+        }
+    }
+}
+
+/// Badge output format for security badges
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BadgeFormat {
+    /// shields.io URL only
+    Url,
+    /// Markdown badge with link
+    #[default]
+    Markdown,
+    /// HTML image tag
+    Html,
+}
+
+impl std::str::FromStr for BadgeFormat {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "url" => Ok(BadgeFormat::Url),
+            "markdown" | "md" => Ok(BadgeFormat::Markdown),
+            "html" => Ok(BadgeFormat::Html),
+            _ => Err(ParseEnumError::invalid("BadgeFormat", s)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ScanType {
     #[default]
     Skill,
@@ -27,6 +73,25 @@ pub enum ScanType {
     Plugin,
 }
 
+impl std::str::FromStr for ScanType {
+    type Err = ParseEnumError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "skill" => Ok(ScanType::Skill),
+            "hook" => Ok(ScanType::Hook),
+            "mcp" => Ok(ScanType::Mcp),
+            "command" | "cmd" => Ok(ScanType::Command),
+            "rules" => Ok(ScanType::Rules),
+            "docker" => Ok(ScanType::Docker),
+            "dependency" | "dep" | "deps" => Ok(ScanType::Dependency),
+            "subagent" | "agent" => Ok(ScanType::Subagent),
+            "plugin" => Ok(ScanType::Plugin),
+            _ => Err(ParseEnumError::invalid("ScanType", s)),
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "cc-audit",
@@ -36,8 +101,52 @@ pub enum ScanType {
 )]
 pub struct Cli {
     /// Paths to scan (files or directories)
-    #[arg(required = true)]
+    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "init", "all_clients", "client"])]
     pub paths: Vec<PathBuf>,
+
+    /// Scan all installed AI coding clients (Claude, Cursor, Windsurf, VS Code)
+    #[arg(long, conflicts_with_all = ["remote", "remote_list", "awesome_claude_code", "client"])]
+    pub all_clients: bool,
+
+    /// Scan a specific AI coding client
+    #[arg(long, value_enum, conflicts_with_all = ["remote", "remote_list", "awesome_claude_code", "all_clients"])]
+    pub client: Option<ClientType>,
+
+    /// Remote repository URL to scan (e.g., `https://github.com/user/repo`)
+    #[arg(long, value_name = "URL")]
+    pub remote: Option<String>,
+
+    /// Git ref (branch, tag, or commit) for remote scan
+    #[arg(long, default_value = "HEAD")]
+    pub git_ref: String,
+
+    /// GitHub token for authentication (or use GITHUB_TOKEN env var)
+    #[arg(long, env = "GITHUB_TOKEN", value_name = "TOKEN")]
+    pub remote_auth: Option<String>,
+
+    /// File containing list of repository URLs to scan (one per line)
+    #[arg(long, conflicts_with = "remote", value_name = "FILE")]
+    pub remote_list: Option<PathBuf>,
+
+    /// Scan all repositories from awesome-claude-code
+    #[arg(long, conflicts_with_all = ["remote", "remote_list"])]
+    pub awesome_claude_code: bool,
+
+    /// Maximum number of parallel repository clones
+    #[arg(long, default_value = "4")]
+    pub parallel_clones: usize,
+
+    /// Generate security badge
+    #[arg(long)]
+    pub badge: bool,
+
+    /// Badge output format (url, markdown, html)
+    #[arg(long, value_enum, default_value_t = BadgeFormat::Markdown)]
+    pub badge_format: BadgeFormat,
+
+    /// Show summary only (for batch scans)
+    #[arg(long)]
+    pub summary: bool,
 
     /// Output format
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Terminal)]
@@ -119,6 +228,14 @@ pub struct Cli {
     #[arg(long)]
     pub no_malware_scan: bool,
 
+    /// Path to a custom CVE database (JSON)
+    #[arg(long)]
+    pub cve_db: Option<PathBuf>,
+
+    /// Disable CVE vulnerability scanning
+    #[arg(long)]
+    pub no_cve_scan: bool,
+
     /// Path to a custom rules file (YAML format)
     #[arg(long)]
     pub custom_rules: Option<PathBuf>,
@@ -174,6 +291,61 @@ pub struct Cli {
     /// Save current settings as a named profile
     #[arg(long, value_name = "NAME")]
     pub save_profile: Option<String>,
+}
+
+impl Default for Cli {
+    fn default() -> Self {
+        Self {
+            paths: Vec::new(),
+            all_clients: false,
+            client: None,
+            remote: None,
+            git_ref: "HEAD".to_string(),
+            remote_auth: None,
+            remote_list: None,
+            awesome_claude_code: false,
+            parallel_clones: 4,
+            badge: false,
+            badge_format: BadgeFormat::Markdown,
+            summary: false,
+            format: OutputFormat::Terminal,
+            strict: false,
+            warn_only: false,
+            min_severity: None,
+            min_rule_severity: None,
+            scan_type: ScanType::Skill,
+            recursive: false,
+            ci: false,
+            verbose: false,
+            include_tests: false,
+            include_node_modules: false,
+            include_vendor: false,
+            min_confidence: Confidence::Tentative,
+            skip_comments: false,
+            fix_hint: false,
+            watch: false,
+            init_hook: false,
+            remove_hook: false,
+            malware_db: None,
+            no_malware_scan: false,
+            cve_db: None,
+            no_cve_scan: false,
+            custom_rules: None,
+            baseline: false,
+            check_drift: false,
+            init: false,
+            output: None,
+            save_baseline: None,
+            baseline_file: None,
+            compare: None,
+            fix: false,
+            fix_dry_run: false,
+            mcp_server: false,
+            deep_scan: false,
+            profile: None,
+            save_profile: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -553,5 +725,61 @@ mod tests {
         let cli = Cli::try_parse_from(["cc-audit", "--warn-only", "--strict", "./skill/"]).unwrap();
         assert!(cli.warn_only);
         assert!(cli.strict);
+    }
+
+    #[test]
+    fn test_parse_all_clients() {
+        let cli = Cli::try_parse_from(["cc-audit", "--all-clients"]).unwrap();
+        assert!(cli.all_clients);
+        assert!(cli.paths.is_empty());
+    }
+
+    #[test]
+    fn test_parse_client_claude() {
+        let cli = Cli::try_parse_from(["cc-audit", "--client", "claude"]).unwrap();
+        assert_eq!(cli.client, Some(ClientType::Claude));
+        assert!(cli.paths.is_empty());
+    }
+
+    #[test]
+    fn test_parse_client_cursor() {
+        let cli = Cli::try_parse_from(["cc-audit", "--client", "cursor"]).unwrap();
+        assert_eq!(cli.client, Some(ClientType::Cursor));
+    }
+
+    #[test]
+    fn test_parse_client_windsurf() {
+        let cli = Cli::try_parse_from(["cc-audit", "--client", "windsurf"]).unwrap();
+        assert_eq!(cli.client, Some(ClientType::Windsurf));
+    }
+
+    #[test]
+    fn test_parse_client_vscode() {
+        let cli = Cli::try_parse_from(["cc-audit", "--client", "vscode"]).unwrap();
+        assert_eq!(cli.client, Some(ClientType::Vscode));
+    }
+
+    #[test]
+    fn test_all_clients_conflicts_with_client() {
+        let result = Cli::try_parse_from(["cc-audit", "--all-clients", "--client", "claude"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_all_clients_conflicts_with_remote() {
+        let result = Cli::try_parse_from([
+            "cc-audit",
+            "--all-clients",
+            "--remote",
+            "https://github.com/x/y",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_default_client_none() {
+        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
+        assert!(cli.client.is_none());
+        assert!(!cli.all_clients);
     }
 }

@@ -1,689 +1,23 @@
-use crate::malware_db::MalwareSignature;
-use crate::rules::RuleSeverity;
-use crate::rules::custom::YamlRule;
-use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
-use std::fs;
-use std::path::Path;
-
-/// Main configuration structure for cc-audit
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct Config {
-    /// Scan configuration (CLI options)
-    pub scan: ScanConfig,
-    /// Watch mode configuration
-    pub watch: WatchConfig,
-    /// Text file detection configuration
-    pub text_files: TextFilesConfig,
-    /// Ignore configuration for scanning
-    pub ignore: IgnoreConfig,
-    /// Baseline configuration for drift detection
-    #[serde(default)]
-    pub baseline: BaselineConfig,
-    /// Rule severity configuration (v0.5.0)
-    #[serde(default)]
-    pub severity: SeverityConfig,
-    /// Rule IDs to disable
-    #[serde(default)]
-    pub disabled_rules: HashSet<String>,
-    /// Custom rules defined in config file
-    #[serde(default)]
-    pub rules: Vec<YamlRule>,
-    /// Custom malware signatures defined in config file
-    #[serde(default)]
-    pub malware_signatures: Vec<MalwareSignature>,
-}
-
-/// Rule severity configuration - controls how findings affect CI exit code.
-///
-/// Priority: ignore > warn > default
-///
-/// Example:
-/// ```yaml
-/// severity:
-///   default: error      # All rules are errors by default
-///   warn:
-///     - PI-001          # Treat as warning only
-///     - PI-002
-///   ignore:
-///     - OP-001          # Completely ignore
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct SeverityConfig {
-    /// Default severity for all rules (error by default)
-    pub default: RuleSeverity,
-    /// Rule IDs to treat as warnings (report only, exit 0)
-    #[serde(default)]
-    pub warn: HashSet<String>,
-    /// Rule IDs to ignore completely (no report)
-    /// Note: These are merged with disabled_rules
-    #[serde(default)]
-    pub ignore: HashSet<String>,
-}
-
-impl Default for SeverityConfig {
-    fn default() -> Self {
-        Self {
-            default: RuleSeverity::Error,
-            warn: HashSet::new(),
-            ignore: HashSet::new(),
-        }
-    }
-}
-
-impl SeverityConfig {
-    /// Get the effective RuleSeverity for a rule ID.
-    /// Returns None if the rule should be ignored.
-    pub fn get_rule_severity(&self, rule_id: &str) -> Option<RuleSeverity> {
-        // Priority: ignore > warn > default
-        if self.ignore.contains(rule_id) {
-            return None; // Ignore this rule
-        }
-        if self.warn.contains(rule_id) {
-            return Some(RuleSeverity::Warn);
-        }
-        Some(self.default)
-    }
-}
-
-/// Scan configuration (corresponds to CLI options)
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ScanConfig {
-    /// Output format: "terminal", "json", "sarif", "html"
-    pub format: Option<String>,
-    /// Strict mode: show medium/low severity findings and treat warnings as errors
-    pub strict: bool,
-    /// Scan type: "skill", "hook", "mcp", "command", "rules", "docker", "dependency", "subagent", "plugin"
-    pub scan_type: Option<String>,
-    /// Recursive scan
-    pub recursive: bool,
-    /// CI mode: non-interactive output
-    pub ci: bool,
-    /// Verbose output
-    pub verbose: bool,
-    /// Minimum confidence level: "tentative", "firm", "certain"
-    pub min_confidence: Option<String>,
-    /// Skip comment lines when scanning
-    pub skip_comments: bool,
-    /// Show fix hints in terminal output
-    pub fix_hint: bool,
-    /// Disable malware signature scanning
-    pub no_malware_scan: bool,
-    /// Watch mode: continuously monitor files for changes
-    pub watch: bool,
-    /// Path to a custom malware signatures database (JSON)
-    pub malware_db: Option<String>,
-    /// Path to a custom rules file (YAML format)
-    pub custom_rules: Option<String>,
-    /// Output file path (for HTML/JSON/SARIF output)
-    pub output: Option<String>,
-    /// Enable deep scan with deobfuscation
-    pub deep_scan: bool,
-    /// Auto-fix issues (where possible)
-    pub fix: bool,
-    /// Preview auto-fix changes without applying them
-    pub fix_dry_run: bool,
-}
-
-impl Config {
-    /// Load configuration from a file
-    pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
-        let content = fs::read_to_string(path).map_err(|e| ConfigError::ReadFile {
-            path: path.display().to_string(),
-            source: e,
-        })?;
-
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        match ext.as_str() {
-            "yaml" | "yml" => serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
-                path: path.display().to_string(),
-                source: e,
-            }),
-            "json" => serde_json::from_str(&content).map_err(|e| ConfigError::ParseJson {
-                path: path.display().to_string(),
-                source: e,
-            }),
-            "toml" => toml::from_str(&content).map_err(|e| ConfigError::ParseToml {
-                path: path.display().to_string(),
-                source: e,
-            }),
-            _ => Err(ConfigError::UnsupportedFormat(
-                path.display().to_string(),
-                ext,
-            )),
-        }
-    }
-
-    /// Load configuration from the project directory or global config
-    ///
-    /// Search order:
-    /// 1. `.cc-audit.yaml` in project root
-    /// 2. `.cc-audit.json` in project root
-    /// 3. `.cc-audit.toml` in project root
-    /// 4. `~/.config/cc-audit/config.yaml`
-    /// 5. Default configuration
-    pub fn load(project_root: Option<&Path>) -> Self {
-        // Try project-level config files
-        if let Some(root) = project_root {
-            for filename in &[
-                ".cc-audit.yaml",
-                ".cc-audit.yml",
-                ".cc-audit.json",
-                ".cc-audit.toml",
-            ] {
-                let path = root.join(filename);
-                if path.exists()
-                    && let Ok(config) = Self::from_file(&path)
-                {
-                    return config;
-                }
-            }
-        }
-
-        // Try global config
-        if let Some(config_dir) = dirs::config_dir() {
-            let global_config = config_dir.join("cc-audit").join("config.yaml");
-            if global_config.exists()
-                && let Ok(config) = Self::from_file(&global_config)
-            {
-                return config;
-            }
-        }
-
-        // Return default
-        Self::default()
-    }
-
-    /// Get the effective set of disabled rules (merges severity.ignore and disabled_rules)
-    pub fn effective_disabled_rules(&self) -> HashSet<String> {
-        let mut disabled = self.disabled_rules.clone();
-        disabled.extend(self.severity.ignore.iter().cloned());
-        disabled
-    }
-
-    /// Check if a rule should be ignored based on both disabled_rules and severity.ignore
-    pub fn is_rule_disabled(&self, rule_id: &str) -> bool {
-        self.disabled_rules.contains(rule_id) || self.severity.ignore.contains(rule_id)
-    }
-
-    /// Get the RuleSeverity for a rule, considering both severity config and disabled_rules
-    pub fn get_rule_severity(&self, rule_id: &str) -> Option<crate::rules::RuleSeverity> {
-        if self.is_rule_disabled(rule_id) {
-            return None;
-        }
-        self.severity.get_rule_severity(rule_id)
-    }
-
-    /// Generate a YAML configuration template with comments
-    pub fn generate_template() -> String {
-        r#"# cc-audit Configuration File
-# Place this file as .cc-audit.yaml in your project root
-
-# =============================================================================
-# RULE SEVERITY CONFIGURATION (v0.5.0)
-# =============================================================================
-# Controls how findings affect CI exit code.
-# - error: Causes CI failure (exit 1) - DEFAULT for all rules
-# - warn: Report only, does not cause CI failure (exit 0)
-# - ignore: Completely skip the rule (no report)
-#
-# Priority: ignore > warn > default
-
-severity:
-  # Default severity for all rules
-  default: error
-
-  # Rules to treat as warnings only (report but don't fail CI)
-  # warn:
-  #   - PI-001    # Prompt injection patterns
-  #   - PI-002
-  #   - OB-001    # Obfuscation patterns
-
-  # Rules to completely ignore (no report)
-  # ignore:
-  #   - OP-001    # Overpermission
-
-# =============================================================================
-# SCAN CONFIGURATION
-# =============================================================================
-scan:
-  # Output format: terminal, json, sarif, html
-  # format: terminal
-
-  # Strict mode: show medium/low severity findings and treat warnings as errors
-  strict: false
-
-  # Scan type: skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
-  # scan_type: skill
-
-  # Recursive scan
-  recursive: false
-
-  # CI mode: non-interactive output
-  ci: false
-
-  # Verbose output
-  verbose: false
-
-  # Minimum confidence level: tentative, firm, certain
-  # min_confidence: tentative
-
-  # Skip comment lines when scanning
-  skip_comments: false
-
-  # Show fix hints in terminal output
-  fix_hint: false
-
-  # Disable malware signature scanning
-  no_malware_scan: false
-
-  # Watch mode: continuously monitor files for changes
-  watch: false
-
-  # Path to a custom malware signatures database (JSON)
-  # malware_db: ./custom-malware.json
-
-  # Path to a custom rules file (YAML format)
-  # custom_rules: ./custom-rules.yaml
-
-  # Output file path (for HTML/JSON/SARIF output)
-  # output: ./report.html
-
-  # Enable deep scan with deobfuscation
-  deep_scan: false
-
-  # Auto-fix issues (where possible)
-  fix: false
-
-  # Preview auto-fix changes without applying them
-  fix_dry_run: false
-
-# =============================================================================
-# BASELINE CONFIGURATION (Drift Detection / Rug Pull Prevention)
-# =============================================================================
-baseline:
-  # Create a baseline snapshot when scanning
-  enabled: false
-
-  # Check for drift against saved baseline
-  check_drift: false
-
-  # Path to save baseline to
-  # save_to: ./.cc-audit-baseline.json
-
-  # Path to baseline file to compare against
-  # compare_with: ./.cc-audit-baseline.json
-
-# =============================================================================
-# WATCH MODE CONFIGURATION
-# =============================================================================
-watch:
-  # Debounce duration in milliseconds
-  debounce_ms: 300
-
-  # Poll interval in milliseconds
-  poll_interval_ms: 500
-
-# =============================================================================
-# IGNORE CONFIGURATION
-# =============================================================================
-ignore:
-  # Directories to ignore (overwrites defaults if specified)
-  # directories:
-  #   - node_modules
-  #   - target
-  #   - .git
-  #   - dist
-  #   - build
-
-  # Glob patterns to ignore
-  # patterns:
-  #   - "*.log"
-  #   - "temp/**"
-
-  # Include test directories in scan
-  include_tests: false
-
-  # Include node_modules in scan
-  include_node_modules: false
-
-  # Include vendor directories in scan
-  include_vendor: false
-
-# =============================================================================
-# RULE CONFIGURATION
-# =============================================================================
-
-# Rule IDs to disable
-# disabled_rules:
-#   - "PE-001"
-#   - "EX-002"
-
-# Text file detection configuration
-# text_files:
-#   # Additional file extensions to treat as text
-#   extensions:
-#     - custom
-#     - special
-#
-#   # Additional special file names
-#   special_names:
-#     - CUSTOMFILE
-
-# Custom rules (YAML format)
-# rules:
-#   - id: "CUSTOM-001"
-#     name: "Custom Rule Name"
-#     severity: "high"  # critical, high, medium, low, info
-#     category: "exfiltration"  # exfiltration, privilege_escalation, persistence, etc.
-#     patterns:
-#       - 'pattern_to_match'
-#     message: "Description of the issue"
-#     confidence: "firm"  # tentative, firm, certain
-#     fix_hint: "How to fix this issue"
-
-# Custom malware signatures
-# malware_signatures:
-#   - id: "MW-CUSTOM-001"
-#     name: "Custom Malware Signature"
-#     description: "Description of what this detects"
-#     pattern: "malware_pattern"
-#     severity: "critical"
-#     category: "exfiltration"
-#     confidence: "firm"
-"#
-        .to_string()
-    }
-}
-
-/// Watch mode configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct WatchConfig {
-    /// Debounce duration in milliseconds
-    pub debounce_ms: u64,
-    /// Poll interval in milliseconds
-    pub poll_interval_ms: u64,
-}
-
-impl Default for WatchConfig {
-    fn default() -> Self {
-        Self {
-            debounce_ms: 300,
-            poll_interval_ms: 500,
-        }
-    }
-}
-
-/// Baseline configuration for drift detection (rug pull prevention)
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(default)]
-pub struct BaselineConfig {
-    /// Create a baseline snapshot when scanning
-    pub enabled: bool,
-    /// Check for drift against saved baseline
-    pub check_drift: bool,
-    /// Path to save baseline to
-    pub save_to: Option<String>,
-    /// Path to baseline file to compare against
-    pub compare_with: Option<String>,
-}
-
-/// Text file detection configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct TextFilesConfig {
-    /// File extensions that should be treated as text
-    pub extensions: HashSet<String>,
-    /// Special file names that should be treated as text (without extension)
-    pub special_names: HashSet<String>,
-}
-
-impl Default for TextFilesConfig {
-    fn default() -> Self {
-        let extensions: HashSet<String> = [
-            // Markdown and text
-            "md",
-            "txt",
-            "rst",
-            // Configuration
-            "json",
-            "yaml",
-            "yml",
-            "toml",
-            "xml",
-            "ini",
-            "conf",
-            "cfg",
-            "env",
-            // Shell
-            "sh",
-            "bash",
-            "zsh",
-            "fish",
-            // Scripting
-            "py",
-            "rb",
-            "pl",
-            "pm",
-            "lua",
-            "r",
-            // Web
-            "js",
-            "ts",
-            "jsx",
-            "tsx",
-            "html",
-            "css",
-            "scss",
-            "sass",
-            "less",
-            // Systems
-            "rs",
-            "go",
-            "c",
-            "cpp",
-            "h",
-            "hpp",
-            "cc",
-            "cxx",
-            // JVM
-            "java",
-            "kt",
-            "kts",
-            "scala",
-            "clj",
-            "groovy",
-            // .NET
-            "cs",
-            "fs",
-            "vb",
-            // Mobile
-            "swift",
-            "m",
-            "mm",
-            // Other languages
-            "php",
-            "ex",
-            "exs",
-            "hs",
-            "ml",
-            "vim",
-            "el",
-            "lisp",
-            // Docker
-            "dockerfile",
-            // Build
-            "makefile",
-            "cmake",
-            "gradle",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        let special_names: HashSet<String> = [
-            "Dockerfile",
-            "Makefile",
-            "Rakefile",
-            "Gemfile",
-            "Podfile",
-            "Vagrantfile",
-            "Procfile",
-            "LICENSE",
-            "README",
-            "CHANGELOG",
-            "CONTRIBUTING",
-            "AUTHORS",
-            "CMakeLists.txt",
-            "Justfile",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        Self {
-            extensions,
-            special_names,
-        }
-    }
-}
-
-/// Ignore configuration for scanning
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default)]
-pub struct IgnoreConfig {
-    /// Directories to ignore (e.g., ["node_modules", "target", ".git"])
-    pub directories: HashSet<String>,
-    /// Glob patterns to ignore (e.g., ["*.log", "build/**"])
-    pub patterns: Vec<String>,
-    /// Whether to include test directories in scan
-    pub include_tests: bool,
-    /// Whether to include node_modules in scan
-    pub include_node_modules: bool,
-    /// Whether to include vendor directories in scan
-    pub include_vendor: bool,
-}
-
-impl Default for IgnoreConfig {
-    fn default() -> Self {
-        let directories: HashSet<String> = [
-            // Common build output directories
-            "target",
-            "dist",
-            "build",
-            "out",
-            // Package manager directories
-            "node_modules",
-            ".pnpm",
-            ".yarn",
-            // Version control
-            ".git",
-            ".svn",
-            ".hg",
-            // IDE directories
-            ".idea",
-            ".vscode",
-            // Cache directories
-            ".cache",
-            "__pycache__",
-            ".pytest_cache",
-            ".mypy_cache",
-            // Coverage directories
-            "coverage",
-            ".nyc_output",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        Self {
-            directories,
-            patterns: Vec::new(),
-            include_tests: false,
-            include_node_modules: false,
-            include_vendor: false,
-        }
-    }
-}
-
-impl TextFilesConfig {
-    /// Check if a path should be treated as a text file
-    pub fn is_text_file(&self, path: &Path) -> bool {
-        // Check by extension
-        if let Some(ext) = path.extension().and_then(|e| e.to_str())
-            && self.extensions.contains(&ext.to_lowercase())
-        {
-            return true;
-        }
-
-        // Check by filename (case-insensitive for special names)
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            // Check exact match first
-            if self.special_names.contains(name) {
-                return true;
-            }
-            // Check case-insensitive match
-            let name_lower = name.to_lowercase();
-            if self
-                .special_names
-                .iter()
-                .any(|n| n.to_lowercase() == name_lower)
-            {
-                return true;
-            }
-        }
-
-        false
-    }
-}
-
-/// Configuration loading error
-#[derive(Debug, thiserror::Error)]
-pub enum ConfigError {
-    #[error("Failed to read config file {path}: {source}")]
-    ReadFile {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("Failed to parse YAML config {path}: {source}")]
-    ParseYaml {
-        path: String,
-        #[source]
-        source: serde_yaml::Error,
-    },
-
-    #[error("Failed to parse JSON config {path}: {source}")]
-    ParseJson {
-        path: String,
-        #[source]
-        source: serde_json::Error,
-    },
-
-    #[error("Failed to parse TOML config {path}: {source}")]
-    ParseToml {
-        path: String,
-        #[source]
-        source: toml::de::Error,
-    },
-
-    #[error("Unsupported config format for {0}: .{1}")]
-    UnsupportedFormat(String, String),
-}
+//! Configuration module for cc-audit.
+//!
+//! This module provides configuration loading and management for the auditor.
+
+mod error;
+mod loading;
+mod severity;
+mod template;
+mod types;
+
+// Re-export all public types
+pub use error::ConfigError;
+pub use severity::SeverityConfig;
+pub use types::{BaselineConfig, Config, IgnoreConfig, ScanConfig, TextFilesConfig, WatchConfig};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     #[test]
@@ -1472,5 +806,107 @@ baseline:
         assert!(template.contains("output:"));
         assert!(template.contains("subagent"));
         assert!(template.contains("plugin"));
+    }
+
+    // ========== v1.1.0 Options Tests ==========
+
+    #[test]
+    fn test_scan_config_v110_defaults() {
+        let config = ScanConfig::default();
+        // Remote options
+        assert!(config.remote.is_none());
+        assert!(config.git_ref.is_none());
+        assert!(config.remote_auth.is_none());
+        assert!(config.parallel_clones.is_none());
+        // Badge options
+        assert!(!config.badge);
+        assert!(config.badge_format.is_none());
+        assert!(!config.summary);
+        // Client options
+        assert!(!config.all_clients);
+        assert!(config.client.is_none());
+    }
+
+    #[test]
+    fn test_config_with_remote_settings() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+scan:
+  remote: https://github.com/user/repo
+  git_ref: main
+  remote_auth: ghp_token123
+  parallel_clones: 8
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert_eq!(
+            config.scan.remote,
+            Some("https://github.com/user/repo".to_string())
+        );
+        assert_eq!(config.scan.git_ref, Some("main".to_string()));
+        assert_eq!(config.scan.remote_auth, Some("ghp_token123".to_string()));
+        assert_eq!(config.scan.parallel_clones, Some(8));
+    }
+
+    #[test]
+    fn test_config_with_badge_settings() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+scan:
+  badge: true
+  badge_format: html
+  summary: true
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert!(config.scan.badge);
+        assert_eq!(config.scan.badge_format, Some("html".to_string()));
+        assert!(config.scan.summary);
+    }
+
+    #[test]
+    fn test_config_with_client_settings() {
+        let dir = TempDir::new().unwrap();
+        let config_path = dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            r#"
+scan:
+  all_clients: true
+  client: cursor
+"#,
+        )
+        .unwrap();
+
+        let config = Config::from_file(&config_path).unwrap();
+        assert!(config.scan.all_clients);
+        assert_eq!(config.scan.client, Some("cursor".to_string()));
+    }
+
+    #[test]
+    fn test_generate_template_contains_v110_sections() {
+        let template = Config::generate_template();
+        // Check v1.1.0 sections
+        assert!(template.contains("Remote Scanning Options"));
+        assert!(template.contains("remote:"));
+        assert!(template.contains("git_ref:"));
+        assert!(template.contains("parallel_clones:"));
+        assert!(template.contains("Badge Options"));
+        assert!(template.contains("badge:"));
+        assert!(template.contains("badge_format:"));
+        assert!(template.contains("summary:"));
+        assert!(template.contains("Client Scan Options"));
+        assert!(template.contains("all_clients:"));
+        assert!(template.contains("client:"));
     }
 }

@@ -1,7 +1,8 @@
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
-use crate::rules::{DynamicRule, Finding};
-use crate::scanner::{ContentScanner, Scanner, ScannerConfig};
+use crate::rules::Finding;
+use crate::scanner::{Scanner, ScannerConfig};
+use crate::{impl_content_scanner, impl_scanner_builder};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -9,25 +10,12 @@ pub struct DockerScanner {
     config: ScannerConfig,
 }
 
-impl DockerScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
+impl_scanner_builder!(DockerScanner);
+impl_content_scanner!(DockerScanner);
 
+impl DockerScanner {
     pub fn with_ignore_filter(mut self, filter: IgnoreFilter) -> Self {
         self.config = self.config.with_ignore_filter(filter);
-        self
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
         self
     }
 
@@ -48,12 +36,6 @@ impl DockerScanner {
             }
             None => false,
         }
-    }
-}
-
-impl ContentScanner for DockerScanner {
-    fn config(&self) -> &ScannerConfig {
-        &self.config
     }
 }
 
@@ -116,15 +98,10 @@ impl Scanner for DockerScanner {
     }
 }
 
-impl Default for DockerScanner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::ContentScanner;
     use std::fs;
     use tempfile::TempDir;
 

@@ -28,6 +28,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-Client Support**: Auto-detect and scan AI coding client configurations
+  - Supported clients: Claude Code, Cursor, Windsurf, VS Code
+  - `--all-clients`: Scan all installed clients
+  - `--client <name>`: Scan a specific client (claude, cursor, windsurf, vscode)
+  - Findings now include client attribution in output
+- **CVE Vulnerability Scanning**: Built-in database of known CVEs affecting MCP and AI tools
+  - Scans for 7 known CVEs (CVE-2025-52882, CVE-2025-49596, CVE-2025-54135, etc.)
+  - Checks package.json, mcp.json, and extensions.json for vulnerable versions
+  - `--cve-db <path>`: Use a custom CVE database
+  - `--no-cve-scan`: Disable CVE scanning
+
+### Changed
+- `src/client.rs`: New module for client detection
+- `src/cve_db.rs`: New module for CVE database handling
+- `data/cve-database.json`: Built-in CVE database with 7 entries
+- Finding struct now includes optional `client` field
+
 ## [0.5.0] - 2026-01-25
 
 ### Added

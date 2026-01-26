@@ -1,8 +1,9 @@
 name: Publish npm packages
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -10,27 +11,29 @@ permissions:
 jobs:
   publish-platforms:
     name: Publish ${{ matrix.platform }}
+    # Only run if Release workflow succeeded and was triggered by a tag
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: darwin-arm64
-            artifact: cc-audit-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-aarch64-apple-darwin.tar.gz
             binary: cc-audit
           - platform: darwin-x64
-            artifact: cc-audit-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-x86_64-apple-darwin.tar.gz
             binary: cc-audit
           - platform: linux-arm64
-            artifact: cc-audit-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-aarch64-unknown-linux-gnu.tar.gz
             binary: cc-audit
           - platform: linux-x64
-            artifact: cc-audit-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-x86_64-unknown-linux-gnu.tar.gz
             binary: cc-audit
           - platform: linux-x64-musl
-            artifact: cc-audit-${{ github.ref_name }}-x86_64-unknown-linux-musl.tar.gz
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-x86_64-unknown-linux-musl.tar.gz
             binary: cc-audit
           - platform: win32-x64
-            artifact: cc-audit-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip
+            artifact: cc-audit-${{ github.event.workflow_run.head_branch }}-x86_64-pc-windows-msvc.zip
             binary: cc-audit.exe
 
     runs-on: ubuntu-latest
@@ -44,7 +47,7 @@ jobs:
 
       - name: Download release artifact
         run: |
-          gh release download ${{ github.ref_name }} \
+          gh release download ${{ github.event.workflow_run.head_branch }} \
             --pattern "${{ matrix.artifact }}" \
             --dir ./tmp
         env:
@@ -64,7 +67,7 @@ jobs:
 
       - name: Update version in package.json
         run: |
-          VERSION="${{ github.ref_name }}"
+          VERSION="${{ github.event.workflow_run.head_branch }}"
           VERSION="${VERSION#v}"
           cd npm/${{ matrix.platform }}
           jq --arg v "$VERSION" '.version = $v' package.json > tmp.json
@@ -91,7 +94,7 @@ jobs:
 
       - name: Update version in package.json
         run: |
-          VERSION="${{ github.ref_name }}"
+          VERSION="${{ github.event.workflow_run.head_branch }}"
           VERSION="${VERSION#v}"
           cd npm/cc-audit
           jq --arg v "$VERSION" '.version = $v' package.json > tmp.json

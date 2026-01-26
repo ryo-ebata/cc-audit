@@ -1,6 +1,7 @@
 use crate::error::Result;
-use crate::rules::{DynamicRule, Finding};
-use crate::scanner::{ContentScanner, Scanner, ScannerConfig};
+use crate::rules::Finding;
+use crate::scanner::{Scanner, ScannerConfig};
+use crate::{impl_content_scanner, impl_scanner_builder};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -28,34 +29,15 @@ pub struct DependencyScanner {
     config: ScannerConfig,
 }
 
+impl_scanner_builder!(DependencyScanner);
+impl_content_scanner!(DependencyScanner);
+
 impl DependencyScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
-        self
-    }
-
     fn is_dependency_file(path: &Path) -> bool {
         path.file_name()
             .and_then(|name| name.to_str())
             .map(|name| DEPENDENCY_FILES.contains(&name))
             .unwrap_or(false)
-    }
-}
-
-impl ContentScanner for DependencyScanner {
-    fn config(&self) -> &ScannerConfig {
-        &self.config
     }
 }
 
@@ -86,15 +68,10 @@ impl Scanner for DependencyScanner {
     }
 }
 
-impl Default for DependencyScanner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::ContentScanner;
     use std::fs;
     use tempfile::TempDir;
 

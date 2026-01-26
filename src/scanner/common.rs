@@ -3,6 +3,7 @@ use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
 use std::fs;
 use std::path::Path;
+use tracing::{debug, trace};
 
 /// Common configuration shared by all scanners.
 ///
@@ -52,15 +53,28 @@ impl ScannerConfig {
 
     /// Reads a file and returns its content as a string.
     pub fn read_file(&self, path: &Path) -> Result<String> {
-        fs::read_to_string(path).map_err(|e| AuditError::ReadError {
-            path: path.display().to_string(),
-            source: e,
+        trace!(path = %path.display(), "Reading file");
+        fs::read_to_string(path).map_err(|e| {
+            debug!(path = %path.display(), error = %e, "Failed to read file");
+            AuditError::ReadError {
+                path: path.display().to_string(),
+                source: e,
+            }
         })
     }
 
     /// Checks the content against all rules and returns findings.
     pub fn check_content(&self, content: &str, file_path: &str) -> Vec<Finding> {
-        self.engine.check_content(content, file_path)
+        trace!(
+            file = file_path,
+            content_len = content.len(),
+            "Checking content"
+        );
+        let findings = self.engine.check_content(content, file_path);
+        if !findings.is_empty() {
+            debug!(file = file_path, count = findings.len(), "Found issues");
+        }
+        findings
     }
 
     /// Checks YAML frontmatter for specific rules (e.g., OP-001).

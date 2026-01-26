@@ -5,15 +5,17 @@ mod injection;
 mod obfuscation;
 mod permission;
 mod persistence;
+mod plugin_rules;
 mod privilege;
 mod secrets;
+mod subagent_rules;
 mod supplychain;
 
 use crate::rules::types::Rule;
 use std::sync::LazyLock;
 
 static ALL_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
-    let mut rules = Vec::with_capacity(40);
+    let mut rules = Vec::with_capacity(50);
     rules.extend(exfiltration::rules());
     rules.extend(privilege::rules());
     rules.extend(persistence::rules());
@@ -24,6 +26,8 @@ static ALL_RULES: LazyLock<Vec<Rule>> = LazyLock::new(|| {
     rules.extend(secrets::rules());
     rules.extend(docker::rules());
     rules.extend(dependency::rules());
+    rules.extend(subagent_rules::rules());
+    rules.extend(plugin_rules::rules());
     rules
 });
 

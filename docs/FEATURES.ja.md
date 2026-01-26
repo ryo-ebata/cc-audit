@@ -141,3 +141,27 @@ cc-audit ./skill/ --format html --output report.html
 - インタラクティブなフィルタリングと検索
 - シンタックスハイライト付きコードスニペット
 - 修正推奨事項
+
+---
+
+## CVEデータベース
+
+cc-auditには、AIコーディングツール、MCPサーバー、および関連製品に影響する既知のCVEのデータベースが組み込まれています。
+
+### 検出対象製品
+
+- Claude Code（VSCode、JetBrains拡張機能）
+- MCP（Model Context Protocol）ツール
+- Cursor IDE
+- GitHub Copilot
+- その他
+
+### 仕組み
+
+スキャン時、cc-auditは検出された製品とバージョンの既知の脆弱性を自動的にチェックします。脆弱なバージョンが見つかった場合、CVEと修正アドバイスを報告します。
+
+### 自動更新
+
+CVEデータベースはGitHub Actionsを通じて毎日自動更新されます。新しいCVEは[NVD API](https://nvd.nist.gov/developers/vulnerabilities)から取得され、プルリクエストとして提出されます。
+
+更新プロセスの詳細は[CVE-UPDATE.ja.md](./CVE-UPDATE.ja.md)を参照してください。

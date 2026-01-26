@@ -1,36 +1,16 @@
 use crate::error::Result;
-use crate::rules::{DynamicRule, Finding};
-use crate::scanner::{ContentScanner, Scanner, ScannerConfig};
+use crate::rules::Finding;
+use crate::scanner::{DirectoryWalker, Scanner, ScannerConfig, WalkConfig};
+use crate::{impl_content_scanner, impl_scanner_builder};
 use std::path::Path;
-use walkdir::WalkDir;
+use tracing::debug;
 
 pub struct CommandScanner {
     config: ScannerConfig,
 }
 
-impl CommandScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
-        self
-    }
-}
-
-impl ContentScanner for CommandScanner {
-    fn config(&self) -> &ScannerConfig {
-        &self.config
-    }
-}
+impl_scanner_builder!(CommandScanner);
+impl_content_scanner!(CommandScanner);
 
 impl Scanner for CommandScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
@@ -42,37 +22,15 @@ impl Scanner for CommandScanner {
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
 
-        // Check for .claude/commands/ directory
-        let commands_dir = dir.join(".claude").join("commands");
-        if commands_dir.exists() && commands_dir.is_dir() {
-            for entry in WalkDir::new(&commands_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let path = entry.path();
-                if path.is_file()
-                    && path.extension().is_some_and(|ext| ext == "md")
-                    && let Ok(file_findings) = self.scan_file(path)
-                {
-                    findings.extend(file_findings);
-                }
-            }
-        }
+        // Use DirectoryWalker for both .claude/commands/ and commands/ directories
+        let walker_config =
+            WalkConfig::new([".claude/commands", "commands"]).with_extensions(&["md"]);
+        let walker = DirectoryWalker::new(walker_config);
 
-        // Also check for commands/ directory at root (alternative location)
-        let alt_commands_dir = dir.join("commands");
-        if alt_commands_dir.exists() && alt_commands_dir.is_dir() {
-            for entry in WalkDir::new(&alt_commands_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let path = entry.path();
-                if path.is_file()
-                    && path.extension().is_some_and(|ext| ext == "md")
-                    && let Ok(file_findings) = self.scan_file(path)
-                {
-                    findings.extend(file_findings);
-                }
+        for path in walker.walk(dir) {
+            debug!(path = %path.display(), "Scanning command file");
+            if let Ok(file_findings) = self.scan_file(&path) {
+                findings.extend(file_findings);
             }
         }
 
@@ -80,15 +38,10 @@ impl Scanner for CommandScanner {
     }
 }
 
-impl Default for CommandScanner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::ContentScanner;
     use std::fs;
     use tempfile::TempDir;
 

@@ -130,9 +130,17 @@ impl Reporter for TerminalReporter {
             for finding in &findings_to_show {
                 let rule_sev_label = self.rule_severity_label(&finding.rule_severity);
                 let severity_label = self.severity_color(&finding.severity);
+
+                // Show client name if available
+                let client_prefix = finding
+                    .client
+                    .as_ref()
+                    .map(|c| format!("[{}] ", c).bright_magenta().to_string())
+                    .unwrap_or_default();
+
                 output.push_str(&format!(
-                    "{} {} {}: {}\n",
-                    rule_sev_label, severity_label, finding.id, finding.name
+                    "{}{} {} {}: {}\n",
+                    client_prefix, rule_sev_label, severity_label, finding.id, finding.name
                 ));
                 output.push_str(&format!(
                     "  Location: {}:{}\n",
@@ -425,6 +433,7 @@ mod tests {
             fix_hint: None,
             cwe_ids: vec![],
             rule_severity: None,
+            client: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
@@ -453,6 +462,7 @@ mod tests {
             fix_hint: None,
             cwe_ids: vec![],
             rule_severity: None,
+            client: None,
         };
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);

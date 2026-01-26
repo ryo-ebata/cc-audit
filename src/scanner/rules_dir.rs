@@ -1,6 +1,6 @@
 use crate::error::Result;
-use crate::rules::{DynamicRule, Finding};
-use crate::scanner::{ContentScanner, Scanner, ScannerConfig};
+use crate::rules::Finding;
+use crate::scanner::{Scanner, ScannerConfig};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -8,29 +8,8 @@ pub struct RulesDirScanner {
     config: ScannerConfig,
 }
 
-impl RulesDirScanner {
-    pub fn new() -> Self {
-        Self {
-            config: ScannerConfig::new(),
-        }
-    }
-
-    pub fn with_skip_comments(mut self, skip: bool) -> Self {
-        self.config = self.config.with_skip_comments(skip);
-        self
-    }
-
-    pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
-        self.config = self.config.with_dynamic_rules(rules);
-        self
-    }
-}
-
-impl ContentScanner for RulesDirScanner {
-    fn config(&self) -> &ScannerConfig {
-        &self.config
-    }
-}
+impl_scanner_builder!(RulesDirScanner);
+impl_content_scanner!(RulesDirScanner);
 
 impl Scanner for RulesDirScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
@@ -77,15 +56,10 @@ impl Scanner for RulesDirScanner {
     }
 }
 
-impl Default for RulesDirScanner {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scanner::ContentScanner;
     use std::fs;
     use tempfile::TempDir;
 

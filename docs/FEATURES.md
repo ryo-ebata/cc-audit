@@ -142,6 +142,186 @@ Includes:
 - Code snippets with syntax highlighting
 - Fix recommendations
 
+### Markdown
+
+Plain Markdown format for documentation and reports:
+
+```bash
+cc-audit ./skill/ --format markdown --output report.md
+```
+
+---
+
+## Client Scanning
+
+Scan installed AI coding client configurations automatically:
+
+```bash
+# Scan all installed clients
+cc-audit --all-clients
+
+# Scan a specific client
+cc-audit --client claude
+cc-audit --client cursor
+cc-audit --client windsurf
+cc-audit --client vscode
+```
+
+Detects and scans:
+- MCP server configurations
+- Hook settings
+- Custom commands
+- Installed skills and plugins
+
+---
+
+## Remote Repository Scanning
+
+Scan remote GitHub repositories without cloning manually:
+
+```bash
+# Scan a single repository
+cc-audit --remote https://github.com/user/awesome-skill
+
+# Scan at specific branch/tag/commit
+cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+
+# Scan with authentication (for private repos)
+cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+
+# Scan multiple repositories from file
+cc-audit --remote-list repos.txt --parallel-clones 8
+
+# Scan all awesome-claude-code repositories
+cc-audit --awesome-claude-code --summary
+```
+
+---
+
+## Security Badges
+
+Generate security badges for your project:
+
+```bash
+# Generate Markdown badge
+cc-audit ./skill/ --badge --badge-format markdown
+
+# Generate HTML badge
+cc-audit ./skill/ --badge --badge-format html
+
+# Generate shields.io URL only
+cc-audit ./skill/ --badge --badge-format url
+```
+
+Example output:
+```markdown
+[![Security: A](https://img.shields.io/badge/security-A-brightgreen)](...)
+```
+
+---
+
+## MCP Pinning (Rug-Pull Detection)
+
+Pin MCP tool configurations to detect unauthorized changes:
+
+```bash
+# Pin current configuration
+cc-audit --type mcp ~/.claude/mcp.json --pin
+
+# Verify pins haven't changed
+cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+
+# Update pins after authorized changes
+cc-audit --type mcp ~/.claude/mcp.json --pin-update
+
+# Force overwrite existing pins
+cc-audit --type mcp ~/.claude/mcp.json --pin-update --pin-force
+```
+
+Pins include:
+- Tool names and descriptions
+- Configuration schemas
+- Permission requirements
+- Server endpoints
+
+---
+
+## Hook Mode
+
+Run cc-audit as a Claude Code hook for real-time scanning:
+
+```bash
+cc-audit --hook-mode
+```
+
+Configure in your Claude Code settings:
+```json
+{
+  "hooks": {
+    "pre-tool-call": {
+      "command": "cc-audit --hook-mode"
+    }
+  }
+}
+```
+
+---
+
+## SBOM Generation
+
+Generate Software Bill of Materials:
+
+```bash
+# Generate CycloneDX SBOM
+cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# Generate SPDX SBOM
+cc-audit ./skill/ --sbom --sbom-format spdx --output sbom.spdx
+
+# Include specific ecosystems
+cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo
+```
+
+---
+
+## Proxy Mode
+
+Runtime MCP monitoring with transparent proxy:
+
+```bash
+# Start proxy
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+
+# With TLS termination
+cc-audit --proxy --proxy-port 8443 --proxy-target localhost:9000 --proxy-tls
+
+# Block mode (stop messages with findings)
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-block
+
+# Log all traffic
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-log traffic.jsonl
+```
+
+---
+
+## False Positive Reporting
+
+Report false positives to improve detection accuracy:
+
+```bash
+# Report a false positive
+cc-audit ./skill/ --report-fp
+
+# Preview without submitting
+cc-audit ./skill/ --report-fp --report-fp-dry-run
+
+# Use custom endpoint
+cc-audit ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
+
+# Disable telemetry entirely
+cc-audit ./skill/ --no-telemetry
+```
+
 ---
 
 ## CVE Database

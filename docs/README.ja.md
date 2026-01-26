@@ -71,6 +71,13 @@ cc-audit --type dependency ./
 # 開発時のウォッチモード
 cc-audit --watch ./my-skill/
 
+# インストール済みの全AIクライアントをスキャン
+cc-audit --all-clients
+
+# 特定のクライアントをスキャン
+cc-audit --client cursor
+cc-audit --client claude
+
 # 設定ファイルを生成
 cc-audit --init ./
 ```
@@ -78,7 +85,7 @@ cc-audit --init ./
 ## 出力例
 
 ```
-cc-audit v0.4.0 - Claude Code Security Auditor
+cc-audit v3.0.0 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 
@@ -111,10 +118,17 @@ Result: FAIL (exit code 1)
 
 - **50以上の検出ルール** — データ流出、権限昇格、永続化、プロンプトインジェクションなど
 - **複数のスキャンタイプ** — Skills、Hooks、MCPサーバー、コマンド、Docker、依存関係、サブエージェント、プラグイン
+- **マルチクライアントサポート** — Claude、Cursor、Windsurf、VS Code設定を自動検出・スキャン
+- **リモートリポジトリスキャン** — GitHubリポジトリを直接スキャン（awesome-claude-codeエコシステム含む）
+- **CVE脆弱性スキャン** — AIコーディングツールの既知の脆弱性データベースを内蔵
 - **リスクスコアリング** — カテゴリ別内訳付きの0-100スコア
 - **ベースライン/ドリフト検出** — ラグプル攻撃を防止
+- **MCPピンニング** — ツール設定をピン留めして不正な変更を検出
 - **自動修正** — 特定の問題を自動的に修正
-- **複数の出力フォーマット** — Terminal、JSON、SARIF、HTML
+- **複数の出力フォーマット** — Terminal、JSON、SARIF、HTML、Markdown
+- **セキュリティバッジ** — プロジェクト用のshields.ioバッジを生成
+- **SBOM生成** — CycloneDXおよびSPDXフォーマットをサポート
+- **プロキシモード** — 透過プロキシによるMCPランタイム監視
 - **ウォッチモード** — 開発中のリアルタイムスキャン
 - **CI/CD 対応** — GitHub Security 統合用の SARIF 出力
 

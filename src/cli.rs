@@ -204,6 +204,12 @@ pub struct Cli {
     #[arg(long)]
     pub skip_comments: bool,
 
+    /// Strict secrets mode: disable dummy key heuristics for test files
+    /// By default, findings in test files have their confidence downgraded.
+    /// This option disables that behavior and treats all secrets equally.
+    #[arg(long)]
+    pub strict_secrets: bool,
+
     /// Show fix hints in terminal output
     #[arg(long)]
     pub fix_hint: bool,
@@ -315,6 +321,62 @@ pub struct Cli {
     /// Save current settings as a named profile
     #[arg(long, value_name = "NAME")]
     pub save_profile: Option<String>,
+
+    /// Report a false positive finding
+    #[arg(long)]
+    pub report_fp: bool,
+
+    /// Dry run mode for false positive reporting (print without submitting)
+    #[arg(long)]
+    pub report_fp_dry_run: bool,
+
+    /// Custom endpoint URL for false positive reporting
+    #[arg(long, value_name = "URL")]
+    pub report_fp_endpoint: Option<String>,
+
+    /// Disable telemetry and false positive reporting
+    #[arg(long)]
+    pub no_telemetry: bool,
+
+    /// Generate SBOM (Software Bill of Materials)
+    #[arg(long)]
+    pub sbom: bool,
+
+    /// SBOM output format (cyclonedx, spdx)
+    #[arg(long, value_name = "FORMAT")]
+    pub sbom_format: Option<String>,
+
+    /// Include npm dependencies in SBOM
+    #[arg(long)]
+    pub sbom_npm: bool,
+
+    /// Include Cargo dependencies in SBOM
+    #[arg(long)]
+    pub sbom_cargo: bool,
+
+    /// Enable proxy mode for runtime MCP monitoring
+    #[arg(long)]
+    pub proxy: bool,
+
+    /// Proxy listen port (default: 8080)
+    #[arg(long, value_name = "PORT")]
+    pub proxy_port: Option<u16>,
+
+    /// Target MCP server address (host:port)
+    #[arg(long, value_name = "HOST:PORT")]
+    pub proxy_target: Option<String>,
+
+    /// Enable TLS termination in proxy mode
+    #[arg(long)]
+    pub proxy_tls: bool,
+
+    /// Enable blocking mode (block messages with findings)
+    #[arg(long)]
+    pub proxy_block: bool,
+
+    /// Log file for proxy traffic (JSONL format)
+    #[arg(long, value_name = "FILE")]
+    pub proxy_log: Option<std::path::PathBuf>,
 }
 
 impl Default for Cli {
@@ -346,6 +408,7 @@ impl Default for Cli {
             include_vendor: false,
             min_confidence: Confidence::Tentative,
             skip_comments: false,
+            strict_secrets: false,
             fix_hint: false,
             watch: false,
             init_hook: false,
@@ -374,6 +437,20 @@ impl Default for Cli {
             deep_scan: false,
             profile: None,
             save_profile: None,
+            report_fp: false,
+            report_fp_dry_run: false,
+            report_fp_endpoint: None,
+            no_telemetry: false,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
+            proxy: false,
+            proxy_port: None,
+            proxy_target: None,
+            proxy_tls: false,
+            proxy_block: false,
+            proxy_log: None,
         }
     }
 }

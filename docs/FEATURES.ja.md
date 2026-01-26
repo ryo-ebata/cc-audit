@@ -142,6 +142,186 @@ cc-audit ./skill/ --format html --output report.html
 - シンタックスハイライト付きコードスニペット
 - 修正推奨事項
 
+### Markdown
+
+ドキュメントやレポート用のプレーンMarkdown形式：
+
+```bash
+cc-audit ./skill/ --format markdown --output report.md
+```
+
+---
+
+## クライアントスキャン
+
+インストール済みAIコーディングクライアントの設定を自動スキャン：
+
+```bash
+# 全クライアントをスキャン
+cc-audit --all-clients
+
+# 特定のクライアントをスキャン
+cc-audit --client claude
+cc-audit --client cursor
+cc-audit --client windsurf
+cc-audit --client vscode
+```
+
+検出・スキャン対象：
+- MCPサーバー設定
+- フック設定
+- カスタムコマンド
+- インストール済みスキルとプラグイン
+
+---
+
+## リモートリポジトリスキャン
+
+手動クローンなしでリモートGitHubリポジトリをスキャン：
+
+```bash
+# 単一リポジトリをスキャン
+cc-audit --remote https://github.com/user/awesome-skill
+
+# 特定のブランチ/タグ/コミットでスキャン
+cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+
+# 認証付きスキャン（プライベートリポジトリ用）
+cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+
+# ファイルから複数リポジトリをスキャン
+cc-audit --remote-list repos.txt --parallel-clones 8
+
+# awesome-claude-codeの全リポジトリをスキャン
+cc-audit --awesome-claude-code --summary
+```
+
+---
+
+## セキュリティバッジ
+
+プロジェクト用のセキュリティバッジを生成：
+
+```bash
+# Markdownバッジを生成
+cc-audit ./skill/ --badge --badge-format markdown
+
+# HTMLバッジを生成
+cc-audit ./skill/ --badge --badge-format html
+
+# shields.io URLのみを生成
+cc-audit ./skill/ --badge --badge-format url
+```
+
+出力例：
+```markdown
+[![Security: A](https://img.shields.io/badge/security-A-brightgreen)](...)
+```
+
+---
+
+## MCPピンニング（ラグプル検出）
+
+不正な変更を検出するためにMCPツール設定をピン留め：
+
+```bash
+# 現在の設定をピン留め
+cc-audit --type mcp ~/.claude/mcp.json --pin
+
+# ピンが変更されていないことを検証
+cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+
+# 承認済み変更後にピンを更新
+cc-audit --type mcp ~/.claude/mcp.json --pin-update
+
+# 既存のピンを強制上書き
+cc-audit --type mcp ~/.claude/mcp.json --pin-update --pin-force
+```
+
+ピン留め対象：
+- ツール名と説明
+- 設定スキーマ
+- 権限要件
+- サーバーエンドポイント
+
+---
+
+## フックモード
+
+リアルタイムスキャン用にClaude Codeフックとしてcc-auditを実行：
+
+```bash
+cc-audit --hook-mode
+```
+
+Claude Code設定で構成：
+```json
+{
+  "hooks": {
+    "pre-tool-call": {
+      "command": "cc-audit --hook-mode"
+    }
+  }
+}
+```
+
+---
+
+## SBOM生成
+
+ソフトウェア部品表を生成：
+
+```bash
+# CycloneDX SBOMを生成
+cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# SPDX SBOMを生成
+cc-audit ./skill/ --sbom --sbom-format spdx --output sbom.spdx
+
+# 特定のエコシステムを含める
+cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo
+```
+
+---
+
+## プロキシモード
+
+透過プロキシによるMCPランタイム監視：
+
+```bash
+# プロキシを起動
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+
+# TLS終端付き
+cc-audit --proxy --proxy-port 8443 --proxy-target localhost:9000 --proxy-tls
+
+# ブロックモード（検出結果のあるメッセージを停止）
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-block
+
+# 全トラフィックをログ
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-log traffic.jsonl
+```
+
+---
+
+## 偽陽性報告
+
+検出精度向上のために偽陽性を報告：
+
+```bash
+# 偽陽性を報告
+cc-audit ./skill/ --report-fp
+
+# 送信せずにプレビュー
+cc-audit ./skill/ --report-fp --report-fp-dry-run
+
+# カスタムエンドポイントを使用
+cc-audit ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
+
+# テレメトリを完全に無効化
+cc-audit ./skill/ --no-telemetry
+```
+
 ---
 
 ## CVEデータベース

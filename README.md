@@ -107,7 +107,7 @@ cc-audit --init ./
 ## Example Output
 
 ```
-cc-audit v0.5.0 - Claude Code Security Auditor
+cc-audit v3.0.0 - Claude Code Security Auditor
 
 Scanning: ./awesome-skill/
 
@@ -141,11 +141,16 @@ Result: FAIL (exit code 1)
 - **50+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
 - **Multiple Scan Types** — Skills, hooks, MCP servers, commands, Docker, dependencies, subagents, plugins
 - **Multi-Client Support** — Auto-detect and scan Claude, Cursor, Windsurf, VS Code configurations
+- **Remote Repository Scanning** — Scan GitHub repositories directly, including awesome-claude-code ecosystem
 - **CVE Vulnerability Scanning** — Built-in database of known vulnerabilities in AI coding tools
 - **Risk Scoring** — 0-100 score with category breakdown
 - **Baseline/Drift Detection** — Prevent rug pull attacks
+- **MCP Pinning** — Pin tool configurations to detect unauthorized changes
 - **Auto-Fix** — Automatically fix certain issues
-- **Multiple Output Formats** — Terminal, JSON, SARIF, HTML
+- **Multiple Output Formats** — Terminal, JSON, SARIF, HTML, Markdown
+- **Security Badges** — Generate shields.io badges for your projects
+- **SBOM Generation** — CycloneDX and SPDX format support
+- **Proxy Mode** — Runtime MCP monitoring with transparent proxy
 - **Watch Mode** — Real-time scanning during development
 - **CI/CD Ready** — SARIF output for GitHub Security integration
 

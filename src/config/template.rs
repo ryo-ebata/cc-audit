@@ -9,7 +9,7 @@ impl Config {
 # Place this file as .cc-audit.yaml in your project root
 
 # =============================================================================
-# RULE SEVERITY CONFIGURATION (v0.5.0)
+# RULE SEVERITY CONFIGURATION (v3.0.0)
 # =============================================================================
 # Controls how findings affect CI exit code.
 # - error: Causes CI failure (exit 1) - DEFAULT for all rules
@@ -87,6 +87,27 @@ scan:
   # Preview auto-fix changes without applying them
   fix_dry_run: false
 
+  # Warn-only mode: treat all findings as warnings (always exit 0)
+  warn_only: false
+
+  # Minimum severity level to include: critical, high, medium, low
+  # min_severity: high
+
+  # Minimum rule severity to treat as errors: error, warn
+  # min_rule_severity: error
+
+  # Strict secrets mode: disable dummy key heuristics for test files
+  strict_secrets: false
+
+  # ---------------------------------------------------------------------------
+  # CVE Scan Options (v1.1.0)
+  # ---------------------------------------------------------------------------
+  # Disable CVE vulnerability scanning
+  no_cve_scan: false
+
+  # Path to a custom CVE database (JSON)
+  # cve_db: ./custom-cve.json
+
   # ---------------------------------------------------------------------------
   # Remote Scanning Options (v1.1.0)
   # ---------------------------------------------------------------------------
@@ -122,6 +143,21 @@ scan:
 
   # Specific client to scan: claude, cursor, windsurf, vscode
   # client: claude
+
+  # ---------------------------------------------------------------------------
+  # SBOM Options (v1.2.0)
+  # ---------------------------------------------------------------------------
+  # Generate SBOM (Software Bill of Materials)
+  sbom: false
+
+  # SBOM output format: cyclonedx, spdx
+  # sbom_format: cyclonedx
+
+  # Include npm dependencies in SBOM
+  sbom_npm: false
+
+  # Include Cargo dependencies in SBOM
+  sbom_cargo: false
 
 # =============================================================================
 # BASELINE CONFIGURATION (Drift Detection / Rug Pull Prevention)

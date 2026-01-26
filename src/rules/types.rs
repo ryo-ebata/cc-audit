@@ -130,6 +130,22 @@ impl Confidence {
             Confidence::Certain => "certain",
         }
     }
+
+    /// Downgrade the confidence level by one step.
+    ///
+    /// Used to reduce confidence when heuristics suggest a potential false positive
+    /// (e.g., detecting secrets in test files or dummy variable names).
+    ///
+    /// - Certain -> Firm
+    /// - Firm -> Tentative
+    /// - Tentative -> Tentative (minimum level)
+    pub fn downgrade(&self) -> Self {
+        match self {
+            Confidence::Certain => Confidence::Firm,
+            Confidence::Firm => Confidence::Tentative,
+            Confidence::Tentative => Confidence::Tentative,
+        }
+    }
 }
 
 impl std::fmt::Display for Confidence {
@@ -669,6 +685,25 @@ mod tests {
         assert_eq!(format!("{}", Confidence::Tentative), "tentative");
         assert_eq!(format!("{}", Confidence::Firm), "firm");
         assert_eq!(format!("{}", Confidence::Certain), "certain");
+    }
+
+    #[test]
+    fn test_confidence_downgrade() {
+        // Certain -> Firm
+        assert_eq!(Confidence::Certain.downgrade(), Confidence::Firm);
+        // Firm -> Tentative
+        assert_eq!(Confidence::Firm.downgrade(), Confidence::Tentative);
+        // Tentative -> Tentative (minimum level)
+        assert_eq!(Confidence::Tentative.downgrade(), Confidence::Tentative);
+    }
+
+    #[test]
+    fn test_confidence_downgrade_twice() {
+        // Double downgrade: Certain -> Firm -> Tentative
+        let confidence = Confidence::Certain;
+        let downgraded_once = confidence.downgrade();
+        let downgraded_twice = downgraded_once.downgrade();
+        assert_eq!(downgraded_twice, Confidence::Tentative);
     }
 
     #[test]

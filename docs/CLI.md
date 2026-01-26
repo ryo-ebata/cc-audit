@@ -20,10 +20,13 @@ cc-audit [OPTIONS] <PATHS>...
 
 | Option | Description |
 |--------|-------------|
-| `-f, --format <FORMAT>` | Output format: `terminal` (default), `json`, `sarif`, `html` |
+| `-f, --format <FORMAT>` | Output format: `terminal` (default), `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | Output file path (for HTML/JSON output) |
 | `-v, --verbose` | Verbose output |
 | `--ci` | CI mode: non-interactive output |
+| `--badge` | Generate security badge |
+| `--badge-format <FORMAT>` | Badge output format: `url`, `markdown` (default), `html` |
+| `--summary` | Show summary only (for batch scans) |
 
 ### Scan Options
 
@@ -37,6 +40,7 @@ cc-audit [OPTIONS] <PATHS>...
 | `--min-rule-severity <LEVEL>` | Minimum rule severity to treat as errors: `error`, `warn` |
 | `--min-confidence <LEVEL>` | Minimum confidence level: `tentative` (default), `firm`, `certain` |
 | `--skip-comments` | Skip comment lines when scanning |
+| `--strict-secrets` | Strict secrets mode: disable dummy key heuristics for test files |
 | `--deep-scan` | Enable deep scan with deobfuscation |
 
 ### Include/Exclude Options
@@ -68,13 +72,15 @@ cc-audit [OPTIONS] <PATHS>...
 | `--init-hook` | Install pre-commit hook |
 | `--remove-hook` | Remove pre-commit hook |
 
-### Custom Rules & Malware
+### Custom Rules & Databases
 
 | Option | Description |
 |--------|-------------|
 | `--custom-rules <PATH>` | Path to custom rules file (YAML format) |
 | `--malware-db <PATH>` | Path to custom malware signatures database |
 | `--no-malware-scan` | Disable malware signature scanning |
+| `--cve-db <PATH>` | Path to custom CVE database (JSON) |
+| `--no-cve-scan` | Disable CVE vulnerability scanning |
 
 ### Baseline & Drift Detection
 
@@ -92,6 +98,69 @@ cc-audit [OPTIONS] <PATHS>...
 |--------|-------------|
 | `--profile <NAME>` | Load settings from a named profile |
 | `--save-profile <NAME>` | Save current settings as a named profile |
+
+### Client Scanning
+
+| Option | Description |
+|--------|-------------|
+| `--all-clients` | Scan all installed AI coding clients (Claude, Cursor, Windsurf, VS Code) |
+| `--client <TYPE>` | Scan a specific client: `claude`, `cursor`, `windsurf`, `vscode` |
+
+### Remote Scanning
+
+| Option | Description |
+|--------|-------------|
+| `--remote <URL>` | Remote repository URL to scan (e.g., `https://github.com/user/repo`) |
+| `--git-ref <REF>` | Git ref (branch, tag, or commit) for remote scan (default: HEAD) |
+| `--remote-auth <TOKEN>` | GitHub token for authentication (or use `GITHUB_TOKEN` env var) |
+| `--remote-list <FILE>` | File containing list of repository URLs to scan (one per line) |
+| `--awesome-claude-code` | Scan all repositories from awesome-claude-code |
+| `--parallel-clones <N>` | Maximum number of parallel repository clones (default: 4) |
+
+### MCP Pinning (Rug-Pull Detection)
+
+| Option | Description |
+|--------|-------------|
+| `--pin` | Pin MCP tool configurations for rug-pull detection |
+| `--pin-verify` | Verify MCP tool pins against current configuration |
+| `--pin-update` | Update MCP tool pins with current configuration |
+| `--pin-force` | Force overwrite existing pins |
+| `--ignore-pin` | Skip pin verification during scan |
+
+### Hook Mode
+
+| Option | Description |
+|--------|-------------|
+| `--hook-mode` | Run as Claude Code Hook (reads from stdin, writes to stdout) |
+
+### SBOM (Software Bill of Materials)
+
+| Option | Description |
+|--------|-------------|
+| `--sbom` | Generate SBOM |
+| `--sbom-format <FORMAT>` | SBOM output format: `cyclonedx`, `spdx` |
+| `--sbom-npm` | Include npm dependencies in SBOM |
+| `--sbom-cargo` | Include Cargo dependencies in SBOM |
+
+### Proxy Mode (Runtime MCP Monitoring)
+
+| Option | Description |
+|--------|-------------|
+| `--proxy` | Enable proxy mode for runtime MCP monitoring |
+| `--proxy-port <PORT>` | Proxy listen port (default: 8080) |
+| `--proxy-target <HOST:PORT>` | Target MCP server address |
+| `--proxy-tls` | Enable TLS termination in proxy mode |
+| `--proxy-block` | Enable blocking mode (block messages with findings) |
+| `--proxy-log <FILE>` | Log file for proxy traffic (JSONL format) |
+
+### False Positive Reporting
+
+| Option | Description |
+|--------|-------------|
+| `--report-fp` | Report a false positive finding |
+| `--report-fp-dry-run` | Dry run mode for false positive reporting (print without submitting) |
+| `--report-fp-endpoint <URL>` | Custom endpoint URL for false positive reporting |
+| `--no-telemetry` | Disable telemetry and false positive reporting |
 
 ### Other Options
 
@@ -152,4 +221,34 @@ cc-audit --ci --format sarif --strict ./
 
 # High confidence only
 cc-audit --min-confidence certain ./skill/
+
+# Scan all installed AI coding clients
+cc-audit --all-clients
+
+# Scan a specific client
+cc-audit --client cursor
+
+# Scan a remote repository
+cc-audit --remote https://github.com/user/awesome-skill
+
+# Scan a remote repository at specific branch
+cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+
+# Scan all repositories from awesome-claude-code
+cc-audit --awesome-claude-code --summary
+
+# Generate security badge
+cc-audit ./skill/ --badge --badge-format markdown
+
+# Pin MCP tool configuration
+cc-audit --type mcp ~/.claude/mcp.json --pin
+
+# Verify MCP pins
+cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+
+# Generate SBOM
+cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# Run as proxy for runtime monitoring
+cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
 ```

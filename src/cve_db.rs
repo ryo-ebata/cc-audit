@@ -233,6 +233,7 @@ impl CveDatabase {
                 cwe_ids: cve.cwe_ids.clone(),
                 rule_severity: None,
                 client: None,
+                context: None,
             })
             .collect()
     }

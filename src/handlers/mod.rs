@@ -8,7 +8,9 @@ mod compare;
 mod config;
 mod fix;
 mod hook;
+mod hook_mode;
 mod mcp;
+mod pin;
 mod remote;
 mod scan;
 
@@ -22,7 +24,9 @@ pub use compare::handle_compare;
 pub use config::{handle_init_config, handle_save_profile, handle_show_profile};
 pub use fix::handle_fix;
 pub use hook::{handle_init_hook, handle_remove_hook};
+pub use hook_mode::handle_hook_mode;
 pub use mcp::handle_mcp_server;
+pub use pin::{handle_pin, handle_pin_verify};
 pub use remote::{handle_awesome_claude_code_scan, handle_remote_list_scan, handle_remote_scan};
 pub use scan::{run_normal_mode, run_watch_mode};
 

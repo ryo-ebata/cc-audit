@@ -173,4 +173,80 @@ mod tests {
         let root = err.root_cause();
         assert!(root.to_string().contains("root cause"));
     }
+
+    #[test]
+    fn test_json_parse_error() {
+        let json_str = "{ invalid }";
+        let json_err = serde_json::from_str::<serde_json::Value>(json_str).unwrap_err();
+        let err = CcAuditError::json_parse_error("/test.json", json_err);
+        assert!(err.to_string().contains("/test.json"));
+        assert!(err.to_string().contains("JSON"));
+    }
+
+    #[test]
+    fn test_yaml_parse_error() {
+        let yaml_str = "invalid: yaml: content";
+        let yaml_err = serde_yaml::from_str::<serde_yaml::Value>(yaml_str).unwrap_err();
+        let err = CcAuditError::yaml_parse_error("/test.yaml", yaml_err);
+        assert!(err.to_string().contains("/test.yaml"));
+        assert!(err.to_string().contains("YAML"));
+    }
+
+    #[test]
+    fn test_toml_parse_error() {
+        let toml_str = "invalid toml [";
+        let toml_err = toml::from_str::<toml::Value>(toml_str).unwrap_err();
+        let err = CcAuditError::toml_parse_error("/test.toml", toml_err);
+        assert!(err.to_string().contains("/test.toml"));
+        assert!(err.to_string().contains("TOML"));
+    }
+
+    #[test]
+    fn test_not_a_directory() {
+        let err = CcAuditError::NotADirectory(PathBuf::from("/test/file"));
+        assert!(err.to_string().contains("/test/file"));
+    }
+
+    #[test]
+    fn test_not_a_file() {
+        let err = CcAuditError::NotAFile(PathBuf::from("/test/dir"));
+        assert!(err.to_string().contains("/test/dir"));
+    }
+
+    #[test]
+    fn test_invalid_format() {
+        let err = CcAuditError::InvalidFormat {
+            path: PathBuf::from("/test/file"),
+            message: "missing field".to_string(),
+        };
+        assert!(err.to_string().contains("/test/file"));
+        assert!(err.to_string().contains("missing field"));
+    }
+
+    #[test]
+    fn test_config_error() {
+        let err = CcAuditError::Config("invalid value".to_string());
+        assert!(err.to_string().contains("invalid value"));
+    }
+
+    #[test]
+    fn test_invalid_skill_format() {
+        let err = CcAuditError::InvalidSkillFormat("missing frontmatter".to_string());
+        assert!(err.to_string().contains("missing frontmatter"));
+    }
+
+    #[test]
+    fn test_error_debug() {
+        let err = CcAuditError::FileNotFound(PathBuf::from("/test"));
+        let debug_str = format!("{:?}", err);
+        assert!(debug_str.contains("FileNotFound"));
+    }
+
+    #[test]
+    fn test_root_cause_no_source() {
+        let err = CcAuditError::Config("test".to_string());
+        let root = err.root_cause();
+        // For errors without source, root cause is the error itself
+        assert!(root.to_string().contains("test"));
+    }
 }

@@ -51,6 +51,7 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
 }
 
 /// Run normal scan mode.
+#[allow(clippy::comparison_to_empty)]
 pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     info!(paths = ?cli.paths, "Starting scan");
     match run_scan(cli) {
@@ -110,5 +111,139 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
             debug!("Scan returned no result");
             ExitCode::from(2)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use std::path::PathBuf;
+    use tempfile::TempDir;
+
+    fn create_test_cli(paths: Vec<PathBuf>) -> Cli {
+        Cli {
+            paths,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_run_normal_mode_valid_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let exit_code = run_normal_mode(&cli);
+        // Should succeed with no findings
+        assert_eq!(exit_code, ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn test_run_normal_mode_with_warn_only() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.warn_only = true;
+        let exit_code = run_normal_mode(&cli);
+        // warn_only always succeeds
+        assert_eq!(exit_code, ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn test_run_normal_mode_with_output_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+        let output_path = temp_dir.path().join("output.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.output = Some(output_path.clone());
+        let exit_code = run_normal_mode(&cli);
+        assert_eq!(exit_code, ExitCode::SUCCESS);
+        assert!(output_path.exists());
+    }
+
+    #[test]
+    fn test_run_normal_mode_with_strict() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.strict = true;
+        let exit_code = run_normal_mode(&cli);
+        // Should succeed with no findings
+        assert_eq!(exit_code, ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn test_run_normal_mode_with_baseline() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+        let baseline_path = temp_dir.path().join("baseline.json");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        // Create empty baseline
+        let mut baseline_file = fs::File::create(&baseline_path).unwrap();
+        writeln!(baseline_file, "[]").unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        cli.baseline_file = Some(baseline_path);
+        let exit_code = run_normal_mode(&cli);
+        assert_eq!(exit_code, ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn test_run_normal_mode_output_write_fail() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        // Use a path that should fail to write
+        cli.output = Some(PathBuf::from("/nonexistent/directory/output.json"));
+        let exit_code = run_normal_mode(&cli);
+        // Should fail with exit code 2
+        assert_eq!(exit_code, ExitCode::from(2));
     }
 }

@@ -1,7 +1,11 @@
 # cc-audit
 
 [![Crates.io](https://img.shields.io/crates/v/cc-audit.svg)](https://crates.io/crates/cc-audit)
-[![Downloads](https://img.shields.io/crates/d/cc-audit.svg)](https://crates.io/crates/cc-audit)
+[![Crates.io Downloads](https://img.shields.io/crates/d/cc-audit.svg)](https://crates.io/crates/cc-audit)
+[![npm](https://img.shields.io/npm/v/@cc-audit/cc-audit)](https://www.npmjs.com/package/@cc-audit/cc-audit)
+[![npm Downloads](https://img.shields.io/npm/dt/@cc-audit/cc-audit)](https://www.npmjs.com/package/@cc-audit/cc-audit)
+[![Homebrew](https://img.shields.io/badge/homebrew-ryo--ebata%2Ftap-FBB040)](https://github.com/ryo-ebata/homebrew-tap)
+[![GitHub Stars](https://img.shields.io/github/stars/ryo-ebata/cc-audit)](https://github.com/ryo-ebata/cc-audit)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/ryo-ebata/cc-audit/workflows/CI/badge.svg)](https://github.com/ryo-ebata/cc-audit/actions)
 [![codecov](https://codecov.io/gh/ryo-ebata/cc-audit/branch/main/graph/badge.svg)](https://codecov.io/gh/ryo-ebata/cc-audit)

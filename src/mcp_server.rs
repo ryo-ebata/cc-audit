@@ -501,6 +501,7 @@ impl McpServer {
             cwe_ids: rule.cwe_ids.iter().map(|s| s.to_string()).collect(),
             rule_severity: None,
             client: None,
+            context: None,
         };
 
         let fixer = AutoFixer::new(true);

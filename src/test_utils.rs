@@ -46,6 +46,7 @@ pub mod fixtures {
             cwe_ids: vec![],
             rule_severity: None,
             client: None,
+            context: None,
         }
     }
 

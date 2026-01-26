@@ -18,6 +18,7 @@
         "revert"
       ]
     ],
+    "subject-exclamation-mark": [2, "never"],
     "subject-case": [0, "always", "sentence-case"],
     "header-max-length": [2, "always", 100],
     "body-max-line-length": [0, "always", 200]

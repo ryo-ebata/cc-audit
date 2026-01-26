@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0](https://github.com/ryo-ebata/cc-audit/compare/v2.0.0...v3.0.0) (2026-01-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* Major architecture refactoring with module reorganization.
+* Default behavior now returns exit code 1 for ANY finding. Previously only critical/high findings caused CI failure.
+
+### Features
+
+* add comprehensive configuration, HTML reports, baseline drift detection, and scoring system ([c2d2ddb](https://github.com/ryo-ebata/cc-audit/commit/c2d2ddb7ddaa39e47d476b12316a608932e81e49))
+* add comprehensive configuration, HTML reports, baseline drift detection, and scoring system ([5cf067a](https://github.com/ryo-ebata/cc-audit/commit/5cf067a72cce56b2a468ef8cacd41a1c22d50554))
+* add comprehensive security scanning features for v0.2.0 ([8c9b8cd](https://github.com/ryo-ebata/cc-audit/commit/8c9b8cd6665410a33e2b6b040f0f421f11c3f0db))
+* add comprehensive security scanning features for v0.2.0 ([18b421c](https://github.com/ryo-ebata/cc-audit/commit/18b421c1f3718b3248b19512df23ac73ca4d9e1a))
+* add multi-client support and CVE vulnerability scanning ([0b351fc](https://github.com/ryo-ebata/cc-audit/commit/0b351fc2333a54546a4a08b61c96beff85fb295f))
+* add multi-platform distribution support ([f9b437c](https://github.com/ryo-ebata/cc-audit/commit/f9b437ca16e78b798a49f142ad9a8fdd1c80f5c4))
+* add multi-platform distribution support ([70c78ae](https://github.com/ryo-ebata/cc-audit/commit/70c78aec263cca74aa7847d1bfbc0bacd9fa0f2d))
+* add rule severity configuration for CI exit code control ([efe8802](https://github.com/ryo-ebata/cc-audit/commit/efe880214bf89bd5b0b3da1f6b0595544d3c4281))
+* add snapshot testing infrastructure and git hooks for CI parity ([74f7589](https://github.com/ryo-ebata/cc-audit/commit/74f75893e5f33a0b578232911f39bb16d47de79c))
+* add Terraform configuration for GitHub repository protection ([13c9c9c](https://github.com/ryo-ebata/cc-audit/commit/13c9c9c2861584a469d05b52dedea39de4de01a7))
+* add Terraform configuration for GitHub repository protection ([736e450](https://github.com/ryo-ebata/cc-audit/commit/736e450d641bd0e9557398ff2e62a6f9faca90e3))
+* add v0.4.0 major features - auto-fix, deobfuscation, MCP server, plugin/subagent scanning ([22db6bf](https://github.com/ryo-ebata/cc-audit/commit/22db6bf7efbc9c9ef860e55d23868dd0792f982a))
+* CI automation, rule severity, and documentation improvements ([a3047b8](https://github.com/ryo-ebata/cc-audit/commit/a3047b8f74b26d9b2cbd6918ef49a398cf46754e))
+* initial project setup with v0.2.0 implementation ([31bcdb1](https://github.com/ryo-ebata/cc-audit/commit/31bcdb1603431e8dd3230d289616f9dfc1ca6234))
+
+
+### Bug Fixes
+
+* add cross-platform support for git hook permissions ([e758006](https://github.com/ryo-ebata/cc-audit/commit/e758006f160b19819413cca3e0291e71f6d662db))
+* **ci:** add GITHUB_TOKEN to tfsec-action to prevent rate limiting ([acc4788](https://github.com/ryo-ebata/cc-audit/commit/acc4788b9aa0ac66f6cc2f337166ca9020fdbc3a))
+* **ci:** add Self Audit Result job for required status check ([817cf74](https://github.com/ryo-ebata/cc-audit/commit/817cf7481e812ff27057bd775d22b7a0b971e722))
+* **ci:** allow uppercase in commit subject ([18e4d9f](https://github.com/ryo-ebata/cc-audit/commit/18e4d9f70cfcc8689ea6193c1d99e31f8ccda090))
+* **ci:** use explicit SHA instead of git checkout - in benchmark comparison ([61f69f2](https://github.com/ryo-ebata/cc-audit/commit/61f69f288bf97f8178a2bb46f76096b512d67a19))
+* **ci:** use fetch-depth 0 and proper branch checkout for benchmark comparison ([efcf001](https://github.com/ryo-ebata/cc-audit/commit/efcf0012709743951802e4a25350f3d8fec2072f))
+* **ci:** use PAT for release-please to bypass GITHUB_TOKEN restrictions ([71513ad](https://github.com/ryo-ebata/cc-audit/commit/71513ad04aefbb6414281a236d544d5871bd078e))
+* correct version to 1.1.0 (was incorrectly released as 2.0.0) ([07e4bf9](https://github.com/ryo-ebata/cc-audit/commit/07e4bf9a7b5944ea47965220a839bb4327df7954))
+* **infra:** make required_status_checks block conditional ([f2b37b6](https://github.com/ryo-ebata/cc-audit/commit/f2b37b6962134f414048d72d35a58b4dfbd014d9))
+* **infra:** remove default required status checks ([983e67c](https://github.com/ryo-ebata/cc-audit/commit/983e67ca7f653ea25e5606307b9dcd9060b00fa9))
+* upgrade notify v7 to v8 to resolve RUSTSEC-2024-0384 ([aca5eca](https://github.com/ryo-ebata/cc-audit/commit/aca5eca8a305e73916b575d22ac1ee680655f00c))
+
 ## [1.1.0](https://github.com/ryo-ebata/cc-audit/compare/v1.0.0...v1.1.0) (2026-01-26)
 
 

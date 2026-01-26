@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1](https://github.com/ryo-ebata/cc-audit/compare/v3.1.0...v3.1.1) (2026-01-26)
+
+
+### Bug Fixes
+
+* 誤検知(False Positive)の削減 ([#35](https://github.com/ryo-ebata/cc-audit/issues/35)) ([8303692](https://github.com/ryo-ebata/cc-audit/commit/83036923cbb66129e63826c48679faae2e98552f))
+
 ## [3.1.0](https://github.com/ryo-ebata/cc-audit/compare/v3.0.0...v3.1.0) (2026-01-26)
 
 

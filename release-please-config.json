@@ -4,6 +4,7 @@
   "packages": {
     ".": {
       "release-type": "rust",
+      "release-as": "1.2.0",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",

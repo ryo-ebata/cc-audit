@@ -2,7 +2,7 @@
 # Place this file as .cc-audit.yaml in your project root
 
 # =============================================================================
-# RULE SEVERITY CONFIGURATION (v0.5.0)
+# RULE SEVERITY CONFIGURATION (v3.0.0)
 # =============================================================================
 # Controls how findings affect CI exit code.
 # - error: Causes CI failure (exit 1) - DEFAULT for all rules
@@ -11,25 +11,25 @@
 #
 # Priority: ignore > warn > default
 
-# severity:
-#   # Default severity for all rules
-#   default: error
-#
-#   # Rules to treat as warnings only (report but don't fail CI)
-#   warn:
-#     - PI-001    # Prompt injection patterns
-#     - PI-002
-#     - OB-001    # Obfuscation patterns
-#
-#   # Rules to completely ignore (no report)
-#   ignore:
-#     - OP-001    # Overpermission
+severity:
+  # Default severity for all rules
+  default: error
+
+  # Rules to treat as warnings only (report but don't fail CI)
+  # warn:
+  #   - PI-001    # Prompt injection patterns
+  #   - PI-002
+  #   - OB-001    # Obfuscation patterns
+
+  # Rules to completely ignore (no report)
+  # ignore:
+  #   - OP-001    # Overpermission
 
 # =============================================================================
 # SCAN CONFIGURATION
 # =============================================================================
 scan:
-  # Output format: terminal, json, sarif, html
+  # Output format: terminal, json, sarif, html, markdown
   # format: terminal
 
   # Strict mode: show medium/low severity findings and treat warnings as errors
@@ -80,21 +80,93 @@ scan:
   # Preview auto-fix changes without applying them
   fix_dry_run: false
 
+  # Warn-only mode: treat all findings as warnings (always exit 0)
+  warn_only: false
+
+  # Minimum severity level to include: critical, high, medium, low
+  # min_severity: high
+
+  # Minimum rule severity to treat as errors: error, warn
+  # min_rule_severity: error
+
+  # Strict secrets mode: disable dummy key heuristics for test files
+  strict_secrets: false
+
+  # ---------------------------------------------------------------------------
+  # CVE Scan Options (v1.1.0)
+  # ---------------------------------------------------------------------------
+  # Disable CVE vulnerability scanning
+  no_cve_scan: false
+
+  # Path to a custom CVE database (JSON)
+  # cve_db: ./custom-cve.json
+
+  # ---------------------------------------------------------------------------
+  # Remote Scanning Options (v1.1.0)
+  # ---------------------------------------------------------------------------
+  # Remote repository URL to scan
+  # remote: https://github.com/user/repo
+
+  # Git reference to checkout (branch, tag, commit)
+  # git_ref: main
+
+  # GitHub authentication token (also reads from GITHUB_TOKEN env var)
+  # remote_auth: ghp_xxxxxxxxxxxx
+
+  # Number of parallel clones for batch scanning
+  # parallel_clones: 4
+
+  # ---------------------------------------------------------------------------
+  # Badge Options (v1.1.0)
+  # ---------------------------------------------------------------------------
+  # Generate a badge for the scan result
+  badge: false
+
+  # Badge format: markdown, html, json
+  # badge_format: markdown
+
+  # Show summary only (useful for batch scanning)
+  summary: false
+
+  # ---------------------------------------------------------------------------
+  # Client Scan Options (v1.1.0)
+  # ---------------------------------------------------------------------------
+  # Scan all installed AI coding clients (Claude Code, Cursor, etc.)
+  all_clients: false
+
+  # Specific client to scan: claude, cursor, windsurf, vscode
+  # client: claude
+
+  # ---------------------------------------------------------------------------
+  # SBOM Options (v1.2.0)
+  # ---------------------------------------------------------------------------
+  # Generate SBOM (Software Bill of Materials)
+  sbom: false
+
+  # SBOM output format: cyclonedx, spdx
+  # sbom_format: cyclonedx
+
+  # Include npm dependencies in SBOM
+  sbom_npm: false
+
+  # Include Cargo dependencies in SBOM
+  sbom_cargo: false
+
 # =============================================================================
 # BASELINE CONFIGURATION (Drift Detection / Rug Pull Prevention)
 # =============================================================================
-# baseline:
-#   # Create a baseline snapshot when scanning
-#   enabled: false
-#
-#   # Check for drift against saved baseline
-#   check_drift: false
-#
-#   # Path to save baseline to
-#   save_to: ./.cc-audit-baseline.json
-#
-#   # Path to baseline file to compare against
-#   compare_with: ./.cc-audit-baseline.json
+baseline:
+  # Create a baseline snapshot when scanning
+  enabled: false
+
+  # Check for drift against saved baseline
+  check_drift: false
+
+  # Path to save baseline to
+  # save_to: ./.cc-audit-baseline.json
+
+  # Path to baseline file to compare against
+  # compare_with: ./.cc-audit-baseline.json
 
 # =============================================================================
 # WATCH MODE CONFIGURATION
@@ -122,6 +194,12 @@ ignore:
   # These directories contain intentionally malicious test content
   patterns:
     - 'examples/**'
+    - 'docs/**'
+    - 'src/**/*test*'
+    - 'tests/**'
+    - 'benches/**'
+    - 'homebrew/**'
+    - 'scripts/**'
 
   # Include test directories in scan
   include_tests: false

@@ -1,7 +1,9 @@
 //! MCP tool pinning handler.
 
+use crate::Config;
 use crate::cli::Cli;
 use crate::pinning::{PINNING_FILENAME, ToolPins};
+use crate::run::EffectiveConfig;
 use colored::Colorize;
 use std::path::Path;
 use std::process::ExitCode;
@@ -13,6 +15,15 @@ pub fn handle_pin(cli: &Cli) -> ExitCode {
         .first()
         .cloned()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // Load config to get effective settings
+    let project_root = if target_path.is_dir() {
+        Some(target_path.as_path())
+    } else {
+        target_path.parent()
+    };
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
 
     // Find MCP config file
     let mcp_path = find_mcp_config(&target_path);
@@ -64,7 +75,7 @@ pub fn handle_pin(cli: &Cli) -> ExitCode {
                 target_path.join(PINNING_FILENAME).display()
             );
 
-            if cli.verbose {
+            if effective.verbose {
                 println!();
                 for (name, tool) in &pins.tools {
                     println!("  {} {}", "📌".dimmed(), name);

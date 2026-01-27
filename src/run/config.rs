@@ -30,12 +30,18 @@ pub struct EffectiveConfig {
     pub fix_dry_run: bool,
     pub malware_db: Option<String>,
     pub custom_rules: Option<String>,
+    /// Strict secrets mode: disable dummy key heuristics for test files.
+    pub strict_secrets: bool,
 
     // v1.1.0: Remote scan options
     pub remote: Option<String>,
     pub git_ref: String,
     pub remote_auth: Option<String>,
     pub parallel_clones: usize,
+    /// File containing list of repository URLs to scan.
+    pub remote_list: Option<String>,
+    /// Scan all repositories from awesome-claude-code.
+    pub awesome_claude_code: bool,
 
     // v1.1.0: Badge options
     pub badge: bool,
@@ -49,6 +55,16 @@ pub struct EffectiveConfig {
     // v1.1.0: CVE scan options
     pub no_cve_scan: bool,
     pub cve_db: Option<String>,
+
+    // v1.2.0: SBOM options
+    /// Generate SBOM (Software Bill of Materials).
+    pub sbom: bool,
+    /// SBOM output format: "cyclonedx", "spdx".
+    pub sbom_format: Option<String>,
+    /// Include npm dependencies in SBOM.
+    pub sbom_npm: bool,
+    /// Include Cargo dependencies in SBOM.
+    pub sbom_cargo: bool,
 }
 
 impl EffectiveConfig {
@@ -125,13 +141,43 @@ impl EffectiveConfig {
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.cve_db.clone());
 
+        // v1.1.0: Additional remote options
+        let remote_list = cli
+            .remote_list
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .or_else(|| config.scan.remote_list.clone());
+        let awesome_claude_code = cli.awesome_claude_code || config.scan.awesome_claude_code;
+
+        // v1.2.0: SBOM options
+        let sbom = cli.sbom || config.scan.sbom;
+        let sbom_format = cli
+            .sbom_format
+            .clone()
+            .or_else(|| config.scan.sbom_format.clone());
+        let sbom_npm = cli.sbom_npm || config.scan.sbom_npm;
+        let sbom_cargo = cli.sbom_cargo || config.scan.sbom_cargo;
+
+        // strict_secrets: CLI OR config
+        let strict_secrets = cli.strict_secrets || config.scan.strict_secrets;
+
+        // Parse min_severity from config if CLI doesn't provide it
+        let min_severity = cli
+            .min_severity
+            .or_else(|| parse_severity(config.scan.min_severity.as_deref()));
+
+        // Parse min_rule_severity from config if CLI doesn't provide it
+        let min_rule_severity = cli
+            .min_rule_severity
+            .or_else(|| parse_rule_severity(config.scan.min_rule_severity.as_deref()));
+
         Self {
             format,
             // Boolean flags: OR operation (config can enable, CLI can enable)
             strict: cli.strict || config.scan.strict,
-            warn_only: cli.warn_only,
-            min_severity: cli.min_severity,
-            min_rule_severity: cli.min_rule_severity,
+            warn_only: cli.warn_only || config.scan.warn_only,
+            min_severity,
+            min_rule_severity,
             scan_type,
             recursive: cli.recursive || config.scan.recursive,
             ci: cli.ci || config.scan.ci,
@@ -148,11 +194,14 @@ impl EffectiveConfig {
             output,
             malware_db,
             custom_rules,
+            strict_secrets,
             // v1.1.0 options
             remote,
             git_ref,
             remote_auth,
             parallel_clones,
+            remote_list,
+            awesome_claude_code,
             badge,
             badge_format,
             summary,
@@ -160,6 +209,11 @@ impl EffectiveConfig {
             client,
             no_cve_scan,
             cve_db,
+            // v1.2.0 options
+            sbom,
+            sbom_format,
+            sbom_npm,
+            sbom_cargo,
         }
     }
 }
@@ -186,6 +240,16 @@ pub fn parse_scan_type(s: Option<&str>) -> Option<ScanType> {
 
 /// Parse confidence level from string using FromStr.
 pub fn parse_confidence(s: Option<&str>) -> Option<Confidence> {
+    s?.parse().ok()
+}
+
+/// Parse severity level from string using FromStr.
+pub fn parse_severity(s: Option<&str>) -> Option<Severity> {
+    s?.parse().ok()
+}
+
+/// Parse rule severity level from string using FromStr.
+pub fn parse_rule_severity(s: Option<&str>) -> Option<RuleSeverity> {
     s?.parse().ok()
 }
 

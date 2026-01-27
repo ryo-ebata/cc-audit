@@ -103,10 +103,13 @@ mod tests {
             fix_dry_run: false,
             malware_db: None,
             custom_rules: None,
+            strict_secrets: false,
             remote: None,
             git_ref: "HEAD".to_string(),
             remote_auth: None,
             parallel_clones: 4,
+            remote_list: None,
+            awesome_claude_code: false,
             badge: false,
             badge_format: crate::BadgeFormat::Markdown,
             summary: false,
@@ -114,6 +117,10 @@ mod tests {
             client: None,
             no_cve_scan: false,
             cve_db: None,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
         };
 
         let result = create_test_result();
@@ -145,10 +152,13 @@ mod tests {
             fix_dry_run: false,
             malware_db: None,
             custom_rules: None,
+            strict_secrets: false,
             remote: None,
             git_ref: "HEAD".to_string(),
             remote_auth: None,
             parallel_clones: 4,
+            remote_list: None,
+            awesome_claude_code: false,
             badge: false,
             badge_format: crate::BadgeFormat::Markdown,
             summary: false,
@@ -156,6 +166,10 @@ mod tests {
             client: None,
             no_cve_scan: false,
             cve_db: None,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
         };
 
         let result = create_test_result();

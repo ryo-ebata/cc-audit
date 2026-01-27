@@ -1,12 +1,23 @@
 //! Proxy mode handler.
 
-use crate::Cli;
 use crate::proxy::{ProxyConfig, ProxyServer};
+use crate::run::EffectiveConfig;
+use crate::{Cli, Config};
 use colored::Colorize;
 use std::process::ExitCode;
 
 /// Handle the --proxy command.
 pub fn handle_proxy(cli: &Cli) -> ExitCode {
+    // Load config from current directory to get effective settings
+    let project_root = cli.paths.first().and_then(|p| {
+        if p.is_dir() {
+            Some(p.as_path())
+        } else {
+            p.parent()
+        }
+    });
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
     // Parse listen address
     let listen_addr = match &cli.proxy_port {
         Some(port) => format!("127.0.0.1:{}", port).parse(),
@@ -57,7 +68,7 @@ pub fn handle_proxy(cli: &Cli) -> ExitCode {
 
     // Block mode
     if cli.proxy_block {
-        let severity = cli.min_severity.unwrap_or(crate::Severity::High);
+        let severity = effective.min_severity.unwrap_or(crate::Severity::High);
         config = config.with_block_mode(severity);
     }
 
@@ -66,8 +77,8 @@ pub fn handle_proxy(cli: &Cli) -> ExitCode {
         config = config.with_log_file(log_path.clone());
     }
 
-    // Verbose
-    if cli.verbose {
+    // Verbose (use effective config)
+    if effective.verbose {
         config = config.with_verbose();
     }
 

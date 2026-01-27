@@ -48,6 +48,14 @@ macro_rules! impl_scanner_builder {
                 self.config = self.config.with_dynamic_rules(rules);
                 self
             }
+
+            /// Enables or disables strict secrets mode.
+            /// When enabled, dummy key heuristics are disabled for test files.
+            #[allow(dead_code)]
+            pub fn with_strict_secrets(mut self, strict: bool) -> Self {
+                self.config = self.config.with_strict_secrets(strict);
+                self
+            }
         }
 
         impl Default for $scanner {
@@ -167,6 +175,12 @@ mod tests {
         let scanner = TestScanner::new().with_dynamic_rules(vec![]);
         // Just verify it compiles and runs
         assert!(!scanner.config.skip_comments());
+    }
+
+    #[test]
+    fn test_with_strict_secrets() {
+        let scanner = TestScanner::new().with_strict_secrets(true);
+        assert!(scanner.config.strict_secrets());
     }
 
     #[test]

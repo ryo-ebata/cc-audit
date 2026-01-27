@@ -1,6 +1,6 @@
 //! CVE database scanning for dependency vulnerabilities.
 
-use crate::{CveDatabase, DirectoryWalker, Finding, WalkConfig};
+use crate::{CveDatabase, DirectoryWalker, Finding, IgnoreFilter, WalkConfig};
 use std::fs;
 use std::path::Path;
 use tracing::{debug, info};
@@ -15,11 +15,19 @@ const CVE_RELEVANT_FILES: &[&str] = &[
 ];
 
 /// Scan a path for CVE vulnerabilities in dependencies.
-pub fn scan_path_with_cve_db(path: &Path, db: &CveDatabase) -> Vec<Finding> {
+///
+/// The `ignore_filter` parameter is used to skip files/directories that match
+/// the ignore patterns configured in `.cc-audit.yaml`.
+pub fn scan_path_with_cve_db(
+    path: &Path,
+    db: &CveDatabase,
+    ignore_filter: &IgnoreFilter,
+) -> Vec<Finding> {
     let mut findings = Vec::new();
 
     if path.is_file() {
-        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+        if !ignore_filter.is_ignored(path)
+            && let Some(name) = path.file_name().and_then(|n| n.to_str())
             && CVE_RELEVANT_FILES.contains(&name)
             && let Ok(content) = fs::read_to_string(path)
         {
@@ -30,7 +38,8 @@ pub fn scan_path_with_cve_db(path: &Path, db: &CveDatabase) -> Vec<Finding> {
         debug!(path = %path.display(), "Scanning directory for CVE vulnerabilities");
         let walker = DirectoryWalker::new(WalkConfig::default());
         for file_path in walker.walk_single(path) {
-            if let Some(name) = file_path.file_name().and_then(|n| n.to_str())
+            if !ignore_filter.is_ignored(&file_path)
+                && let Some(name) = file_path.file_name().and_then(|n| n.to_str())
                 && CVE_RELEVANT_FILES.contains(&name)
                 && let Ok(content) = fs::read_to_string(&file_path)
             {
@@ -145,8 +154,13 @@ fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<F
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::IgnoreConfig;
     use std::io::Write;
     use tempfile::TempDir;
+
+    fn create_default_filter(path: &Path) -> IgnoreFilter {
+        IgnoreFilter::from_config(path, &IgnoreConfig::default())
+    }
 
     #[test]
     fn test_scan_path_with_cve_db_empty() {
@@ -157,7 +171,8 @@ mod tests {
         writeln!(file, "Not a relevant file").unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         assert!(findings.is_empty());
     }
 
@@ -178,7 +193,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // No CVEs for express in our database
         assert!(findings.is_empty());
     }
@@ -209,8 +225,9 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
         // This tests the mcp-inspector code path
-        let _findings = scan_path_with_cve_db(&file_path, &db);
+        let _findings = scan_path_with_cve_db(&file_path, &db, &filter);
     }
 
     #[test]
@@ -230,7 +247,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // May find CVE for mcp-remote
         assert!(findings.is_empty() || !findings.is_empty());
     }
@@ -252,7 +270,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // Test that the function handles this package
         assert!(findings.is_empty() || !findings.is_empty());
     }
@@ -275,7 +294,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // Should handle extensions.json
         assert!(findings.is_empty());
     }
@@ -299,7 +319,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // Should check mcp-remote in mcpServers
         assert!(findings.is_empty() || !findings.is_empty());
     }
@@ -323,7 +344,8 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(&file_path, &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
         // Should check inspector server
         assert!(findings.is_empty() || !findings.is_empty());
     }
@@ -345,15 +367,47 @@ mod tests {
         .unwrap();
 
         let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
         // Scan the directory instead of the file
-        let findings = scan_path_with_cve_db(temp_dir.path(), &db);
+        let findings = scan_path_with_cve_db(temp_dir.path(), &db, &filter);
         assert!(findings.is_empty());
     }
 
     #[test]
     fn test_scan_nonexistent_path() {
+        let temp_dir = TempDir::new().unwrap();
         let db = CveDatabase::default();
-        let findings = scan_path_with_cve_db(Path::new("/nonexistent/path"), &db);
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(Path::new("/nonexistent/path"), &db, &filter);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_scan_path_respects_ignore_patterns() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a package.json in an ignored directory
+        let ignored_dir = temp_dir.path().join("node_modules").join("some-pkg");
+        fs::create_dir_all(&ignored_dir).unwrap();
+        let ignored_file = ignored_dir.join("package.json");
+        let mut file = fs::File::create(&ignored_file).unwrap();
+        writeln!(
+            file,
+            r#"{{
+            "dependencies": {{
+                "mcp-inspector": "0.1.0"
+            }}
+        }}"#
+        )
+        .unwrap();
+
+        // Default config ignores node_modules
+        let filter = create_default_filter(temp_dir.path());
+
+        let db = CveDatabase::default();
+        let findings = scan_path_with_cve_db(temp_dir.path(), &db, &filter);
+
+        // Should be empty because node_modules is ignored by default
         assert!(findings.is_empty());
     }
 

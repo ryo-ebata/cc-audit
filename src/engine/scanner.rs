@@ -78,6 +78,7 @@ pub struct ScannerConfig {
     engine: RuleEngine,
     ignore_filter: Option<IgnoreFilter>,
     skip_comments: bool,
+    strict_secrets: bool,
 }
 
 impl ScannerConfig {
@@ -87,13 +88,22 @@ impl ScannerConfig {
             engine: RuleEngine::new(),
             ignore_filter: None,
             skip_comments: false,
+            strict_secrets: false,
         }
     }
 
     /// Enables or disables comment skipping during scanning.
     pub fn with_skip_comments(mut self, skip: bool) -> Self {
         self.skip_comments = skip;
-        self.engine = RuleEngine::new().with_skip_comments(skip);
+        self.engine = self.engine.with_skip_comments(skip);
+        self
+    }
+
+    /// Enables or disables strict secrets mode.
+    /// When enabled, dummy key heuristics are disabled for test files.
+    pub fn with_strict_secrets(mut self, strict: bool) -> Self {
+        self.strict_secrets = strict;
+        self.engine = self.engine.with_strict_secrets(strict);
         self
     }
 
@@ -150,6 +160,11 @@ impl ScannerConfig {
     /// Returns whether skip_comments is enabled.
     pub fn skip_comments(&self) -> bool {
         self.skip_comments
+    }
+
+    /// Returns whether strict_secrets is enabled.
+    pub fn strict_secrets(&self) -> bool {
+        self.strict_secrets
     }
 
     /// Returns a reference to the underlying RuleEngine.

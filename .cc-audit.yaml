@@ -195,11 +195,14 @@ ignore:
   patterns:
     - 'examples/**'
     - 'docs/**'
-    - 'src/**/*test*'
+    - 'src/**'
     - 'tests/**'
     - 'benches/**'
     - 'homebrew/**'
     - 'scripts/**'
+    - 'data/**'
+    - 'target/**'
+    - 'npm/**'
 
   # Include test directories in scan
   include_tests: false

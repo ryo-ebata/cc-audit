@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+* **terminal:** improve error display with lint-style output format ([#43](https://github.com/ryo-ebata/cc-audit/issues/43)) ([d36885e](https://github.com/ryo-ebata/cc-audit/commit/d36885e62c671b7fdae39a96baa70de4417e8fee))
+
+## [3.1.4](https://github.com/ryo-ebata/cc-audit/compare/v3.1.3...v3.1.4) (2026-01-27)
+
+
+### Bug Fixes
+
 * **terminal:** improve error display with lint-style output format
 
 Add lint-style output format similar to ESLint, Clippy for better readability:

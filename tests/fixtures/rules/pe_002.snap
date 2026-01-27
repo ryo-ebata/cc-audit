@@ -35,5 +35,16 @@ expression: findings
     "code": "rm -rf --no-preserve-root /",
     "message": "Destructive command: potential filesystem destruction detected",
     "recommendation": "Never use rm -rf on root or with wildcards in skills"
+  },
+  {
+    "id": "PE-002",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "certain",
+    "name": "Destructive root deletion",
+    "line": 8,
+    "code": "rm -Rf /var/",
+    "message": "Destructive command: potential filesystem destruction detected",
+    "recommendation": "Never use rm -rf on root or with wildcards in skills"
   }
 ]

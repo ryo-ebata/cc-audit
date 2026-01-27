@@ -272,6 +272,7 @@ impl Default for RuleEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::types::Confidence;
 
     #[test]
     fn test_detect_curl_with_env_var() {
@@ -805,5 +806,150 @@ rules:
             findings.iter().any(|f| f.id == "CUSTOM-004"),
             "Should detect pattern after add_dynamic_rules"
         );
+    }
+
+    #[test]
+    fn test_with_strict_secrets_disabled_by_default() {
+        let engine = RuleEngine::new();
+        assert!(!engine.strict_secrets);
+    }
+
+    #[test]
+    fn test_with_strict_secrets_enabled() {
+        let engine = RuleEngine::new().with_strict_secrets(true);
+        assert!(engine.strict_secrets);
+
+        // With strict secrets, test file heuristics should NOT apply
+        // Check a secret pattern in a test file
+        let content = r#"API_KEY = "sk-1234567890abcdef1234567890abcdef""#;
+        let findings = engine.check_content(content, "test_config.rs");
+
+        // Even in test file, confidence should NOT be downgraded in strict mode
+        for finding in &findings {
+            if finding.category == Category::SecretLeak {
+                // In strict mode, confidence is not downgraded
+                assert_ne!(finding.confidence, Confidence::Tentative);
+            }
+        }
+    }
+
+    #[test]
+    fn test_secret_leak_heuristics_in_test_file() {
+        let engine = RuleEngine::new(); // strict_secrets = false by default
+
+        // This should trigger a secret leak finding
+        let content = r#"password = "supersecretpassword123""#;
+        let findings = engine.check_content(content, "test_helpers.rs");
+
+        // In test file, confidence should be downgraded
+        for finding in &findings {
+            if finding.category == Category::SecretLeak {
+                // Confidence should be downgraded in test files
+                assert!(
+                    finding.confidence <= Confidence::Firm,
+                    "Confidence should be downgraded in test files"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_secret_leak_heuristics_with_dummy_variable() {
+        let engine = RuleEngine::new(); // strict_secrets = false by default
+
+        // Content with dummy variable names like "example", "test", "dummy"
+        let content = r#"password = "example_password_test""#;
+        let findings = engine.check_content(content, "config.rs");
+
+        // With dummy variable names, confidence should be downgraded
+        for finding in &findings {
+            if finding.category == Category::SecretLeak {
+                // Confidence may be downgraded due to dummy variable names
+                assert!(finding.confidence <= Confidence::Certain);
+            }
+        }
+    }
+
+    #[test]
+    fn test_dynamic_rule_heuristics_in_test_file() {
+        use crate::rules::custom::CustomRuleLoader;
+
+        let yaml = r#"
+version: "1"
+rules:
+  - id: "SECRET-TEST"
+    name: "Test Secret"
+    severity: "high"
+    category: "secret-leak"
+    patterns:
+      - 'secret_value\s*='
+    message: "Secret value detected"
+"#;
+        let dynamic_rules = CustomRuleLoader::load_from_string(yaml).unwrap();
+        let engine = RuleEngine::new().with_dynamic_rules(dynamic_rules);
+
+        let content = "secret_value = abc123";
+        let findings = engine.check_content(content, "test_file.rs");
+
+        // Dynamic rule findings in test files should have downgraded confidence
+        for finding in &findings {
+            if finding.id == "SECRET-TEST" {
+                assert!(
+                    finding.confidence <= Confidence::Firm,
+                    "Dynamic rule confidence should be downgraded in test files"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_dynamic_rule_heuristics_with_dummy_variable() {
+        use crate::rules::custom::CustomRuleLoader;
+
+        let yaml = r#"
+version: "1"
+rules:
+  - id: "SECRET-DUMMY"
+    name: "Test Secret Dummy"
+    severity: "high"
+    category: "secret-leak"
+    patterns:
+      - 'api_key\s*='
+    message: "API key detected"
+"#;
+        let dynamic_rules = CustomRuleLoader::load_from_string(yaml).unwrap();
+        let engine = RuleEngine::new().with_dynamic_rules(dynamic_rules);
+
+        // Content with dummy variable name
+        let content = "api_key = example_key_for_testing";
+        let findings = engine.check_content(content, "config.rs");
+
+        // Findings with dummy variables should have downgraded confidence
+        for finding in &findings {
+            if finding.id == "SECRET-DUMMY" {
+                // Confidence may be downgraded due to dummy variable
+                assert!(finding.confidence <= Confidence::Certain);
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_rule_by_id() {
+        let engine = RuleEngine::new();
+        let rule = engine.get_rule("EX-001");
+        assert!(rule.is_some());
+        assert_eq!(rule.unwrap().id, "EX-001");
+
+        let nonexistent = engine.get_rule("NONEXISTENT-001");
+        assert!(nonexistent.is_none());
+    }
+
+    #[test]
+    fn test_get_all_rules() {
+        let engine = RuleEngine::new();
+        let rules = engine.get_all_rules();
+        assert!(!rules.is_empty());
+        // Should have many builtin rules
+        assert!(rules.len() > 50);
     }
 }

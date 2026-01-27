@@ -138,7 +138,7 @@ Result: FAIL (exit code 1)
 
 ## Key Features
 
-- **50+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
+- **95+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
 - **Multiple Scan Types** — Skills, hooks, MCP servers, commands, Docker, dependencies, subagents, plugins
 - **Multi-Client Support** — Auto-detect and scan Claude, Cursor, Windsurf, VS Code configurations
 - **Remote Repository Scanning** — Scan GitHub repositories directly, including awesome-claude-code ecosystem

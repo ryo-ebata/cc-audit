@@ -146,7 +146,23 @@ mod cli_options {
     fn test_verbose_mode() {
         let skill_path = fixtures_path().join("malicious/data-exfil");
 
+        // Friendly mode (default) shows lint-style labels and confidence in verbose mode
         cmd()
+            .arg("--verbose")
+            .arg(skill_path)
+            .assert()
+            .failure()
+            .stdout(predicate::str::contains("fix:"))
+            .stdout(predicate::str::contains("confidence:"));
+    }
+
+    #[test]
+    fn test_compact_mode() {
+        let skill_path = fixtures_path().join("malicious/data-exfil");
+
+        // Compact mode shows English labels
+        cmd()
+            .arg("--compact")
             .arg("--verbose")
             .arg(skill_path)
             .assert()

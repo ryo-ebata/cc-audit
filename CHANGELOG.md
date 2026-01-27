@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.4](https://github.com/ryo-ebata/cc-audit/compare/v3.1.3...v3.1.4) (2026-01-27)
+
+
+### Bug Fixes
+
+* **terminal:** improve error display with lint-style output format
+
+Add lint-style output format similar to ESLint, Clippy for better readability:
+- Shows code with line number gutter and caret pointer (^)
+- Structured labels: why, ref, fix, example
+- Add --compact option for traditional output format
+- Document new output format in CLI.md and CLI.ja.md
+
 ## [3.1.3](https://github.com/ryo-ebata/cc-audit/compare/v3.1.2...v3.1.3) (2026-01-27)
 
 

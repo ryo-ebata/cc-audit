@@ -1,5 +1,6 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::fs;
+use std::hint::black_box;
 use tempfile::TempDir;
 
 use cc_audit::{

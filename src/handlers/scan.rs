@@ -1,8 +1,11 @@
 //! Scan mode handlers.
 
-use crate::{Cli, WatchModeResult, format_result, run_scan, setup_watch_mode, watch_iteration};
+use crate::run::EffectiveConfig;
+use crate::{
+    Cli, Config, WatchModeResult, format_result, run_scan, setup_watch_mode, watch_iteration,
+};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing::{debug, info, warn};
 
@@ -113,8 +116,22 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
 pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     info!(paths = ?cli.paths, "Starting scan");
 
+    // Load config to get effective settings
+    let project_root = cli.paths.first().and_then(|p| {
+        if p.is_dir() {
+            Some(p.as_path())
+        } else {
+            p.parent()
+        }
+    });
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+
+    // Get the effective output path (CLI or config file)
+    let effective_output_path: Option<PathBuf> = effective.output.as_ref().map(PathBuf::from);
+
     // Validate output path before scanning
-    if let Some(ref output_path) = cli.output
+    if let Some(ref output_path) = effective_output_path
         && let Err(e) = validate_output_path(output_path)
     {
         eprintln!("Invalid output path: {}", e);
@@ -138,8 +155,8 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
 
             let output = format_result(cli, &result);
 
-            // Write to file if --output is specified
-            if let Some(ref output_path) = cli.output {
+            // Write to file if output path is specified (CLI or config)
+            if let Some(ref output_path) = effective_output_path {
                 match fs::write(output_path, &output) {
                     Ok(()) => {
                         println!("Output written to {}", output_path.display());
@@ -164,9 +181,11 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
             // - warn_only: always exit 0 (warnings don't fail CI)
             // - strict: exit 1 if any findings (errors or warnings)
             // - normal: exit 1 if any errors
-            if cli.warn_only {
+            let warn_only = effective.warn_only;
+
+            if warn_only {
                 ExitCode::SUCCESS
-            } else if cli.strict {
+            } else if effective.strict {
                 // In strict mode, any finding (error or warning) is a failure
                 if result.summary.errors > 0 || result.summary.warnings > 0 {
                     ExitCode::from(1)

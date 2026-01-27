@@ -137,11 +137,13 @@ cat ./my-rules.yaml | python -c "import yaml, sys; yaml.safe_load(sys.stdin)"
 
 **Q: Does cc-audit send any data externally?**
 
-A: No. cc-audit runs entirely locally. No data is transmitted to external servers.
+A: By default, no. Scan results stay local. However, some optional features require network access:
+- `--remote` / `--awesome-claude-code`: Clones repositories via git
+- `--report-fp`: Submits false positive reports (use `--no-telemetry` to disable)
 
 **Q: Can I use cc-audit in air-gapped environments?**
 
-A: Yes. Once installed, cc-audit works completely offline.
+A: Yes, for local scanning. Clone repositories manually first, then scan locally. The `--remote` feature is not available in air-gapped environments.
 
 **Q: How do I suppress specific rules?**
 
@@ -159,7 +161,7 @@ A: No. Only text-based files (scripts, configs, markdown, JSON, YAML, etc.).
 
 **Q: Can I scan remote repositories directly?**
 
-A: Not yet. Clone first, then scan locally. Remote scanning is planned for v1.0.0.
+A: Yes! Use `--remote <URL>` to scan a single repository, `--remote-list <FILE>` for multiple repositories, or `--awesome-claude-code` to scan all awesome-claude-code repositories. See [Remote Repository Scanning](./FEATURES.md#remote-repository-scanning) for details.
 
 **Q: What's the difference between `--strict` and default mode?**
 

@@ -1,9 +1,11 @@
 //! SBOM generation handler.
 
-use crate::Cli;
+use crate::run::EffectiveConfig;
 use crate::sbom::{SbomBuilder, SbomFormat};
+use crate::{Cli, Config};
 use colored::Colorize;
 use std::fs;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Handle the --sbom command.
@@ -19,18 +21,27 @@ pub fn handle_sbom(cli: &Cli) -> ExitCode {
         return ExitCode::from(2);
     }
 
-    // Determine format
-    let format = cli
+    // Load config to get effective settings
+    let project_root = if path.is_dir() {
+        Some(path.as_path())
+    } else {
+        path.parent()
+    };
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+
+    // Determine format (effective config includes merged CLI and config file)
+    let format = effective
         .sbom_format
         .as_ref()
         .and_then(|f| f.parse::<SbomFormat>().ok())
         .unwrap_or(SbomFormat::CycloneDx);
 
-    // Build SBOM
+    // Build SBOM using effective config
     let mut builder = SbomBuilder::new()
         .with_format(format)
-        .with_npm(cli.sbom_npm)
-        .with_cargo(cli.sbom_cargo);
+        .with_npm(effective.sbom_npm)
+        .with_cargo(effective.sbom_cargo);
 
     if let Err(e) = builder.build_from_path(&path) {
         eprintln!("{} Failed to extract dependencies: {}", "Error:".red(), e);
@@ -46,8 +57,9 @@ pub fn handle_sbom(cli: &Cli) -> ExitCode {
         }
     };
 
-    // Output to file or stdout
-    if let Some(ref output_path) = cli.output {
+    // Output to file or stdout (use effective config for output path)
+    let effective_output: Option<PathBuf> = effective.output.as_ref().map(PathBuf::from);
+    if let Some(ref output_path) = effective_output {
         if let Err(e) = fs::write(output_path, &output) {
             eprintln!(
                 "{} Failed to write SBOM to {}: {}",

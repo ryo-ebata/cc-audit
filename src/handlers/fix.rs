@@ -1,12 +1,24 @@
 //! Auto-fix handler.
 
-use crate::{AutoFixer, Cli, run_scan};
+use crate::run::EffectiveConfig;
+use crate::{AutoFixer, Cli, Config, run_scan};
 use colored::Colorize;
 use std::process::ExitCode;
 
 /// Handle --fix or --fix-dry-run command.
 pub fn handle_fix(cli: &Cli) -> ExitCode {
-    let dry_run = cli.fix_dry_run;
+    // Load config to get effective settings
+    let project_root = cli.paths.first().and_then(|p| {
+        if p.is_dir() {
+            Some(p.as_path())
+        } else {
+            p.parent()
+        }
+    });
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+
+    let dry_run = effective.fix_dry_run;
 
     // First, run a scan to get findings
     let result = match run_scan(cli) {

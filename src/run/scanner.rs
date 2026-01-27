@@ -126,6 +126,7 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
             path,
             &create_ignore_filter,
             effective.skip_comments,
+            effective.strict_secrets,
             &custom_rules,
         );
 
@@ -142,19 +143,22 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
 
         // Run malware database scan on files
         if let Some(ref db) = malware_db {
-            let malware_findings = scan_path_with_malware_db(path, db);
+            let ignore_filter = create_ignore_filter(path);
+            let malware_findings = scan_path_with_malware_db(path, db, &ignore_filter);
             all_findings.extend(malware_findings);
         }
 
         // Run deep scan with deobfuscation if enabled
         if effective.deep_scan {
-            let deep_findings = run_deep_scan(path);
+            let ignore_filter = create_ignore_filter(path);
+            let deep_findings = run_deep_scan(path, &ignore_filter);
             all_findings.extend(deep_findings);
         }
 
         // Run CVE database scan on dependency files
         if let Some(ref db) = cve_db {
-            let cve_findings = scan_path_with_cve_db(path, db);
+            let ignore_filter = create_ignore_filter(path);
+            let cve_findings = scan_path_with_cve_db(path, db, &ignore_filter);
             all_findings.extend(cve_findings);
         }
     }
@@ -180,6 +184,7 @@ fn run_scanner_for_type<F>(
     path: &Path,
     create_ignore_filter: &F,
     skip_comments: bool,
+    strict_secrets: bool,
     custom_rules: &[DynamicRule],
 ) -> crate::error::Result<Vec<Finding>>
 where
@@ -191,30 +196,35 @@ where
             let scanner = SkillScanner::new()
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Hook => {
             let scanner = HookScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Mcp => {
             let scanner = McpScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Command => {
             let scanner = CommandScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Rules => {
             let scanner = RulesDirScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -223,24 +233,28 @@ where
             let scanner = DockerScanner::new()
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Dependency => {
             let scanner = DependencyScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Subagent => {
             let scanner = SubagentScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
         ScanType::Plugin => {
             let scanner = PluginScanner::new()
                 .with_skip_comments(skip_comments)
+                .with_strict_secrets(strict_secrets)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -360,12 +374,16 @@ fn filter_and_process_findings(
 }
 
 /// Run deep scan with deobfuscation on a path.
-pub(crate) fn run_deep_scan(path: &Path) -> Vec<Finding> {
+///
+/// The `ignore_filter` parameter is used to skip files/directories that match
+/// the ignore patterns configured in `.cc-audit.yaml`.
+pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Finding> {
     let mut findings = Vec::new();
     let deobfuscator = Deobfuscator::new();
 
     if path.is_file() {
-        if is_text_file(path)
+        if !ignore_filter.is_ignored(path)
+            && is_text_file(path)
             && let Ok(content) = fs::read_to_string(path)
         {
             debug!(path = %path.display(), "Running deep scan on file");
@@ -375,7 +393,8 @@ pub(crate) fn run_deep_scan(path: &Path) -> Vec<Finding> {
         debug!(path = %path.display(), "Running deep scan on directory");
         let walker = DirectoryWalker::new(WalkConfig::default());
         for file_path in walker.walk_single(path) {
-            if is_text_file(&file_path)
+            if !ignore_filter.is_ignored(&file_path)
+                && is_text_file(&file_path)
                 && let Ok(content) = fs::read_to_string(&file_path)
             {
                 findings.extend(deobfuscator.deep_scan(&content, &file_path.display().to_string()));
@@ -438,7 +457,8 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "# Normal content without obfuscation").unwrap();
 
-        let findings = run_deep_scan(&file_path);
+        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let findings = run_deep_scan(&file_path, &filter);
         assert!(findings.is_empty());
     }
 
@@ -450,7 +470,8 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "# Normal content").unwrap();
 
-        let findings = run_deep_scan(temp_dir.path());
+        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let findings = run_deep_scan(temp_dir.path(), &filter);
         assert!(findings.is_empty());
     }
 
@@ -487,7 +508,8 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Hook, &file_path, &ignore_fn, false, &[]);
+        let result =
+            run_scanner_for_type(&ScanType::Hook, &file_path, &ignore_fn, false, false, &[]);
         assert!(result.is_ok());
     }
 
@@ -506,7 +528,8 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Mcp, &file_path, &ignore_fn, false, &[]);
+        let result =
+            run_scanner_for_type(&ScanType::Mcp, &file_path, &ignore_fn, false, false, &[]);
         assert!(result.is_ok());
     }
 
@@ -519,7 +542,14 @@ mod tests {
         writeln!(file, "# Commands\nRun this command").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Command, &file_path, &ignore_fn, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Command,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -532,7 +562,8 @@ mod tests {
         writeln!(file, "FROM ubuntu:latest").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Docker, &file_path, &ignore_fn, false, &[]);
+        let result =
+            run_scanner_for_type(&ScanType::Docker, &file_path, &ignore_fn, false, false, &[]);
         assert!(result.is_ok());
     }
 
@@ -551,8 +582,14 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Dependency, &file_path, &ignore_fn, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Dependency,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -565,7 +602,14 @@ mod tests {
         writeln!(file, "name: test").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Subagent, &file_path, &ignore_fn, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Subagent,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -584,7 +628,8 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Plugin, &file_path, &ignore_fn, false, &[]);
+        let result =
+            run_scanner_for_type(&ScanType::Plugin, &file_path, &ignore_fn, false, false, &[]);
         assert!(result.is_ok());
     }
 
@@ -597,7 +642,8 @@ mod tests {
         writeln!(file, "rules: []").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result = run_scanner_for_type(&ScanType::Rules, &file_path, &ignore_fn, false, &[]);
+        let result =
+            run_scanner_for_type(&ScanType::Rules, &file_path, &ignore_fn, false, false, &[]);
         assert!(result.is_ok());
     }
 
@@ -655,7 +701,29 @@ mod tests {
 
     #[test]
     fn test_run_deep_scan_nonexistent_path() {
-        let findings = run_deep_scan(Path::new("/nonexistent/path"));
+        let temp_dir = TempDir::new().unwrap();
+        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_run_deep_scan_respects_ignore_patterns() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a file in an ignored directory
+        let ignored_dir = temp_dir.path().join("node_modules");
+        fs::create_dir_all(&ignored_dir).unwrap();
+        let ignored_file = ignored_dir.join("test.md");
+        let mut file = fs::File::create(&ignored_file).unwrap();
+        // Write base64 encoded content that would normally trigger a finding
+        writeln!(file, "eval(atob('bWFsaWNpb3VzIGNvZGU='))").unwrap();
+
+        // Default config ignores node_modules
+        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let findings = run_deep_scan(temp_dir.path(), &filter);
+
+        // Should be empty because node_modules is ignored
         assert!(findings.is_empty());
     }
 }

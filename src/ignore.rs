@@ -151,6 +151,16 @@ impl IgnoreFilter {
 
         path.components().any(|c| {
             let name = c.as_os_str().to_string_lossy();
+            // Skip node_modules check if include_node_modules is true
+            if self.include_node_modules && name == "node_modules" {
+                return false;
+            }
+            // Skip vendor check if include_vendor is true
+            if self.include_vendor
+                && (name == "vendor" || name == "vendors" || name == "third_party")
+            {
+                return false;
+            }
             self.extra_directories.contains(name.as_ref())
         })
     }

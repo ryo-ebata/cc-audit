@@ -1,6 +1,7 @@
 //! Compare handler for comparing scan results between directories.
 
-use crate::{Cli, run_scan};
+use crate::run::EffectiveConfig;
+use crate::{Cli, Config, run_scan};
 use colored::Colorize;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -18,44 +19,54 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
 
     println!("Comparing {} vs {}\n", path1.display(), path2.display());
 
+    // Load config from first path to get effective settings
+    let project_root = if path1.is_dir() {
+        Some(path1.as_path())
+    } else {
+        path1.parent()
+    };
+    let config = Config::load(project_root);
+    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+
     // Create CLI for scanning with same options but different paths
+    // Use effective config values to ensure config file settings are respected
     let create_scan_cli = |path: PathBuf| -> Cli {
         Cli {
             paths: vec![path],
             remote: None,
-            git_ref: "HEAD".to_string(),
-            remote_auth: None,
+            git_ref: effective.git_ref.clone(),
+            remote_auth: effective.remote_auth.clone(),
             remote_list: None,
             awesome_claude_code: false,
-            parallel_clones: 4,
-            badge: false,
-            badge_format: cli.badge_format,
+            parallel_clones: effective.parallel_clones,
+            badge: effective.badge,
+            badge_format: effective.badge_format,
             summary: false,
-            format: cli.format,
-            strict: cli.strict,
-            warn_only: cli.warn_only,
-            min_severity: cli.min_severity,
-            min_rule_severity: cli.min_rule_severity,
-            scan_type: cli.scan_type,
-            recursive: cli.recursive,
-            ci: cli.ci,
-            verbose: cli.verbose,
+            format: effective.format,
+            strict: effective.strict,
+            warn_only: effective.warn_only,
+            min_severity: effective.min_severity,
+            min_rule_severity: effective.min_rule_severity,
+            scan_type: effective.scan_type,
+            recursive: effective.recursive,
+            ci: effective.ci,
+            verbose: effective.verbose,
             include_tests: cli.include_tests,
             include_node_modules: cli.include_node_modules,
             include_vendor: cli.include_vendor,
-            min_confidence: cli.min_confidence,
+            min_confidence: effective.min_confidence,
             watch: false,
             init_hook: false,
             remove_hook: false,
-            skip_comments: cli.skip_comments,
-            strict_secrets: cli.strict_secrets,
-            fix_hint: cli.fix_hint,
-            compact: cli.compact,
-            no_malware_scan: cli.no_malware_scan,
-            cve_db: cli.cve_db.clone(),
-            no_cve_scan: cli.no_cve_scan,
-            malware_db: cli.malware_db.clone(),
-            custom_rules: cli.custom_rules.clone(),
+            skip_comments: effective.skip_comments,
+            strict_secrets: effective.strict_secrets,
+            fix_hint: effective.fix_hint,
+            compact: effective.compact,
+            no_malware_scan: effective.no_malware_scan,
+            cve_db: effective.cve_db.as_ref().map(PathBuf::from),
+            no_cve_scan: effective.no_cve_scan,
+            malware_db: effective.malware_db.as_ref().map(PathBuf::from),
+            custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
             baseline: false,
             check_drift: false,
             init: false,
@@ -72,7 +83,7 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             pin_update: false,
             pin_force: false,
             ignore_pin: false,
-            deep_scan: cli.deep_scan,
+            deep_scan: effective.deep_scan,
             profile: cli.profile.clone(),
             save_profile: None,
             all_clients: false,

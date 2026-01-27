@@ -28,8 +28,21 @@ fn ex_001() -> Rule {
         category: Category::Exfiltration,
         confidence: Confidence::Firm,
         patterns: vec![
+            // Uppercase environment variables: $API_KEY, $SECRET
             Regex::new(r"(curl|wget)\s+.*\$[A-Z_][A-Z0-9_]*").expect("EX-001: invalid regex"),
+            // Uppercase ${} form: ${API_KEY}
             Regex::new(r"(curl|wget)\s+.*\$\{[A-Z_][A-Z0-9_]*\}").expect("EX-001: invalid regex"),
+            // Lowercase environment variables: $api_key, $secret (common in scripts)
+            Regex::new(r"(curl|wget)\s+.*\$[a-z_][a-z0-9_]*").expect("EX-001: invalid regex"),
+            // Lowercase ${} form: ${api_key}
+            Regex::new(r"(curl|wget)\s+.*\$\{[a-z_][a-z0-9_]*\}").expect("EX-001: invalid regex"),
+            // Mixed case ${} form: ${ApiKey}, ${apiKey}
+            Regex::new(r"(curl|wget)\s+.*\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+                .expect("EX-001: invalid regex"),
+            // Command substitution: $(get_token), $(cat /etc/passwd)
+            Regex::new(r"(curl|wget)\s+.*\$\([^)]+\)").expect("EX-001: invalid regex"),
+            // Backtick command substitution: `get_token`
+            Regex::new(r"(curl|wget)\s+.*`[^`]+`").expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
             // Local/internal hosts
@@ -94,13 +107,27 @@ fn ex_003() -> Rule {
         patterns: vec![
             // dig/nslookup with variable data in subdomain
             Regex::new(r"\b(dig|nslookup|host)\s+.*\$").expect("EX-003: invalid regex"),
-            // Common DNS exfil patterns
+            // Common DNS exfil patterns with command substitution
             Regex::new(r"\$\([^)]+\)\.[a-zA-Z0-9-]+\.(com|net|org|io)\b")
                 .expect("EX-003: invalid regex"),
-            // ping with variable subdomain
+            // ping with uppercase variable subdomain
             Regex::new(r"ping\s+.*\$[A-Z_][A-Z0-9_]*.*\.").expect("EX-003: invalid regex"),
+            // ping with lowercase variable subdomain
+            Regex::new(r"ping\s+.*\$[a-z_][a-z0-9_]*.*\.").expect("EX-003: invalid regex"),
+            // dig with TXT record query (common exfil technique)
+            Regex::new(r"\bdig\s+.*TXT\s+.*\$").expect("EX-003: invalid regex"),
+            // nslookup with type specification
+            Regex::new(r"\bnslookup\s+-type=(txt|any|mx)\s+.*\$").expect("EX-003: invalid regex"),
+            // DNS over HTTPS exfiltration
+            Regex::new(r"(curl|wget)\s+.*dns\.google|cloudflare-dns\.com")
+                .expect("EX-003: invalid regex"),
+            // Encoded subdomain pattern (hex, base32)
+            Regex::new(r"\b(dig|nslookup)\s+[a-f0-9]{16,}\.").expect("EX-003: invalid regex"),
         ],
-        exclusions: vec![],
+        exclusions: vec![
+            // Legitimate DNS lookups
+            Regex::new(r"(?i)localhost|127\.0\.0\.1").expect("EX-003: invalid regex"),
+        ],
         message: "Potential DNS-based data exfiltration: data encoded in DNS query detected",
         recommendation: "Review DNS queries and ensure they are not being used to exfiltrate data",
         fix_hint: None,
@@ -144,16 +171,22 @@ fn ex_006() -> Rule {
             // FTP upload with credentials or data
             Regex::new(r"curl\s+-T.*ftp://").expect("EX-006: invalid regex"),
             Regex::new(r"ftp\s+-n.*<<").expect("EX-006: invalid regex"),
-            // SCP/SFTP with sensitive data
+            // SCP/SFTP with uppercase sensitive data
             Regex::new(r"scp\s+.*\$[A-Z_]").expect("EX-006: invalid regex"),
+            // SCP/SFTP with lowercase sensitive data
+            Regex::new(r"scp\s+.*\$[a-z_]").expect("EX-006: invalid regex"),
+            // SCP/SFTP with ${} form
+            Regex::new(r"scp\s+.*\$\{[A-Za-z_]").expect("EX-006: invalid regex"),
             Regex::new(r"sftp.*<<<").expect("EX-006: invalid regex"),
             // TFTP
             Regex::new(r"tftp\s+.*-c\s*(put|get)").expect("EX-006: invalid regex"),
             // sendmail/mail with data
             Regex::new(r"(sendmail|mail)\s+.*<<<.*\$").expect("EX-006: invalid regex"),
             Regex::new(r"(sendmail|mail).*<<.*EOF").expect("EX-006: invalid regex"),
-            // IRC exfiltration
+            // IRC exfiltration (uppercase)
             Regex::new(r"PRIVMSG.*\$[A-Z_]").expect("EX-006: invalid regex"),
+            // IRC exfiltration (lowercase)
+            Regex::new(r"PRIVMSG.*\$[a-z_]").expect("EX-006: invalid regex"),
             // WebSocket connections
             Regex::new(r#"WebSocket\s*\(\s*['"]wss?://"#).expect("EX-006: invalid regex"),
             Regex::new(r"wscat\s+-c").expect("EX-006: invalid regex"),
@@ -161,6 +194,8 @@ fn ex_006() -> Rule {
             Regex::new(r"socat\s+.*TCP:").expect("EX-006: invalid regex"),
             // telnet with data
             Regex::new(r"telnet\s+.*\|\s*(bash|sh)").expect("EX-006: invalid regex"),
+            // rsync with sensitive data
+            Regex::new(r"rsync\s+.*\$[A-Za-z_]").expect("EX-006: invalid regex"),
         ],
         exclusions: vec![
             Regex::new(r"localhost|127\.0\.0\.1").expect("EX-006: invalid regex"),
@@ -182,21 +217,34 @@ fn ex_007() -> Rule {
         category: Category::Exfiltration,
         confidence: Confidence::Tentative,
         patterns: vec![
-            // AWS S3 uploads with sensitive data
+            // AWS S3 uploads with sensitive data (uppercase)
             Regex::new(r"aws\s+s3\s+(cp|mv|sync).*\$[A-Z_]").expect("EX-007: invalid regex"),
+            // AWS S3 uploads with sensitive data (lowercase)
+            Regex::new(r"aws\s+s3\s+(cp|mv|sync).*\$[a-z_]").expect("EX-007: invalid regex"),
+            // AWS S3 uploads with ${} form
+            Regex::new(r"aws\s+s3\s+(cp|mv|sync).*\$\{[A-Za-z_]").expect("EX-007: invalid regex"),
+            // AWS S3 with process substitution
             Regex::new(r"aws\s+s3\s+(cp|mv|sync).*<\(").expect("EX-007: invalid regex"),
-            // GCS uploads
+            // GCS uploads (uppercase)
             Regex::new(r"gsutil\s+(cp|mv|rsync).*\$[A-Z_]").expect("EX-007: invalid regex"),
-            // Azure blob uploads
+            // GCS uploads (lowercase)
+            Regex::new(r"gsutil\s+(cp|mv|rsync).*\$[a-z_]").expect("EX-007: invalid regex"),
+            // Azure blob uploads (uppercase)
             Regex::new(r"az\s+storage\s+blob\s+upload.*\$[A-Z_]").expect("EX-007: invalid regex"),
-            // rclone (multi-cloud)
+            // Azure blob uploads (lowercase)
+            Regex::new(r"az\s+storage\s+blob\s+upload.*\$[a-z_]").expect("EX-007: invalid regex"),
+            // rclone (multi-cloud, uppercase)
             Regex::new(r"rclone\s+(copy|sync|move).*\$[A-Z_]").expect("EX-007: invalid regex"),
+            // rclone (multi-cloud, lowercase)
+            Regex::new(r"rclone\s+(copy|sync|move).*\$[a-z_]").expect("EX-007: invalid regex"),
             // GitHub/GitLab exfiltration via commits
-            Regex::new(r"git\s+config\s+user\.(email|name).*\$[A-Z_]")
+            Regex::new(r"git\s+config\s+user\.(email|name).*\$[A-Za-z_]")
                 .expect("EX-007: invalid regex"),
             // Pastebin-style services
             Regex::new(r"(curl|wget).*(paste|hastebin|sprunge|ix\.io|termbin)")
                 .expect("EX-007: invalid regex"),
+            // GitHub Gist exfiltration
+            Regex::new(r"(curl|wget).*api\.github\.com/gists").expect("EX-007: invalid regex"),
         ],
         exclusions: vec![
             Regex::new(r"localhost|127\.0\.0\.1").expect("EX-007: invalid regex"),

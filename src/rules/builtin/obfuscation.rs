@@ -218,11 +218,28 @@ fn ob_006() -> Rule {
             // xz/unxz pipe to execution
             Regex::new(r"(unxz|xz\s+-d|xzcat).*\|\s*(bash|sh|zsh|eval)")
                 .expect("OB-006: invalid regex"),
+            // zstd decompression pipe to execution (new compression format)
+            Regex::new(r"(zstd\s+-d|zstdcat|unzstd).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
+            // lz4 decompression pipe to execution
+            Regex::new(r"(lz4\s+-d|lz4cat|unlz4).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
+            // lzma/unlzma pipe to execution
+            Regex::new(r"(lzma\s+-d|lzcat|unlzma).*\|\s*(bash|sh|zsh|eval)")
+                .expect("OB-006: invalid regex"),
             // openssl encoding
             Regex::new(r"openssl\s+(enc|base64)\s+-d.*\|\s*(bash|sh|eval)")
                 .expect("OB-006: invalid regex"),
             // uudecode
             Regex::new(r"uudecode.*\|\s*(bash|sh|eval)").expect("OB-006: invalid regex"),
+            // base58/base85 (used in some encoding schemes)
+            Regex::new(r"(base58|base85)\s*decode.*\|\s*(bash|sh|eval)")
+                .expect("OB-006: invalid regex"),
+            // Multi-stage: base64 + ROT13 combined
+            Regex::new(r"base64\s+(-d|--decode).*tr\s+.*A-Za-z").expect("OB-006: invalid regex"),
+            // Python zlib/gzip decompression + exec
+            Regex::new(r"zlib\.decompress.*exec\s*\(").expect("OB-006: invalid regex"),
+            Regex::new(r"gzip\.decompress.*exec\s*\(").expect("OB-006: invalid regex"),
         ],
         exclusions: vec![Regex::new(r"^\s*#").expect("OB-006: invalid regex")],
         message: "Alternative encoding execution detected. Content is decoded and executed, potentially hiding malicious commands.",

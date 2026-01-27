@@ -39,10 +39,28 @@ fn pe_002() -> Rule {
         category: Category::PrivilegeEscalation,
         confidence: Confidence::Certain,
         patterns: vec![
+            // rm -rf / at end of line
             Regex::new(r"rm\s+(-[rfRF]+\s+)+/\s*$").expect("PE-002: invalid regex"),
+            // rm -rf / followed by non-alpha (e.g., rm -rf /* or rm -rf /)
             Regex::new(r"rm\s+(-[rfRF]+\s+)+/[^a-zA-Z]").expect("PE-002: invalid regex"),
+            // rm -rf with wildcards
             Regex::new(r"rm\s+(-[rfRF]+\s+)+\*").expect("PE-002: invalid regex"),
+            // Explicit --no-preserve-root
             Regex::new(r"rm\s+.*--no-preserve-root").expect("PE-002: invalid regex"),
+            // rm -rf / followed by command separator (;, &&, ||)
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+/\s*(;|&&|\|\|)").expect("PE-002: invalid regex"),
+            // rm -rf / with escaped wildcard
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+/\\\*").expect("PE-002: invalid regex"),
+            // rm -rf with variable expansion that could be /
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\s*$")
+                .expect("PE-002: invalid regex"),
+            // rm -rf with subshell that could evaluate to /
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+\$\([^)]+\)").expect("PE-002: invalid regex"),
+            // rm -rf with backtick command substitution
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+`[^`]+`").expect("PE-002: invalid regex"),
+            // Critical system directories
+            Regex::new(r"rm\s+(-[rfRF]+\s+)+/(bin|boot|dev|etc|lib|lib64|opt|proc|root|sbin|sys|usr|var)\b")
+                .expect("PE-002: invalid regex"),
         ],
         exclusions: vec![],
         message: "Destructive command: potential filesystem destruction detected",

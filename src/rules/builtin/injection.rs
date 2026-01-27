@@ -60,6 +60,27 @@ fn pi_001() -> Rule {
             // Security research/educational content
             Regex::new(r"(?i)injection\s+(attack|attempt|example|pattern)")
                 .expect("PI-001: invalid regex"),
+            // Linter/tool ignore comments
+            Regex::new(r"(?i)//\s*(eslint|tslint|prettier|stylelint|biome)-disable")
+                .expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)#\s*(noqa|type:\s*ignore|pylint:\s*disable|nosec)")
+                .expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)@(Ignore|Disabled|Skip|SuppressWarnings)")
+                .expect("PI-001: invalid regex"),
+            // Test framework ignore patterns
+            Regex::new(r#"(?i)ignore_errors?\s*[=:]|errors?\s*=\s*["'](ignore|skip)["']"#)
+                .expect("PI-001: invalid regex"),
+            Regex::new(r"(?i)(xdescribe|xit|xtest|\.skip\()")
+                .expect("PI-001: invalid regex"),
+            // Git ignore context
+            Regex::new(r"(?i)\.gitignore|\.dockerignore|\.eslintignore")
+                .expect("PI-001: invalid regex"),
+            // Educational/explanatory context
+            Regex::new(r"(?i)how\s+to\s+ignore|ignoring\s+(errors?|warnings?)")
+                .expect("PI-001: invalid regex"),
+            // Configuration file context
+            Regex::new(r"(?i)ignore_?(pattern|file|dir|path)s?\s*[=:]")
+                .expect("PI-001: invalid regex"),
         ],
         message: "Potential prompt injection: instruction override pattern detected",
         recommendation: "Remove or escape prompt injection patterns from skill content",
@@ -140,6 +161,19 @@ fn pi_003() -> Rule {
             Regex::new(r"\.md$|\.rst$|\.txt$|\.adoc$").expect("PI-003: invalid regex"),
             // Localization files may contain special characters
             Regex::new(r"(?i)locale|i18n|l10n|translations?").expect("PI-003: invalid regex"),
+            // Font and typography related files
+            Regex::new(r"(?i)\.ttf$|\.otf$|\.woff2?$|font").expect("PI-003: invalid regex"),
+            // Gettext translation files
+            Regex::new(r"(?i)\.po$|\.pot$|\.mo$|messages\.").expect("PI-003: invalid regex"),
+            // JSON language/localization files
+            Regex::new(r"(?i)[a-z]{2}(-[A-Z]{2})?\.json$|lang\.json|languages\.json")
+                .expect("PI-003: invalid regex"),
+            // Unicode test files
+            Regex::new(r"(?i)unicode|utf-?8|encoding").expect("PI-003: invalid regex"),
+            // Common legitimate use of ZWNJ in Persian/Arabic scripts
+            Regex::new(r"(?i)(farsi|persian|arabic|urdu|hindi)").expect("PI-003: invalid regex"),
+            // Emoji and symbol related
+            Regex::new(r"(?i)emoji|emoticon|symbol").expect("PI-003: invalid regex"),
         ],
         message: "Potential prompt injection: invisible Unicode characters detected",
         recommendation: "Remove invisible Unicode characters and verify content integrity",

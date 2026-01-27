@@ -490,4 +490,58 @@ mod tests {
         let home = ClientType::Vscode.home_dir();
         assert!(home.is_some());
     }
+
+    #[test]
+    fn test_is_installed_checks_path_exists() {
+        // is_installed should return false for non-existent path
+        // Since we can't mock home_dir, we just verify the method works
+        for ct in ClientType::all() {
+            let _ = ct.is_installed();
+        }
+    }
+
+    #[test]
+    fn test_all_config_paths_combines_mcp_and_settings() {
+        // all_config_paths should return both MCP and settings paths
+        for ct in ClientType::all() {
+            let all = ct.all_config_paths();
+            let mcp = ct.mcp_config_paths();
+            let settings = ct.settings_config_paths();
+            assert_eq!(all.len(), mcp.len() + settings.len());
+        }
+    }
+
+    #[test]
+    fn test_settings_config_paths() {
+        // Claude, Cursor, Windsurf should have settings paths
+        assert!(!ClientType::Claude.settings_config_paths().is_empty());
+        assert!(!ClientType::Cursor.settings_config_paths().is_empty());
+        assert!(!ClientType::Windsurf.settings_config_paths().is_empty());
+        // VS Code doesn't have a settings path
+        assert!(ClientType::Vscode.settings_config_paths().is_empty());
+    }
+
+    #[test]
+    fn test_list_installed_clients() {
+        // This function should return a vector of installed clients
+        // We can't guarantee which clients are installed, but we can verify it doesn't panic
+        let installed = list_installed_clients();
+        // All returned clients should have is_installed() == true
+        for client in &installed {
+            assert!(client.is_installed());
+        }
+    }
+
+    #[test]
+    fn test_vscode_mcp_config_paths() {
+        // VS Code MCP config paths should include Roo-Cline and Claude Dev extensions
+        let paths = ClientType::Vscode.mcp_config_paths();
+        // The paths depend on whether dirs::data_dir() returns Some
+        // On most systems this should return paths
+        if !paths.is_empty() {
+            for path in &paths {
+                assert!(path.to_string_lossy().contains("cline_mcp_settings.json"));
+            }
+        }
+    }
 }

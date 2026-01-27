@@ -81,7 +81,19 @@ fn op_003() -> Rule {
             // Bash with curl/wget without domain restriction
             Regex::new(r#"Bash\(curl:\*\)|Bash\(wget:\*\)"#).expect("OP-003: invalid regex"),
         ],
-        exclusions: vec![],
+        exclusions: vec![
+            // Schema/type definitions (describing structure, not granting permissions)
+            Regex::new(r"(?i)schema|interface|type\s+\w+|typedef").expect("OP-003: invalid regex"),
+            // JSON Schema format
+            Regex::new(r#""type"\s*:\s*"(string|boolean|object|array)""#)
+                .expect("OP-003: invalid regex"),
+            // Comments
+            Regex::new(r"^\s*(#|//|/\*|\*)").expect("OP-003: invalid regex"),
+            // Example/documentation context
+            Regex::new(r"(?i)example|documentation|readme|docs/").expect("OP-003: invalid regex"),
+            // Test context
+            Regex::new(r"(?i)test|spec|mock").expect("OP-003: invalid regex"),
+        ],
         message: "Unrestricted network permission detected. May allow data exfiltration.",
         recommendation: "Restrict network access to specific domains or disable if not needed.",
         fix_hint: Some("Use domain restrictions: Bash(curl:api.github.com)"),
@@ -104,7 +116,19 @@ fn op_004() -> Rule {
                 .expect("OP-004: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"Bash\([^)]+\)").expect("OP-004: invalid regex"), // Restricted Bash is OK
+            // Restricted Bash is OK
+            Regex::new(r"Bash\([^)]+\)").expect("OP-004: invalid regex"),
+            // Schema/type definitions
+            Regex::new(r"(?i)schema|interface|type\s+\w+|typedef").expect("OP-004: invalid regex"),
+            // Comments
+            Regex::new(r"^\s*(#|//|/\*|\*)").expect("OP-004: invalid regex"),
+            // Documentation context
+            Regex::new(r"(?i)example|documentation|readme|docs/").expect("OP-004: invalid regex"),
+            // Test context
+            Regex::new(r"(?i)test|spec|mock").expect("OP-004: invalid regex"),
+            // Description of permission (not actual grant)
+            Regex::new(r"(?i)requires?|needs?|wants?\s+.*(bash|shell)")
+                .expect("OP-004: invalid regex"),
         ],
         message: "Unrestricted shell execution detected. Allows running arbitrary commands.",
         recommendation: "Restrict shell commands to specific allowed patterns.",

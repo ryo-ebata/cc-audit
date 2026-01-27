@@ -140,14 +140,32 @@ fn ps_006() -> Rule {
             Regex::new(r"screen\s+-[dDmS]+.*(-c|bash|sh|curl|wget|nc)")
                 .expect("PS-006: invalid regex"),
             Regex::new(r"tmux\s+(new-session|new)\s+-d").expect("PS-006: invalid regex"),
-            // nohup with suspicious commands
+            // nohup with suspicious commands (shell, network tools)
             Regex::new(r"nohup\s+.*\b(curl|wget|nc|netcat|bash|sh)\b")
                 .expect("PS-006: invalid regex"),
+            // nohup with Python/Node (also suspicious)
+            Regex::new(r"nohup\s+.*\b(python3?|node|ruby|perl)\b").expect("PS-006: invalid regex"),
             // disown to hide background processes
             Regex::new(r"&\s*;\s*disown").expect("PS-006: invalid regex"),
             Regex::new(r"disown\s+-h").expect("PS-006: invalid regex"),
             // setsid for new session
             Regex::new(r"setsid\s+.*\b(curl|wget|nc|bash|sh)\b").expect("PS-006: invalid regex"),
+            // systemd-run for transient services (background execution)
+            Regex::new(r"systemd-run\s+(--scope|--user).*\b(curl|wget|bash|sh|python|node)\b")
+                .expect("PS-006: invalid regex"),
+            // timeout with background execution
+            Regex::new(r"timeout\s+.*&\s*$").expect("PS-006: invalid regex"),
+            // sleep + command chaining (delayed execution)
+            Regex::new(r"sleep\s+\d+\s*;\s*(curl|wget|bash|sh|nc)").expect("PS-006: invalid regex"),
+            Regex::new(r"sleep\s+\d+\s*&&\s*(curl|wget|bash|sh|nc)")
+                .expect("PS-006: invalid regex"),
+            // fork bomb patterns (denial of service)
+            Regex::new(r":\(\)\s*\{\s*:\|\:&\s*\}").expect("PS-006: invalid regex"),
+            // daemon() style background execution
+            Regex::new(r"\bstart-stop-daemon\s+--start").expect("PS-006: invalid regex"),
+            // Background execution with output redirection (hiding output)
+            Regex::new(r"&>\s*/dev/null\s*&").expect("PS-006: invalid regex"),
+            Regex::new(r">\s*/dev/null\s+2>&1\s*&").expect("PS-006: invalid regex"),
         ],
         exclusions: vec![
             Regex::new(r"^\s*#").expect("PS-006: invalid regex"),

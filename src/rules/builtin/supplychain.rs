@@ -23,7 +23,7 @@ fn sc_001() -> Rule {
         category: Category::SupplyChain,
         confidence: Confidence::Certain,
         patterns: vec![
-            // curl | bash/sh/zsh (basic)
+            // curl | bash/sh/zsh (basic pipe)
             Regex::new(r"curl\s+[^|]*\|\s*(bash|sh|zsh|dash)").expect("SC-001: invalid regex"),
             // curl | sudo bash/sh
             Regex::new(r"curl\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)")
@@ -42,6 +42,23 @@ fn sc_001() -> Rule {
             Regex::new(r"source\s+<\(curl").expect("SC-001: invalid regex"),
             // . <(curl ...)
             Regex::new(r"\.\s+<\(curl").expect("SC-001: invalid regex"),
+            // Multi-step: curl -o file && bash file
+            Regex::new(r"curl\s+.*-[oO]\s*\S+.*&&\s*(bash|sh|zsh)\s")
+                .expect("SC-001: invalid regex"),
+            // Multi-step: curl > file && bash file
+            Regex::new(r"curl\s+.*>\s*/?(tmp|var/tmp)/[^&]+&&\s*(bash|sh|zsh)")
+                .expect("SC-001: invalid regex"),
+            // Multi-step: curl > file ; bash file
+            Regex::new(r"curl\s+.*>\s*\S+\s*;\s*(bash|sh|zsh)").expect("SC-001: invalid regex"),
+            // curl | tee | bash
+            Regex::new(r"curl\s+[^|]*\|\s*tee\s+[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-001: invalid regex"),
+            // curl | node (JavaScript execution)
+            Regex::new(r"curl\s+[^|]*\|\s*node").expect("SC-001: invalid regex"),
+            // curl | ruby
+            Regex::new(r"curl\s+[^|]*\|\s*ruby").expect("SC-001: invalid regex"),
+            // curl | perl
+            Regex::new(r"curl\s+[^|]*\|\s*perl").expect("SC-001: invalid regex"),
         ],
         exclusions: vec![
             // localhost is generally safe
@@ -65,7 +82,7 @@ fn sc_002() -> Rule {
         category: Category::SupplyChain,
         confidence: Confidence::Certain,
         patterns: vec![
-            // wget -O- | bash/sh
+            // wget -O- | bash/sh (pipe to stdout)
             Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*(bash|sh|zsh)")
                 .expect("SC-002: invalid regex"),
             // wget -qO- | bash
@@ -79,6 +96,24 @@ fn sc_002() -> Rule {
                 .expect("SC-002: invalid regex"),
             // bash -c "$(wget ...)"
             Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(wget"#).expect("SC-002: invalid regex"),
+            // Multi-step: wget -O file && bash file
+            Regex::new(r"wget\s+.*-O\s+\S+.*&&\s*(bash|sh|zsh)\s").expect("SC-002: invalid regex"),
+            // Multi-step: wget > file && bash file
+            Regex::new(r"wget\s+.*>\s*/?(tmp|var/tmp)/[^&]+&&\s*(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
+            // Multi-step: wget > file ; bash file
+            Regex::new(r"wget\s+.*>\s*\S+\s*;\s*(bash|sh|zsh)").expect("SC-002: invalid regex"),
+            // wget | tee | bash
+            Regex::new(r"wget\s+[^|]*\|\s*tee\s+[^|]*\|\s*(bash|sh|zsh)")
+                .expect("SC-002: invalid regex"),
+            // wget | python
+            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*python").expect("SC-002: invalid regex"),
+            // wget | node
+            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*node").expect("SC-002: invalid regex"),
+            // wget | ruby
+            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*ruby").expect("SC-002: invalid regex"),
+            // wget | perl
+            Regex::new(r"wget\s+[^|]*-O\s*-[^|]*\|\s*perl").expect("SC-002: invalid regex"),
         ],
         exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1").expect("SC-002: invalid regex")],
         message: "Remote script execution via wget detected. This is a common supply chain attack vector.",

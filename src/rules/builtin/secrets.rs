@@ -109,15 +109,17 @@ fn sl_003() -> Rule {
             Regex::new(r"sk-ant-api[0-9]{2}-[A-Za-z0-9-]{86}").expect("SL-003: invalid regex"),
             // Google AI/Gemini API Key
             Regex::new(r"AIza[A-Za-z0-9_-]{35}").expect("SL-003: invalid regex"),
-            // Cohere API Key
-            Regex::new(r"[A-Za-z0-9]{40}").expect("SL-003: invalid regex"),
+            // Cohere API Key - require specific prefix to reduce false positives
+            // Note: removed generic 40-char pattern as it causes too many false positives
+            Regex::new(r#"(?i)cohere[_-]?api[_-]?key\s*[=:]\s*["'][A-Za-z0-9]{40}["']"#)
+                .expect("SL-003: invalid regex"),
         ],
         exclusions: vec![
             // Test/example patterns
             Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample")
                 .expect("SL-003: invalid regex"),
             // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
-            Regex::new(r"(?i)sha1|sha256|sha384|sha512|commit|hash|digest|checksum")
+            Regex::new(r"(?i)sha1|sha256|sha384|sha512|commit|hash|digest|checksum|integrity")
                 .expect("SL-003: invalid regex"),
             // SHA-1 hash pattern (40 lowercase hex characters)
             Regex::new(r"\b[0-9a-f]{40}\b").expect("SL-003: invalid regex"),
@@ -132,6 +134,14 @@ fn sl_003() -> Rule {
             Regex::new(r"sk-ant-api\d{2}-[xX]{32,}").expect("SL-003: invalid regex"),
             // Generic placeholder patterns
             Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|<[A-Z_]+>").expect("SL-003: invalid regex"),
+            // Lock files and package manager files
+            Regex::new(
+                r"(?i)package-lock\.json|yarn\.lock|pnpm-lock\.yaml|Cargo\.lock|Gemfile\.lock",
+            )
+            .expect("SL-003: invalid regex"),
+            // Version control related
+            Regex::new(r"(?i)resolved|integrity|@[0-9]+\.[0-9]+\.[0-9]+")
+                .expect("SL-003: invalid regex"),
         ],
         message: "AI API Key detected. This key could allow unauthorized API usage and incur costs.",
         recommendation: "Remove the key, rotate it in the respective service dashboard, and use environment variables instead.",
@@ -255,12 +265,25 @@ fn sl_006() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // JWT format: header.payload.signature (base64url encoded)
+            // Header must start with eyJ (base64 for '{"')
             Regex::new(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
                 .expect("SL-006: invalid regex"),
         ],
         exclusions: vec![
             // Test/example patterns
             Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+                .expect("SL-006: invalid regex"),
+            // JWT documentation/examples
+            Regex::new(r"(?i)jwt\.io|example\.jwt|demo\.jwt").expect("SL-006: invalid regex"),
+            // Well-known example JWTs from documentation
+            Regex::new(r"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ")
+                .expect("SL-006: invalid regex"),
+            // Template placeholders
+            Regex::new(r"(?i)\{jwt\}|\{token\}|<jwt>|<token>").expect("SL-006: invalid regex"),
+            // Tutorial/docs context
+            Regex::new(r"(?i)tutorial|documentation|readme|how-?to").expect("SL-006: invalid regex"),
+            // Environment variable references
+            Regex::new(r"\$\{?JWT|\$\{?TOKEN|process\.env\.JWT|os\.environ")
                 .expect("SL-006: invalid regex"),
         ],
         message: "Hardcoded JWT token detected. This token may grant unauthorized access.",

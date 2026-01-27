@@ -997,4 +997,173 @@ mod tests {
         let result = RuleSeverity::from_str("critical");
         assert!(result.is_err());
     }
+
+    // ========== Severity FromStr Tests ==========
+
+    #[test]
+    fn test_severity_from_str_valid() {
+        use std::str::FromStr;
+
+        assert_eq!(Severity::from_str("low").unwrap(), Severity::Low);
+        assert_eq!(Severity::from_str("LOW").unwrap(), Severity::Low);
+        assert_eq!(Severity::from_str("Low").unwrap(), Severity::Low);
+
+        assert_eq!(Severity::from_str("medium").unwrap(), Severity::Medium);
+        assert_eq!(Severity::from_str("MEDIUM").unwrap(), Severity::Medium);
+        assert_eq!(Severity::from_str("med").unwrap(), Severity::Medium);
+        assert_eq!(Severity::from_str("MED").unwrap(), Severity::Medium);
+
+        assert_eq!(Severity::from_str("high").unwrap(), Severity::High);
+        assert_eq!(Severity::from_str("HIGH").unwrap(), Severity::High);
+
+        assert_eq!(Severity::from_str("critical").unwrap(), Severity::Critical);
+        assert_eq!(Severity::from_str("CRITICAL").unwrap(), Severity::Critical);
+        assert_eq!(Severity::from_str("crit").unwrap(), Severity::Critical);
+        assert_eq!(Severity::from_str("CRIT").unwrap(), Severity::Critical);
+    }
+
+    #[test]
+    fn test_severity_from_str_invalid() {
+        use std::str::FromStr;
+
+        let result = Severity::from_str("invalid");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.type_name, "Severity");
+        assert_eq!(error.value, "invalid");
+
+        // Empty string
+        let result = Severity::from_str("");
+        assert!(result.is_err());
+    }
+
+    // ========== Category FromStr Tests ==========
+
+    #[test]
+    fn test_category_from_str_valid() {
+        use std::str::FromStr;
+
+        // Exfiltration
+        assert_eq!(
+            Category::from_str("exfiltration").unwrap(),
+            Category::Exfiltration
+        );
+        assert_eq!(
+            Category::from_str("EXFILTRATION").unwrap(),
+            Category::Exfiltration
+        );
+        assert_eq!(Category::from_str("exfil").unwrap(), Category::Exfiltration);
+        assert_eq!(Category::from_str("EXFIL").unwrap(), Category::Exfiltration);
+
+        // Privilege Escalation
+        assert_eq!(
+            Category::from_str("privilege_escalation").unwrap(),
+            Category::PrivilegeEscalation
+        );
+        assert_eq!(
+            Category::from_str("privilege-escalation").unwrap(),
+            Category::PrivilegeEscalation
+        );
+        assert_eq!(
+            Category::from_str("privilegeescalation").unwrap(),
+            Category::PrivilegeEscalation
+        );
+        assert_eq!(
+            Category::from_str("privesc").unwrap(),
+            Category::PrivilegeEscalation
+        );
+
+        // Persistence
+        assert_eq!(
+            Category::from_str("persistence").unwrap(),
+            Category::Persistence
+        );
+
+        // Prompt Injection
+        assert_eq!(
+            Category::from_str("prompt_injection").unwrap(),
+            Category::PromptInjection
+        );
+        assert_eq!(
+            Category::from_str("promptinjection").unwrap(),
+            Category::PromptInjection
+        );
+
+        // Overpermission
+        assert_eq!(
+            Category::from_str("overpermission").unwrap(),
+            Category::Overpermission
+        );
+
+        // Obfuscation
+        assert_eq!(
+            Category::from_str("obfuscation").unwrap(),
+            Category::Obfuscation
+        );
+
+        // Supply Chain
+        assert_eq!(
+            Category::from_str("supply_chain").unwrap(),
+            Category::SupplyChain
+        );
+        assert_eq!(
+            Category::from_str("supplychain").unwrap(),
+            Category::SupplyChain
+        );
+
+        // Secret Leak
+        assert_eq!(
+            Category::from_str("secret_leak").unwrap(),
+            Category::SecretLeak
+        );
+        assert_eq!(
+            Category::from_str("secretleak").unwrap(),
+            Category::SecretLeak
+        );
+    }
+
+    #[test]
+    fn test_category_from_str_invalid() {
+        use std::str::FromStr;
+
+        let result = Category::from_str("invalid");
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(error.type_name, "Category");
+        assert_eq!(error.value, "invalid");
+
+        // Empty string
+        let result = Category::from_str("");
+        assert!(result.is_err());
+    }
+
+    // ========== Finding with_context and with_client Tests ==========
+
+    #[test]
+    fn test_finding_with_context() {
+        use crate::context::ContentContext;
+
+        let finding = create_test_finding("TEST-001", Severity::High, None);
+        assert!(finding.context.is_none());
+
+        let finding_with_context = finding.with_context(ContentContext::Documentation);
+        assert_eq!(
+            finding_with_context.context,
+            Some(ContentContext::Documentation)
+        );
+    }
+
+    #[test]
+    fn test_finding_with_client() {
+        let finding = create_test_finding("TEST-001", Severity::High, None);
+        assert!(finding.client.is_none());
+
+        let finding_with_client = finding.with_client(Some("claude".to_string()));
+        assert_eq!(finding_with_client.client, Some("claude".to_string()));
+
+        // Test with None
+        let finding2 = create_test_finding("TEST-002", Severity::Medium, None);
+        let finding_without_client = finding2.with_client(None);
+        assert!(finding_without_client.client.is_none());
+    }
 }

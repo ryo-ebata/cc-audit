@@ -1,5 +1,5 @@
 use crate::reporter::Reporter;
-use crate::rules::{Confidence, RuleSeverity, ScanResult, Severity};
+use crate::rules::{Confidence, Finding, RuleSeverity, ScanResult, Severity};
 use crate::scoring::RiskLevel;
 use colored::Colorize;
 
@@ -7,6 +7,8 @@ pub struct TerminalReporter {
     strict: bool,
     verbose: bool,
     show_fix_hint: bool,
+    /// Show friendly advice by default (why, where, how)
+    friendly: bool,
 }
 
 impl TerminalReporter {
@@ -15,11 +17,17 @@ impl TerminalReporter {
             strict,
             verbose,
             show_fix_hint: false,
+            friendly: true, // デフォルトで親切な表示を有効
         }
     }
 
     pub fn with_fix_hints(mut self, show: bool) -> Self {
         self.show_fix_hint = show;
+        self
+    }
+
+    pub fn with_friendly(mut self, friendly: bool) -> Self {
+        self.friendly = friendly;
         self
     }
 
@@ -57,6 +65,165 @@ impl TerminalReporter {
             RiskLevel::High => label.yellow().bold(),
             RiskLevel::Critical => label.red().bold(),
         }
+    }
+
+    /// Format finding with friendly advice (lint-style with caret pointer)
+    fn format_finding_friendly(&self, finding: &Finding) -> String {
+        let mut output = String::new();
+        let rule_sev_label = self.rule_severity_label(&finding.rule_severity);
+        let severity_label = self.severity_color(&finding.severity);
+
+        // Client prefix if available
+        let client_prefix = finding
+            .client
+            .as_ref()
+            .map(|c| format!("[{}] ", c).bright_magenta().to_string())
+            .unwrap_or_default();
+
+        // Location header: file:line:col
+        let col = finding.location.column.unwrap_or(1);
+        output.push_str(&format!(
+            "{}{}:{}:{}: {} {} {}: {}\n",
+            client_prefix,
+            finding.location.file,
+            finding.location.line,
+            col,
+            rule_sev_label,
+            severity_label,
+            finding.id,
+            finding.name
+        ));
+
+        // Code snippet with line number gutter
+        let line_num = finding.location.line;
+        let gutter_width = line_num.to_string().len().max(4);
+
+        // Empty gutter line
+        output.push_str(&format!(
+            "{:>width$} {}\n",
+            "",
+            "|".dimmed(),
+            width = gutter_width
+        ));
+
+        // Code line
+        output.push_str(&format!(
+            "{:>width$} {} {}\n",
+            line_num.to_string().cyan(),
+            "|".dimmed(),
+            finding.code,
+            width = gutter_width
+        ));
+
+        // Caret pointer line
+        let code_len = finding.code.trim().len().min(60);
+        let pointer = "^".repeat(code_len.max(1));
+        output.push_str(&format!(
+            "{:>width$} {} {}\n",
+            "",
+            "|".dimmed(),
+            pointer.bright_red().bold(),
+            width = gutter_width
+        ));
+
+        // Why: error message
+        output.push_str(&format!(
+            "{:>width$} {} {}\n",
+            "",
+            "=".dimmed(),
+            format!("why: {}", finding.message).yellow(),
+            width = gutter_width
+        ));
+
+        // CWE references
+        if !finding.cwe_ids.is_empty() {
+            output.push_str(&format!(
+                "{:>width$} {} {}\n",
+                "",
+                "=".dimmed(),
+                format!("ref: {}", finding.cwe_ids.join(", ")).bright_blue(),
+                width = gutter_width
+            ));
+        }
+
+        // Fix recommendation
+        output.push_str(&format!(
+            "{:>width$} {} {}\n",
+            "",
+            "=".dimmed(),
+            format!("fix: {}", finding.recommendation).green(),
+            width = gutter_width
+        ));
+
+        // Fix example hint
+        if let Some(ref hint) = finding.fix_hint {
+            output.push_str(&format!(
+                "{:>width$} {} {}\n",
+                "",
+                "=".dimmed(),
+                format!("example: {}", hint).bright_green(),
+                width = gutter_width
+            ));
+        }
+
+        // Confidence (verbose mode only)
+        if self.verbose {
+            output.push_str(&format!(
+                "{:>width$} {} confidence: {}\n",
+                "",
+                "=".dimmed(),
+                self.confidence_label(&finding.confidence),
+                width = gutter_width
+            ));
+        }
+
+        output
+    }
+
+    /// Format finding in compact mode (original style)
+    fn format_finding_compact(&self, finding: &Finding) -> String {
+        let mut output = String::new();
+        let rule_sev_label = self.rule_severity_label(&finding.rule_severity);
+        let severity_label = self.severity_color(&finding.severity);
+
+        let client_prefix = finding
+            .client
+            .as_ref()
+            .map(|c| format!("[{}] ", c).bright_magenta().to_string())
+            .unwrap_or_default();
+
+        output.push_str(&format!(
+            "{}{} {} {}: {}\n",
+            client_prefix, rule_sev_label, severity_label, finding.id, finding.name
+        ));
+        output.push_str(&format!(
+            "  Location: {}:{}\n",
+            finding.location.file, finding.location.line
+        ));
+        output.push_str(&format!("  Code: {}\n", finding.code.dimmed()));
+
+        if self.verbose {
+            output.push_str(&format!(
+                "  Confidence: {}\n",
+                self.confidence_label(&finding.confidence)
+            ));
+            if !finding.cwe_ids.is_empty() {
+                output.push_str(&format!(
+                    "  CWE: {}\n",
+                    finding.cwe_ids.join(", ").bright_blue()
+                ));
+            }
+            output.push_str(&format!("  Message: {}\n", finding.message));
+            output.push_str(&format!("  Recommendation: {}\n", finding.recommendation));
+        }
+
+        if self.show_fix_hint
+            && let Some(ref hint) = finding.fix_hint
+        {
+            output.push_str(&format!("  Fix: {}\n", hint.bright_green()));
+        }
+
+        output
     }
 
     fn format_risk_score(&self, result: &ScanResult) -> String {
@@ -128,45 +295,10 @@ impl Reporter for TerminalReporter {
             output.push_str(&"No security issues found.\n".green().to_string());
         } else {
             for finding in &findings_to_show {
-                let rule_sev_label = self.rule_severity_label(&finding.rule_severity);
-                let severity_label = self.severity_color(&finding.severity);
-
-                // Show client name if available
-                let client_prefix = finding
-                    .client
-                    .as_ref()
-                    .map(|c| format!("[{}] ", c).bright_magenta().to_string())
-                    .unwrap_or_default();
-
-                output.push_str(&format!(
-                    "{}{} {} {}: {}\n",
-                    client_prefix, rule_sev_label, severity_label, finding.id, finding.name
-                ));
-                output.push_str(&format!(
-                    "  Location: {}:{}\n",
-                    finding.location.file, finding.location.line
-                ));
-                output.push_str(&format!("  Code: {}\n", finding.code.dimmed()));
-
-                if self.verbose {
-                    output.push_str(&format!(
-                        "  Confidence: {}\n",
-                        self.confidence_label(&finding.confidence)
-                    ));
-                    if !finding.cwe_ids.is_empty() {
-                        output.push_str(&format!(
-                            "  CWE: {}\n",
-                            finding.cwe_ids.join(", ").bright_blue()
-                        ));
-                    }
-                    output.push_str(&format!("  Message: {}\n", finding.message));
-                    output.push_str(&format!("  Recommendation: {}\n", finding.recommendation));
-                }
-
-                if self.show_fix_hint
-                    && let Some(ref hint) = finding.fix_hint
-                {
-                    output.push_str(&format!("  Fix: {}\n", hint.bright_green()));
+                if self.friendly {
+                    output.push_str(&self.format_finding_friendly(finding));
+                } else {
+                    output.push_str(&self.format_finding_compact(finding));
                 }
                 output.push('\n');
             }
@@ -284,7 +416,8 @@ mod tests {
 
     #[test]
     fn test_report_verbose_mode() {
-        let reporter = TerminalReporter::new(false, true);
+        // Compact mode for verbose output testing
+        let reporter = TerminalReporter::new(false, true).with_friendly(false);
         let mut finding = create_finding(
             "EX-001",
             Severity::Critical,
@@ -342,7 +475,8 @@ mod tests {
 
     #[test]
     fn test_report_verbose_shows_confidence() {
-        let reporter = TerminalReporter::new(false, true);
+        // Compact mode for verbose confidence testing
+        let reporter = TerminalReporter::new(false, true).with_friendly(false);
         let finding = create_finding(
             "EX-001",
             Severity::Critical,
@@ -360,7 +494,10 @@ mod tests {
 
     #[test]
     fn test_report_shows_fix_hint() {
-        let reporter = TerminalReporter::new(false, false).with_fix_hints(true);
+        // Compact mode for fix hint testing
+        let reporter = TerminalReporter::new(false, false)
+            .with_fix_hints(true)
+            .with_friendly(false);
         let mut finding = create_finding(
             "PE-001",
             Severity::Critical,
@@ -379,7 +516,8 @@ mod tests {
 
     #[test]
     fn test_report_no_fix_hint_when_disabled() {
-        let reporter = TerminalReporter::new(false, false);
+        // Compact mode for testing fix hint display control
+        let reporter = TerminalReporter::new(false, false).with_friendly(false);
         let mut finding = create_finding(
             "PE-001",
             Severity::Critical,
@@ -392,12 +530,16 @@ mod tests {
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
 
+        // In compact mode without fix_hints enabled, "Fix:" should not appear
         assert!(!output.contains("Fix:"));
     }
 
     #[test]
     fn test_report_no_fix_hint_when_none() {
-        let reporter = TerminalReporter::new(false, false).with_fix_hints(true);
+        // Compact mode for testing fix hint display control
+        let reporter = TerminalReporter::new(false, false)
+            .with_fix_hints(true)
+            .with_friendly(false);
         let finding = create_finding(
             "PE-001",
             Severity::Critical,
@@ -410,12 +552,14 @@ mod tests {
         let result = create_test_result(vec![finding]);
         let output = reporter.report(&result);
 
+        // When fix_hint is None, "Fix:" should not appear even with fix_hints enabled
         assert!(!output.contains("Fix:"));
     }
 
     #[test]
     fn test_report_verbose_shows_confidence_tentative() {
-        let reporter = TerminalReporter::new(false, true);
+        // Compact mode for verbose confidence testing
+        let reporter = TerminalReporter::new(false, true).with_friendly(false);
         let finding = Finding {
             id: "EX-001".to_string(),
             severity: Severity::Critical,
@@ -445,7 +589,8 @@ mod tests {
 
     #[test]
     fn test_report_verbose_shows_confidence_certain() {
-        let reporter = TerminalReporter::new(false, true);
+        // Compact mode for verbose confidence testing
+        let reporter = TerminalReporter::new(false, true).with_friendly(false);
         let finding = Finding {
             id: "EX-001".to_string(),
             severity: Severity::Critical,
@@ -642,5 +787,94 @@ mod tests {
         });
         let output = reporter.report(&result);
         assert!(output.contains("CRITICAL")); // RiskLevel displays as uppercase
+    }
+
+    // ========== Friendly Mode Tests ==========
+
+    #[test]
+    fn test_report_friendly_mode_default() {
+        // Friendly mode is enabled by default
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        finding.code = "curl $SECRET".to_string();
+        finding.message = "Potential exfiltration".to_string();
+        finding.recommendation = "Review the command".to_string();
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        // Lint-style friendly mode shows caret pointer and structured labels
+        assert!(output.contains("test.sh:1:1:")); // file:line:col header
+        assert!(output.contains("^")); // caret pointer
+        assert!(output.contains("why:")); // why label
+        assert!(output.contains("fix:")); // fix label
+    }
+
+    #[test]
+    fn test_report_friendly_mode_shows_cwe_refs() {
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        finding.cwe_ids = vec!["CWE-200".to_string(), "CWE-319".to_string()];
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        // Lint-style shows ref: CWE-xxx, CWE-yyy
+        assert!(output.contains("ref:"));
+        assert!(output.contains("CWE-200"));
+        assert!(output.contains("CWE-319"));
+    }
+
+    #[test]
+    fn test_report_friendly_mode_with_fix_hint() {
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "PE-001",
+            Severity::Critical,
+            Category::PrivilegeEscalation,
+            "Sudo execution",
+            "test.sh",
+            1,
+        );
+        finding.fix_hint = Some("Remove sudo".to_string());
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        // Lint-style friendly mode shows example: hint
+        assert!(output.contains("example:"));
+        assert!(output.contains("Remove sudo"));
+    }
+
+    #[test]
+    fn test_report_compact_mode_explicit() {
+        let reporter = TerminalReporter::new(false, false).with_friendly(false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        finding.message = "Potential exfiltration".to_string();
+        let result = create_test_result(vec![finding]);
+        let output = reporter.report(&result);
+
+        // Compact mode uses Location/Code labels (not Where/Why/Fix)
+        assert!(!output.contains("Why:"));
+        assert!(output.contains("Location:"));
+        assert!(output.contains("Code:"));
     }
 }

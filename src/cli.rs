@@ -214,6 +214,10 @@ pub struct Cli {
     #[arg(long)]
     pub fix_hint: bool,
 
+    /// Use compact output format (disable friendly advice)
+    #[arg(long)]
+    pub compact: bool,
+
     /// Watch mode: continuously monitor files for changes and re-scan
     #[arg(short, long)]
     pub watch: bool,
@@ -410,6 +414,7 @@ impl Default for Cli {
             skip_comments: false,
             strict_secrets: false,
             fix_hint: false,
+            compact: false,
             watch: false,
             init_hook: false,
             remove_hook: false,

@@ -50,6 +50,7 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             skip_comments: cli.skip_comments,
             strict_secrets: cli.strict_secrets,
             fix_hint: cli.fix_hint,
+            compact: cli.compact,
             no_malware_scan: cli.no_malware_scan,
             cve_db: cli.cve_db.clone(),
             no_cve_scan: cli.no_cve_scan,

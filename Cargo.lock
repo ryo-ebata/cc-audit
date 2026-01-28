@@ -243,7 +243,7 @@ dependencies = [
 
 [[package]]
 name = "cc-audit"
-version = "3.1.6"
+version = "3.1.7"
 dependencies = [
  "assert_cmd",
  "base64",
@@ -2292,7 +2292,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "3.1.6"
+version = "3.1.7"
 dependencies = [
  "anyhow",
  "clap",

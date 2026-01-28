@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.7](https://github.com/ryo-ebata/cc-audit/compare/v3.1.6...v3.1.7) (2026-01-28)
+
+
+### Bug Fixes
+
+* implement recursive setting in scanner configuration ([#50](https://github.com/ryo-ebata/cc-audit/issues/50)) ([4ff8ffa](https://github.com/ryo-ebata/cc-audit/commit/4ff8ffa645e42f07d5edde2720cfc2d9b7ded9d4))
+
 ## [3.1.6](https://github.com/ryo-ebata/cc-audit/compare/v3.1.5...v3.1.6) (2026-01-27)
 
 

@@ -38,8 +38,8 @@ scan:
   # Scan type: skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   # scan_type: skill
 
-  # Recursive scan
-  recursive: false
+  # Recursive scan (enabled by default)
+  recursive: true
 
   # CI mode: non-interactive output
   ci: false
@@ -181,37 +181,42 @@ watch:
 # =============================================================================
 # IGNORE CONFIGURATION
 # =============================================================================
+# Uses regex patterns to determine which paths to ignore during scanning.
+# Each pattern is matched against the full path of the file.
 ignore:
-  # Directories to ignore (overwrites defaults if specified)
-  # directories:
-  #   - node_modules
-  #   - target
-  #   - .git
-  #   - dist
-  #   - build
-
-  # Glob patterns to ignore
-  # These directories contain intentionally malicious test content
+  # Regex patterns to ignore
+  # Examples:
+  #   - "node_modules"           # Simple directory name match
+  #   - "/tests?/"               # Match /test/ or /tests/
+  #   - "\\.test\\.(js|ts)$"     # Match .test.js or .test.ts files
+  #   - "\\.(log|tmp|bak)$"      # Match files by extension
   patterns:
-    - 'examples/**'
-    - 'docs/**'
-    - 'src/**'
-    - 'tests/**'
-    - 'benches/**'
-    - 'homebrew/**'
-    - 'scripts/**'
-    - 'data/**'
-    - 'target/**'
-    - 'npm/**'
-
-  # Include test directories in scan
-  include_tests: false
-
-  # Include node_modules in scan
-  include_node_modules: false
-
-  # Include vendor directories in scan
-  include_vendor: false
+    # Build outputs
+    - "/(target|dist|build|out|_build)/"
+    # Frameworks
+    - "/(\\.next|\\.nuxt|\\.output|\\.svelte-kit|\\.astro|\\.remix|\\.gatsby|\\.expo|storybook-static)/"
+    # Package managers
+    - "/(node_modules|\\.pnpm|\\.yarn|bower_components)/"
+    # Version control
+    - "/(\\.git|\\.svn|\\.hg)/"
+    # IDEs
+    - "/(\\.idea|\\.vscode|\\.eclipse|\\.settings)/"
+    # Deployment
+    - "/(\\.vercel|\\.netlify|\\.amplify|\\.serverless)/"
+    # Cache/Bundlers
+    - "/(\\.cache|\\.parcel-cache|\\.vite|\\.turbo|\\.esbuild|\\.rpt2_cache|tmp|temp)/"
+    # Python
+    - "/(__pycache__|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.venv|venv|\\.tox|\\.nox|__pypackages__|site-packages|\\.eggs)/"
+    # Ruby
+    - "/\\.bundle/"
+    # Java/Gradle
+    - "/(\\.gradle|\\.mvn)/"
+    # Go
+    - "/vendor/"
+    # Coverage
+    - "/(coverage|\\.nyc_output|htmlcov|\\.coverage)/"
+    # Misc
+    - "/(logs|\\.docker)/"
 
 # =============================================================================
 # RULE CONFIGURATION

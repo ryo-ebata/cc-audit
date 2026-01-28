@@ -1,0 +1,88 @@
+name: Cargo Install Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-install-test:
+    name: Test Cargo Installation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cc-audit via cargo
+        run: cargo install cc-audit
+
+      - name: Verify installation
+        run: |
+          cc-audit --version
+          cc-audit --help
+
+      - name: Create temporary test directory
+        shell: bash
+        run: |
+          mkdir -p /tmp/cc-audit-test
+          cd /tmp/cc-audit-test
+          echo "# Test Skill" > SKILL.md
+          echo "This is a benign test skill" >> SKILL.md
+
+      - name: Run audit on test directory
+        shell: bash
+        run: |
+          echo "## Cargo Install Test Results (${{ matrix.os }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cd /tmp/cc-audit-test
+          cc-audit check . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Test init command
+        shell: bash
+        run: |
+          cd /tmp/cc-audit-test
+          cc-audit init
+          test -f .cc-audit.yaml && echo "Config file created successfully" || exit 1
+
+      - name: Test with config file
+        shell: bash
+        run: |
+          cd /tmp/cc-audit-test
+          cc-audit check . || true
+
+      - name: Test different output formats
+        shell: bash
+        run: |
+          cd /tmp/cc-audit-test
+          echo "Testing JSON output..."
+          cc-audit check --format json . || true
+          echo "Testing SARIF output..."
+          cc-audit check --format sarif . || true
+          echo "Testing Markdown output..."
+          cc-audit check --format markdown . || true
+
+  cargo-install-result:
+    name: Cargo Install Test Result
+    needs: [cargo-install-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.cargo-install-test.result }}" == "failure" ]]; then
+            echo "Cargo install test failed"
+            exit 1
+          fi
+          echo "Cargo install test passed"

@@ -1,0 +1,65 @@
+name: NPM Install Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  npm-install-test:
+    name: Test NPM Installation
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install cc-audit via npm
+        run: npm install -g @cc-audit/cc-audit
+
+      - name: Verify installation
+        run: |
+          cc-audit --version
+          cc-audit --help
+
+      - name: Run audit on current directory
+        shell: bash
+        run: |
+          echo "## NPM Install Test Results (${{ matrix.os }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cc-audit check . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Test different scan types
+        shell: bash
+        run: |
+          echo "Testing skill scan..."
+          cc-audit check --type skill . || true
+          echo "Testing hook scan..."
+          cc-audit check --type hook . || true
+          echo "Testing mcp scan..."
+          cc-audit check --type mcp . || true
+
+  npm-install-result:
+    name: NPM Install Test Result
+    needs: [npm-install-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.npm-install-test.result }}" == "failure" ]]; then
+            echo "NPM install test failed"
+            exit 1
+          fi
+          echo "NPM install test passed"

@@ -188,28 +188,80 @@ watch:
 # =============================================================================
 # IGNORE CONFIGURATION
 # =============================================================================
-# By default, cc-audit ignores many common directories automatically:
-#
-# Build outputs:     target, dist, build, out, _build
-# Frameworks:        .next, .nuxt, .output, .svelte-kit, .astro, .remix,
-#                    .gatsby, .expo, storybook-static
-# Package managers:  node_modules, .pnpm, .yarn, bower_components
-# Version control:   .git, .svn, .hg
-# IDEs:              .idea, .vscode, .eclipse, .settings
-# Deployment:        .vercel, .netlify, .amplify, .serverless
-# Cache/Bundlers:    .cache, .parcel-cache, .vite, .turbo, .esbuild, tmp, temp
-# Python:            __pycache__, .pytest_cache, .mypy_cache, .ruff_cache,
-#                    .venv, venv, .tox, .nox, site-packages
-# Ruby:              .bundle
-# Java/Gradle:       .gradle, .mvn
-# Go:                vendor
-# Coverage:          coverage, .nyc_output, htmlcov
-# Misc:              logs, .docker
-
 ignore:
-  # Directories to ignore (overwrites defaults if specified)
-  # directories:
-  #   - my-custom-dir
+  # Directories to ignore
+  directories:
+    # Build outputs
+    - target
+    - dist
+    - build
+    - out
+    - _build
+    # Frameworks
+    - .next
+    - .nuxt
+    - .output
+    - .svelte-kit
+    - .astro
+    - .remix
+    - .gatsby
+    - .expo
+    - storybook-static
+    # Package managers
+    - node_modules
+    - .pnpm
+    - .yarn
+    - bower_components
+    # Version control
+    - .git
+    - .svn
+    - .hg
+    # IDEs
+    - .idea
+    - .vscode
+    - .eclipse
+    - .settings
+    # Deployment
+    - .vercel
+    - .netlify
+    - .amplify
+    - .serverless
+    # Cache/Bundlers
+    - .cache
+    - .parcel-cache
+    - .vite
+    - .turbo
+    - .esbuild
+    - .rpt2_cache
+    - tmp
+    - temp
+    # Python
+    - __pycache__
+    - .pytest_cache
+    - .mypy_cache
+    - .ruff_cache
+    - .venv
+    - venv
+    - .tox
+    - .nox
+    - __pypackages__
+    - site-packages
+    - .eggs
+    # Ruby
+    - .bundle
+    # Java/Gradle
+    - .gradle
+    - .mvn
+    # Go
+    - vendor
+    # Coverage
+    - coverage
+    - .nyc_output
+    - htmlcov
+    - .coverage
+    # Misc
+    - logs
+    - .docker
 
   # Glob patterns to ignore
   # patterns:

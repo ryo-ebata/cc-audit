@@ -1,13 +1,12 @@
 //! Result formatting and output generation.
 
 use crate::{
-    BadgeFormat, Config, JsonReporter, OutputFormat, Reporter, SarifReporter, ScanResult,
-    TerminalReporter,
+    BadgeFormat, CheckArgs, Config, JsonReporter, OutputFormat, Reporter, SarifReporter,
+    ScanResult, TerminalReporter,
 };
 
-use super::client::resolve_scan_paths;
+use super::client::resolve_scan_paths_from_check_args;
 use super::config::EffectiveConfig;
-use crate::Cli;
 
 /// Generate a badge URL based on scan result.
 fn generate_badge_url(result: &ScanResult) -> String {
@@ -41,10 +40,10 @@ fn generate_badge_output(result: &ScanResult, format: &BadgeFormat) -> String {
     }
 }
 
-/// Format scan result using CLI settings.
-pub fn format_result(cli: &Cli, result: &ScanResult) -> String {
+/// Format scan result using CheckArgs settings.
+pub fn format_result_check_args(args: &CheckArgs, result: &ScanResult) -> String {
     // Resolve paths and determine project root for config loading
-    let scan_paths = resolve_scan_paths(cli);
+    let scan_paths = resolve_scan_paths_from_check_args(args);
     let project_root = scan_paths.first().and_then(|p| {
         if p.is_dir() {
             Some(p.as_path())
@@ -53,9 +52,9 @@ pub fn format_result(cli: &Cli, result: &ScanResult) -> String {
         }
     });
 
-    // Load config and merge with CLI
+    // Load config and merge with CheckArgs
     let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     format_result_with_config(&effective, result)
 }

@@ -1,6 +1,6 @@
 //! Configuration and profile management handlers.
 
-use crate::{Cli, Config, Profile, profile_from_cli};
+use crate::{CheckArgs, Config, Profile, profile_from_check_args};
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
@@ -46,9 +46,9 @@ pub fn handle_init_config(path: &Path) -> ExitCode {
 }
 
 /// Handle --save-profile command.
-pub fn handle_save_profile(cli: &Cli, profile_name: &str) -> ExitCode {
-    // Create profile from current CLI settings
-    let profile = profile_from_cli(profile_name, cli);
+pub fn handle_save_profile(args: &CheckArgs, profile_name: &str, verbose: bool) -> ExitCode {
+    // Create profile from current check args
+    let profile = profile_from_check_args(profile_name, args, verbose);
 
     match profile.save() {
         Ok(path) => {

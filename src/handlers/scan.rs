@@ -2,15 +2,19 @@
 
 use crate::run::EffectiveConfig;
 use crate::{
-    Cli, Config, WatchModeResult, format_result, run_scan_with_config, setup_watch_mode,
-    watch_iteration,
+    CheckArgs, Config, WatchModeResult, format_result_check_args, run_scan_with_check_args_config,
+    setup_watch_mode, watch_iteration,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing::{debug, info, warn};
 
-use super::filter_against_baseline;
+use super::{
+    filter_against_baseline, handle_baseline, handle_check_drift, handle_compare, handle_fix,
+    handle_hook_mode, handle_pin, handle_pin_verify, handle_report_fp, handle_save_baseline,
+    handle_save_profile, handle_sbom, handle_show_profile, require_config,
+};
 
 /// Validate that a path is safe to write to.
 /// Prevents symlink attacks and path traversal issues.
@@ -69,13 +73,130 @@ fn validate_input_path(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Handle --watch command.
-pub fn run_watch_mode(cli: &Cli) -> ExitCode {
+/// Handle `cc-audit check` subcommand.
+pub fn handle_check(args: &CheckArgs, verbose: bool) -> ExitCode {
+    info!(paths = ?args.paths, "Starting check command");
+
+    // Determine project root for config lookup
+    // For --compare, use the first compare path; otherwise use paths
+    let project_root = if let Some(ref compare_paths) = args.compare {
+        compare_paths.first().and_then(|p| {
+            if p.is_dir() {
+                Some(p.as_path())
+            } else {
+                p.parent()
+            }
+        })
+    } else {
+        args.paths.first().and_then(|p| {
+            if p.is_dir() {
+                Some(p.as_path())
+            } else {
+                p.parent()
+            }
+        })
+    };
+
+    // Load config: prefer --config option, then require config file
+    let config = if let Some(ref config_path) = args.config {
+        match Config::from_file(config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "Error: Failed to load configuration from {}: {}",
+                    config_path.display(),
+                    e
+                );
+                return ExitCode::from(2);
+            }
+        }
+    } else {
+        match require_config(project_root) {
+            Ok((config, _path)) => config,
+            Err(exit_code) => return exit_code,
+        }
+    };
+
+    // Handle --save-baseline <file>
+    if let Some(ref baseline_path) = args.save_baseline {
+        return handle_save_baseline(&args.paths, baseline_path);
+    }
+
+    // Handle baseline creation (--baseline)
+    if args.baseline {
+        return handle_baseline(&args.paths);
+    }
+
+    // Handle drift detection
+    if args.check_drift {
+        return handle_check_drift(args);
+    }
+
+    // Handle --compare <path1> <path2>
+    if let Some(ref paths) = args.compare {
+        return handle_compare(args, paths);
+    }
+
+    // Handle --fix or --fix-dry-run
+    if args.fix || args.fix_dry_run {
+        return handle_fix(args);
+    }
+
+    // Handle --hook-mode (Claude Code Hook integration)
+    if args.hook_mode {
+        return handle_hook_mode();
+    }
+
+    // Handle --pin (create MCP tool pins)
+    if args.pin || args.pin_update {
+        return handle_pin(args, verbose);
+    }
+
+    // Handle --pin-verify (verify MCP tool pins)
+    if args.pin_verify {
+        return handle_pin_verify(args);
+    }
+
+    // Handle --save-profile
+    if let Some(ref profile_name) = args.save_profile {
+        return handle_save_profile(args, profile_name, verbose);
+    }
+
+    // Handle --report-fp (false positive reporting)
+    if args.report_fp {
+        return handle_report_fp(args);
+    }
+
+    // Handle --sbom (SBOM generation)
+    if args.sbom {
+        return handle_sbom(args);
+    }
+
+    // Handle --profile (info mode when no paths to scan)
+    if let Some(ref profile_name) = args.profile
+        && args.paths.len() == 1
+        && args.paths[0].as_os_str() == "."
+        && !args.paths[0].exists()
+    {
+        return handle_show_profile(profile_name);
+    }
+
+    // Handle watch mode
+    if args.watch {
+        return run_watch_mode_check_args(args);
+    }
+
+    // Normal scan mode
+    run_normal_mode_check_args(args, config)
+}
+
+/// Run watch mode with CheckArgs.
+fn run_watch_mode_check_args(args: &CheckArgs) -> ExitCode {
     info!("Starting watch mode");
     println!("Starting watch mode...");
     println!("Press Ctrl+C to stop\n");
 
-    let watcher = match setup_watch_mode(cli) {
+    let watcher = match setup_watch_mode(args) {
         Ok(w) => w,
         Err(WatchModeResult::WatcherCreationFailed(e)) => {
             eprintln!("Failed to create file watcher: {}", e);
@@ -89,7 +210,7 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
     };
 
     // Initial scan
-    if let Some(output) = watch_iteration(cli) {
+    if let Some(output) = watch_iteration(args) {
         println!("{}", output);
     }
 
@@ -100,7 +221,7 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
             print!("\x1B[2J\x1B[1;1H");
             println!("File change detected, re-scanning...\n");
 
-            if let Some(output) = watch_iteration(cli) {
+            if let Some(output) = watch_iteration(args) {
                 println!("{}", output);
             }
         } else {
@@ -112,55 +233,9 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Run normal scan mode.
-#[allow(clippy::comparison_to_empty)]
-pub fn run_normal_mode(cli: &Cli) -> ExitCode {
-    info!(paths = ?cli.paths, "Starting scan");
-
-    // Determine config source and load configuration
-    let project_root = cli.paths.first().and_then(|p| {
-        if p.is_dir() {
-            Some(p.as_path())
-        } else {
-            p.parent()
-        }
-    });
-
-    // Load config: prefer --config option, then search for config file
-    let config = if let Some(ref config_path) = cli.config {
-        // Load from explicit path
-        match Config::from_file(config_path) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!(
-                    "Error: Failed to load configuration from {}: {}",
-                    config_path.display(),
-                    e
-                );
-                return ExitCode::from(2);
-            }
-        }
-    } else {
-        // Search for config file and require it to exist
-        let load_result = Config::try_load(project_root);
-        if load_result.path.is_none() {
-            eprintln!("Error: Configuration file not found.");
-            eprintln!();
-            eprintln!("cc-audit requires a configuration file (.cc-audit.yaml) to run.");
-            eprintln!("You can create one using:");
-            eprintln!();
-            eprintln!("  cc-audit init");
-            eprintln!();
-            eprintln!("Or specify a custom configuration file using:");
-            eprintln!();
-            eprintln!("  cc-audit --config <path> <paths...>");
-            eprintln!();
-            return ExitCode::from(2);
-        }
-        load_result.config
-    };
-
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+/// Run normal scan mode with CheckArgs and pre-loaded config.
+fn run_normal_mode_check_args(args: &CheckArgs, config: Config) -> ExitCode {
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Get the effective output path (CLI or config file)
     let effective_output_path: Option<PathBuf> = effective.output.as_ref().map(PathBuf::from);
@@ -174,21 +249,21 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     }
 
     // Validate baseline path if specified
-    if let Some(ref baseline_path) = cli.baseline_file
+    if let Some(ref baseline_path) = args.baseline_file
         && let Err(e) = validate_input_path(baseline_path)
     {
         eprintln!("Invalid baseline path: {}", e);
         return ExitCode::from(2);
     }
 
-    match run_scan_with_config(cli, config) {
+    match run_scan_with_check_args_config(args, config) {
         Some(mut result) => {
             // Filter against baseline if --baseline-file is specified
-            if let Some(ref baseline_path) = cli.baseline_file {
+            if let Some(ref baseline_path) = args.baseline_file {
                 result = filter_against_baseline(result, baseline_path);
             }
 
-            let output = format_result(cli, &result);
+            let output = format_result_check_args(args, &result);
 
             // Write to file if output path is specified (CLI or config)
             if let Some(ref output_path) = effective_output_path {
@@ -212,28 +287,21 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
                 "Scan completed"
             );
 
-            // Determine exit code based on mode:
-            // - warn_only: always exit 0 (warnings don't fail CI)
-            // - strict: exit 1 if any findings (errors or warnings)
-            // - normal: exit 1 if any errors
+            // Determine exit code based on mode
             let warn_only = effective.warn_only;
 
             if warn_only {
                 ExitCode::SUCCESS
             } else if effective.strict {
-                // In strict mode, any finding (error or warning) is a failure
                 if result.summary.errors > 0 || result.summary.warnings > 0 {
                     ExitCode::from(1)
                 } else {
                     ExitCode::SUCCESS
                 }
+            } else if result.summary.passed {
+                ExitCode::SUCCESS
             } else {
-                // Normal mode: result.summary.passed is based on errors == 0
-                if result.summary.passed {
-                    ExitCode::SUCCESS
-                } else {
-                    ExitCode::from(1)
-                }
+                ExitCode::from(1)
             }
         }
         None => {
@@ -243,15 +311,33 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     }
 }
 
+/// Run normal scan mode with CheckArgs (for external callers).
+pub fn run_normal_check_mode(args: &CheckArgs) -> ExitCode {
+    // Determine project root for config lookup
+    let project_root = args.paths.first().and_then(|p| {
+        if p.is_dir() {
+            Some(p.as_path())
+        } else {
+            p.parent()
+        }
+    });
+
+    // Load config
+    let config = Config::load(project_root);
+
+    run_normal_mode_check_args(args, config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CheckArgs;
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
-    fn create_test_cli(paths: Vec<PathBuf>) -> Cli {
-        Cli {
+    fn create_test_check_args(paths: Vec<PathBuf>) -> CheckArgs {
+        CheckArgs {
             paths,
             ..Default::default()
         }
@@ -264,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn test_run_normal_mode_valid_path() {
+    fn test_run_normal_check_mode_valid_path() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -276,14 +362,14 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        let exit_code = run_normal_mode(&cli);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let exit_code = run_normal_check_mode(&args);
         // Should succeed with no findings
         assert_eq!(exit_code, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_run_normal_mode_with_warn_only() {
+    fn test_run_normal_check_mode_with_warn_only() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -295,15 +381,15 @@ mod tests {
         )
         .unwrap();
 
-        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        cli.warn_only = true;
-        let exit_code = run_normal_mode(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.warn_only = true;
+        let exit_code = run_normal_check_mode(&args);
         // warn_only always succeeds
         assert_eq!(exit_code, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_run_normal_mode_with_output_file() {
+    fn test_run_normal_check_mode_with_output_file() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -316,15 +402,15 @@ mod tests {
         )
         .unwrap();
 
-        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        cli.output = Some(output_path.clone());
-        let exit_code = run_normal_mode(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.output = Some(output_path.clone());
+        let exit_code = run_normal_check_mode(&args);
         assert_eq!(exit_code, ExitCode::SUCCESS);
         assert!(output_path.exists());
     }
 
     #[test]
-    fn test_run_normal_mode_with_strict() {
+    fn test_run_normal_check_mode_with_strict() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -336,15 +422,15 @@ mod tests {
         )
         .unwrap();
 
-        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        cli.strict = true;
-        let exit_code = run_normal_mode(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.strict = true;
+        let exit_code = run_normal_check_mode(&args);
         // Should succeed with no findings
         assert_eq!(exit_code, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_run_normal_mode_with_baseline() {
+    fn test_run_normal_check_mode_with_baseline() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -361,14 +447,14 @@ mod tests {
         let mut baseline_file = fs::File::create(&baseline_path).unwrap();
         writeln!(baseline_file, "[]").unwrap();
 
-        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        cli.baseline_file = Some(baseline_path);
-        let exit_code = run_normal_mode(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.baseline_file = Some(baseline_path);
+        let exit_code = run_normal_check_mode(&args);
         assert_eq!(exit_code, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_run_normal_mode_output_write_fail() {
+    fn test_run_normal_check_mode_output_write_fail() {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
@@ -380,10 +466,10 @@ mod tests {
         )
         .unwrap();
 
-        let mut cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
         // Use a path that should fail to write
-        cli.output = Some(PathBuf::from("/nonexistent/directory/output.json"));
-        let exit_code = run_normal_mode(&cli);
+        args.output = Some(PathBuf::from("/nonexistent/directory/output.json"));
+        let exit_code = run_normal_check_mode(&args);
         // Should fail with exit code 2
         assert_eq!(exit_code, ExitCode::from(2));
     }

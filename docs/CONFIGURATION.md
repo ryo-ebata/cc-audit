@@ -20,10 +20,10 @@ Generate a configuration file template:
 
 ```bash
 # Create .cc-audit.yaml in current directory
-cc-audit --init ./
+cc-audit init
 
 # Create in a specific directory
-cc-audit --init /path/to/project/
+cc-audit init /path/to/project/.cc-audit.yaml
 ```
 
 ## Example Configuration
@@ -162,10 +162,10 @@ CLI flags and config file settings are merged:
 
 ```bash
 # Config has strict: true - strict mode is active even without --strict
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # CLI --verbose + config strict: true - both are active
-cc-audit --verbose ./my-skill/
+cc-audit check ./my-skill/ --verbose
 ```
 
 ---
@@ -243,7 +243,7 @@ Result: FAIL (exit code 1)
 To restore previous behavior:
 ```bash
 # Option 1: Use --warn-only for initial baseline scans
-cc-audit --warn-only ./my-skill/
+cc-audit check --warn-only ./my-skill/
 
 # Option 2: Configure specific rules as warnings in config
 ```
@@ -294,7 +294,7 @@ rules:
 ## Usage
 
 ```bash
-cc-audit ./my-skill/ --custom-rules ./my-rules.yaml
+cc-audit check ./my-skill/ --custom-rules ./my-rules.yaml
 ```
 
 ---
@@ -343,8 +343,8 @@ cc-audit includes a built-in malware signature database.
 
 ```bash
 # Use custom malware database
-cc-audit ./my-skill/ --malware-db ./custom-signatures.json
+cc-audit check ./my-skill/ --malware-db ./custom-signatures.json
 
 # Disable malware scanning
-cc-audit ./my-skill/ --no-malware-scan
+cc-audit check ./my-skill/ --no-malware-scan
 ```

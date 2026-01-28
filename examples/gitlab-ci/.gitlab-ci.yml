@@ -1,5 +1,5 @@
 # cc-audit GitLab CI Configuration
-# このファイルを .gitlab-ci.yml にマージして使用
+# Merge this file into your .gitlab-ci.yml
 
 cc-audit:
   stage: test
@@ -7,10 +7,10 @@ cc-audit:
   before_script:
     - cargo install cc-audit
   script:
-    - cc-audit --type skill --ci .
-    - cc-audit --type hook --ci .
-    - cc-audit --type mcp --ci .
-    - cc-audit --type dependency --ci .
+    - cc-audit check --type skill --ci .
+    - cc-audit check --type hook --ci .
+    - cc-audit check --type mcp --ci .
+    - cc-audit check --type dependency --ci .
   rules:
     - changes:
         - .claude/**/*
@@ -23,14 +23,14 @@ cc-audit:
       sast: cc-audit-results.json
     when: always
 
-# SARIF出力版
+# SARIF output version
 cc-audit-sarif:
   stage: test
   image: rust:latest
   before_script:
     - cargo install cc-audit
   script:
-    - cc-audit --type skill --format sarif -o cc-audit-results.sarif .
+    - cc-audit check --type skill --format sarif -o cc-audit-results.sarif .
   artifacts:
     paths:
       - cc-audit-results.sarif

@@ -1,15 +1,15 @@
 //! Baseline management handlers.
 
-use crate::{Baseline, Cli, RiskScore, ScanResult, Summary};
+use crate::{Baseline, CheckArgs, RiskScore, ScanResult, Summary};
 use colored::Colorize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-/// Handle --baseline command.
-pub fn handle_baseline(cli: &Cli) -> ExitCode {
-    for path in &cli.paths {
+/// Handle baseline command.
+pub fn handle_baseline(paths: &[PathBuf]) -> ExitCode {
+    for path in paths {
         match Baseline::from_directory(path) {
             Ok(baseline) => {
                 if let Err(e) = baseline.save(path) {
@@ -32,15 +32,15 @@ pub fn handle_baseline(cli: &Cli) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Handle --save-baseline command.
-pub fn handle_save_baseline(cli: &Cli, baseline_path: &Path) -> ExitCode {
+/// Handle save-baseline command.
+pub fn handle_save_baseline(paths: &[PathBuf], baseline_path: &Path) -> ExitCode {
     // Single path case: use relative paths (compatible with check_drift)
     // Multiple paths case: use prefixed paths to distinguish sources
-    let single_path = cli.paths.len() == 1;
+    let single_path = paths.len() == 1;
 
     let mut combined_hashes = HashMap::new();
 
-    for path in &cli.paths {
+    for path in paths {
         match Baseline::from_directory(path) {
             Ok(baseline) => {
                 for (file_path, hash) in baseline.file_hashes {
@@ -85,12 +85,12 @@ pub fn handle_save_baseline(cli: &Cli, baseline_path: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Handle --check-drift command.
-pub fn handle_check_drift(cli: &Cli) -> ExitCode {
+/// Handle check-drift command.
+pub fn handle_check_drift(args: &CheckArgs) -> ExitCode {
     let mut has_any_drift = false;
 
     // If --baseline-file is specified, load from that file
-    if let Some(ref baseline_file) = cli.baseline_file {
+    if let Some(ref baseline_file) = args.baseline_file {
         let baseline = match Baseline::load_from_file(baseline_file) {
             Ok(b) => b,
             Err(e) => {
@@ -103,7 +103,7 @@ pub fn handle_check_drift(cli: &Cli) -> ExitCode {
             }
         };
 
-        for path in &cli.paths {
+        for path in &args.paths {
             match baseline.check_drift(path) {
                 Ok(report) => {
                     println!("Checking drift for: {}\n", path.display());
@@ -120,7 +120,7 @@ pub fn handle_check_drift(cli: &Cli) -> ExitCode {
         }
     } else {
         // Load baseline from each path's default location
-        for path in &cli.paths {
+        for path in &args.paths {
             match Baseline::load(path) {
                 Ok(baseline) => match baseline.check_drift(path) {
                     Ok(report) => {

@@ -1,38 +1,42 @@
 //! Core scanning functionality.
 
 use crate::{
-    Cli, CommandScanner, Config, CustomRuleLoader, CveDatabase, Deobfuscator, DependencyScanner,
-    DirectoryWalker, DockerScanner, DynamicRule, Finding, HookScanner, IgnoreFilter,
-    MalwareDatabase, McpScanner, PluginScanner, RiskScore, RuleSeverity, RulesDirScanner,
-    ScanResult, ScanType, Scanner, SkillScanner, SubagentScanner, Summary, WalkConfig,
+    CheckArgs, CommandScanner, Config, CustomRuleLoader, CveDatabase, Deobfuscator,
+    DependencyScanner, DirectoryWalker, DockerScanner, DynamicRule, Finding, HookScanner,
+    IgnoreFilter, MalwareDatabase, McpScanner, PluginScanner, RiskScore, RuleSeverity,
+    RulesDirScanner, ScanResult, ScanType, Scanner, SkillScanner, SubagentScanner, Summary,
+    WalkConfig,
 };
 use chrono::Utc;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use super::client::{detect_client_for_path, resolve_scan_paths};
+use super::client::{detect_client_for_path, resolve_scan_paths_from_check_args};
 use super::config::{EffectiveConfig, load_custom_rules_from_effective};
 use super::cve::scan_path_with_cve_db;
 use super::malware::scan_path_with_malware_db;
 use super::text_file::is_text_file;
 
-/// Run a scan using CLI settings.
-pub fn run_scan(cli: &Cli) -> Option<ScanResult> {
-    run_scan_internal(cli, None)
+/// Run a scan using CheckArgs settings.
+pub fn run_scan_with_check_args(args: &CheckArgs) -> Option<ScanResult> {
+    run_scan_with_check_args_internal(args, None)
 }
 
-/// Run scan with pre-loaded config (for testing).
-pub fn run_scan_with_config(cli: &Cli, config: Config) -> Option<ScanResult> {
-    run_scan_internal(cli, Some(config))
+/// Run scan with CheckArgs and pre-loaded config (for testing).
+pub fn run_scan_with_check_args_config(args: &CheckArgs, config: Config) -> Option<ScanResult> {
+    run_scan_with_check_args_internal(args, Some(config))
 }
 
-fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<ScanResult> {
+fn run_scan_with_check_args_internal(
+    args: &CheckArgs,
+    preloaded_config: Option<Config>,
+) -> Option<ScanResult> {
     let mut all_findings = Vec::new();
     let mut targets = Vec::new();
 
     // Resolve paths based on scan mode (client scan or path scan)
-    let scan_paths: Vec<PathBuf> = resolve_scan_paths(cli);
+    let scan_paths: Vec<PathBuf> = resolve_scan_paths_from_check_args(args);
 
     if scan_paths.is_empty() {
         eprintln!("No paths to scan");
@@ -53,7 +57,7 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
 
     // Load profile if specified
     let mut config = config;
-    if let Some(ref profile_name) = cli.profile {
+    if let Some(ref profile_name) = args.profile {
         match crate::Profile::load(profile_name) {
             Ok(profile) => {
                 profile.apply_to_config(&mut config.scan);
@@ -67,8 +71,8 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
         }
     }
 
-    // Merge CLI options with config file settings
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    // Merge CheckArgs options with config file settings
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Load custom rules: merge effective config rules with config file inline rules
     let mut custom_rules = load_custom_rules_from_effective(&effective);
@@ -152,7 +156,8 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
     }
 
     // Filter and process findings
-    let filtered_findings = filter_and_process_findings(all_findings, cli, &config, &effective);
+    let filtered_findings =
+        filter_and_process_findings_check_args(all_findings, args, &config, &effective);
 
     let summary = Summary::from_findings_with_rule_severity(&filtered_findings);
     let risk_score = RiskScore::from_findings(&filtered_findings);
@@ -326,10 +331,21 @@ fn load_cve_database(effective: &EffectiveConfig) -> Option<CveDatabase> {
     }
 }
 
-/// Filter findings by confidence, severity, and disabled rules.
-fn filter_and_process_findings(
+/// Filter findings by confidence, severity, and disabled rules (for CheckArgs).
+fn filter_and_process_findings_check_args(
     all_findings: Vec<Finding>,
-    cli: &Cli,
+    args: &CheckArgs,
+    config: &Config,
+    effective: &EffectiveConfig,
+) -> Vec<Finding> {
+    let is_client_scan = args.all_clients || args.client.is_some();
+    filter_and_process_findings_internal(all_findings, is_client_scan, config, effective)
+}
+
+/// Internal function to filter findings.
+fn filter_and_process_findings_internal(
+    all_findings: Vec<Finding>,
+    is_client_scan: bool,
     config: &Config,
     effective: &EffectiveConfig,
 ) -> Vec<Finding> {
@@ -349,7 +365,6 @@ fn filter_and_process_findings(
         .collect();
 
     // Apply RuleSeverity and client attribution to each finding
-    let is_client_scan = cli.all_clients || cli.client.is_some();
     for finding in &mut filtered_findings {
         // Set rule severity
         let rule_severity = if effective.warn_only {
@@ -416,8 +431,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    fn create_test_cli(paths: Vec<PathBuf>) -> Cli {
-        Cli {
+    fn create_test_check_args(paths: Vec<PathBuf>) -> CheckArgs {
+        CheckArgs {
             paths,
             scan_type: ScanType::Skill,
             ..Default::default()
@@ -426,14 +441,14 @@ mod tests {
 
     #[test]
     fn test_run_scan_empty_paths() {
-        let cli = Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: None,
             ..Default::default()
         };
         // This will default to current directory, which should work
-        let result = run_scan(&cli);
+        let result = run_scan_with_check_args(&args);
         assert!(result.is_some());
     }
 
@@ -449,8 +464,8 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
-        let result = run_scan(&cli);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let result = run_scan_with_check_args(&args);
         assert!(result.is_some());
     }
 
@@ -492,9 +507,9 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(vec![temp_dir.path().to_path_buf()]);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
         let config = Config::default();
-        let result = run_scan_with_config(&cli, config);
+        let result = run_scan_with_check_args_config(&args, config);
         assert!(result.is_some());
     }
 
@@ -692,53 +707,53 @@ mod tests {
 
     #[test]
     fn test_load_malware_database_disabled() {
-        let cli = Cli {
+        let args = CheckArgs {
             no_malware_scan: true,
             ..Default::default()
         };
         let config = Config::default();
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
         let db = load_malware_database(&effective, &config);
         assert!(db.is_none());
     }
 
     #[test]
     fn test_load_malware_database_default() {
-        let cli = Cli::default();
+        let args = CheckArgs::default();
         let config = Config::default();
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
         let db = load_malware_database(&effective, &config);
         assert!(db.is_some());
     }
 
     #[test]
     fn test_load_cve_database_disabled() {
-        let cli = Cli {
+        let args = CheckArgs {
             no_cve_scan: true,
             ..Default::default()
         };
         let config = Config::default();
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
         let db = load_cve_database(&effective);
         assert!(db.is_none());
     }
 
     #[test]
     fn test_load_cve_database_default() {
-        let cli = Cli::default();
+        let args = CheckArgs::default();
         let config = Config::default();
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
         let db = load_cve_database(&effective);
         assert!(db.is_some());
     }
 
     #[test]
     fn test_filter_and_process_findings_empty() {
-        let cli = Cli::default();
+        let args = CheckArgs::default();
         let config = Config::default();
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
 
-        let filtered = filter_and_process_findings(vec![], &cli, &config, &effective);
+        let filtered = filter_and_process_findings_check_args(vec![], &args, &config, &effective);
         assert!(filtered.is_empty());
     }
 
@@ -777,7 +792,7 @@ mod tests {
     fn test_filter_and_process_findings_min_rule_severity() {
         use crate::rules::{Category, Confidence, Location, Severity};
 
-        let cli = Cli {
+        let args = CheckArgs {
             min_rule_severity: Some(RuleSeverity::Error),
             ..Default::default()
         };
@@ -785,7 +800,7 @@ mod tests {
         // Set EX-001 to warn level
         config.severity.warn.insert("EX-001".to_string());
 
-        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
 
         // Create a finding that will be assigned Warn severity
         let finding = Finding {
@@ -809,8 +824,12 @@ mod tests {
             context: None,
         };
 
-        let filtered =
-            filter_and_process_findings(vec![finding.clone()], &cli, &config, &effective);
+        let filtered = filter_and_process_findings_check_args(
+            vec![finding.clone()],
+            &args,
+            &config,
+            &effective,
+        );
 
         // With min_rule_severity=Error, warnings should be filtered out
         assert!(
@@ -819,11 +838,12 @@ mod tests {
         );
 
         // Without min_rule_severity filter, warning should be included
-        let cli_no_filter = Cli::default();
-        let effective_no_filter = EffectiveConfig::from_cli_and_config(&cli_no_filter, &config);
-        let filtered_no_filter = filter_and_process_findings(
+        let args_no_filter = CheckArgs::default();
+        let effective_no_filter =
+            EffectiveConfig::from_check_args_and_config(&args_no_filter, &config);
+        let filtered_no_filter = filter_and_process_findings_check_args(
             vec![finding],
-            &cli_no_filter,
+            &args_no_filter,
             &config,
             &effective_no_filter,
         );

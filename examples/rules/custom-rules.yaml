@@ -1,0 +1,70 @@
+# Custom Rules Example
+# Use with: cc-audit check ./path --custom-rules ./examples/rules/custom-rules.yaml
+
+version: "1"
+rules:
+  # Detect access to internal API endpoints
+  - id: "CUSTOM-001"
+    name: "Internal API access"
+    description: "Detects access to internal API endpoints"
+    severity: "high"
+    category: "exfiltration"
+    confidence: "firm"
+    patterns:
+      - 'https?://internal\.company\.com'
+      - 'https?://api\.internal\.'
+      - 'https?://.*\.corp\.example\.com'
+    exclusions:
+      - 'localhost'
+      - '127\.0\.0\.1'
+    message: "Access to internal API endpoint detected"
+    recommendation: "Ensure this access is authorized and necessary"
+    cwe:
+      - "CWE-200"
+
+  # Detect hardcoded database connection strings
+  - id: "CUSTOM-002"
+    name: "Database connection string"
+    description: "Detects hardcoded database connection strings"
+    severity: "high"
+    category: "secret-leak"
+    confidence: "firm"
+    patterns:
+      - 'mongodb://[^/]+:[^@]+@'
+      - 'postgres://[^/]+:[^@]+@'
+      - 'mysql://[^/]+:[^@]+@'
+      - 'redis://:[^@]+@'
+    message: "Hardcoded database connection string with credentials detected"
+    recommendation: "Use environment variables for database credentials"
+    cwe:
+      - "CWE-798"
+
+  # Detect company-specific sensitive file access
+  - id: "CUSTOM-003"
+    name: "Sensitive file access"
+    description: "Detects access to company-specific sensitive files"
+    severity: "medium"
+    category: "exfiltration"
+    confidence: "tentative"
+    patterns:
+      - '/opt/company/secrets/'
+      - '/var/lib/company/credentials'
+      - '\.company-secrets'
+    message: "Access to company-specific sensitive file detected"
+    recommendation: "Review if this file access is necessary"
+
+  # Detect cryptocurrency wallet patterns
+  - id: "CUSTOM-004"
+    name: "Cryptocurrency wallet access"
+    description: "Detects potential cryptocurrency wallet access"
+    severity: "critical"
+    category: "exfiltration"
+    confidence: "certain"
+    patterns:
+      - '\.bitcoin/wallet\.dat'
+      - '\.ethereum/keystore'
+      - 'wallet\.json.*private'
+    message: "Cryptocurrency wallet file access detected"
+    recommendation: "This could indicate theft of cryptocurrency assets"
+    cwe:
+      - "CWE-200"

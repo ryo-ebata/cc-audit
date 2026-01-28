@@ -5,16 +5,43 @@
 ## Usage
 
 ```
-cc-audit [OPTIONS] <PATHS>...
+cc-audit [OPTIONS] <COMMAND>
+cc-audit <COMMAND> [OPTIONS] [ARGS]
 ```
 
-## Arguments
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `check` | Scan paths for security vulnerabilities |
+| `init`  | Generate a default configuration file template |
+| `hook`  | Manage Git pre-commit hooks |
+| `serve` | Run as MCP server |
+| `proxy` | Run as MCP proxy for runtime monitoring |
+
+## Global Options
+
+| Option | Description |
+|--------|-------------|
+| `--verbose` | Verbose output |
+| `-h, --help` | Print help |
+| `-V, --version` | Print version |
+
+---
+
+## `check` Command
+
+Scan paths for security vulnerabilities.
+
+```
+cc-audit check [OPTIONS] <PATHS>...
+```
+
+### Arguments
 
 | Argument | Description |
 |----------|-------------|
-| `<PATHS>...` | Paths to scan (files or directories) |
-
-## Options
+| `<PATHS>...` | Paths to scan (files or directories). Required unless using `--remote`, `--remote-list`, `--awesome-claude-code`, `--all-clients`, or `--client` |
 
 ### Output Options
 
@@ -22,7 +49,6 @@ cc-audit [OPTIONS] <PATHS>...
 |--------|-------------|
 | `-f, --format <FORMAT>` | Output format: `terminal` (default), `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | Output file path (for HTML/JSON output) |
-| `-v, --verbose` | Verbose output (includes confidence level) |
 | `--compact` | Compact output format (traditional style instead of lint-style) |
 | `--ci` | CI mode: non-interactive output |
 | `--badge` | Generate security badge |
@@ -34,8 +60,8 @@ cc-audit [OPTIONS] <PATHS>...
 | Option | Description |
 |--------|-------------|
 | `-t, --type <SCAN_TYPE>` | Scan type (see [Scan Types](#scan-types)) |
-| `-s, --strict` | Strict mode: treat warnings as errors (exit 1 for any finding) |
-| `-r, --recursive` | Recursive scan |
+| `-S, --strict` | Strict mode: show medium/low severity findings and treat warnings as errors |
+| `--no-recursive` | Disable recursive scanning (default: recursive enabled) |
 | `--warn-only` | Warn-only mode: treat all findings as warnings (always exit 0) |
 | `--min-severity <LEVEL>` | Minimum finding severity to include: `critical`, `high`, `medium`, `low` |
 | `--min-rule-severity <LEVEL>` | Minimum rule severity to treat as errors: `error`, `warn` |
@@ -43,6 +69,12 @@ cc-audit [OPTIONS] <PATHS>...
 | `--skip-comments` | Skip comment lines when scanning |
 | `--strict-secrets` | Strict secrets mode: disable dummy key heuristics for test files |
 | `--deep-scan` | Enable deep scan with deobfuscation |
+
+### Configuration
+
+| Option | Description |
+|--------|-------------|
+| `-c, --config <FILE>` | Path to configuration file |
 
 ### Fix Options
 
@@ -57,13 +89,6 @@ cc-audit [OPTIONS] <PATHS>...
 | Option | Description |
 |--------|-------------|
 | `-w, --watch` | Watch mode: continuously monitor files |
-
-### Git Hooks
-
-| Option | Description |
-|--------|-------------|
-| `--init-hook` | Install pre-commit hook |
-| `--remove-hook` | Remove pre-commit hook |
 
 ### Custom Rules & Databases
 
@@ -135,17 +160,6 @@ cc-audit [OPTIONS] <PATHS>...
 | `--sbom-npm` | Include npm dependencies in SBOM |
 | `--sbom-cargo` | Include Cargo dependencies in SBOM |
 
-### Proxy Mode (Runtime MCP Monitoring)
-
-| Option | Description |
-|--------|-------------|
-| `--proxy` | Enable proxy mode for runtime MCP monitoring |
-| `--proxy-port <PORT>` | Proxy listen port (default: 8080) |
-| `--proxy-target <HOST:PORT>` | Target MCP server address |
-| `--proxy-tls` | Enable TLS termination in proxy mode |
-| `--proxy-block` | Enable blocking mode (block messages with findings) |
-| `--proxy-log <FILE>` | Log file for proxy traffic (JSONL format) |
-
 ### False Positive Reporting
 
 | Option | Description |
@@ -155,14 +169,70 @@ cc-audit [OPTIONS] <PATHS>...
 | `--report-fp-endpoint <URL>` | Custom endpoint URL for false positive reporting |
 | `--no-telemetry` | Disable telemetry and false positive reporting |
 
-### Other Options
+---
+
+## `init` Command
+
+Generate a default configuration file template.
+
+```
+cc-audit init [PATH]
+```
+
+### Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `[PATH]` | Output path for the configuration file (default: `.cc-audit.yaml`) |
+
+---
+
+## `hook` Command
+
+Manage Git pre-commit hooks.
+
+```
+cc-audit hook <ACTION> [PATH]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `init [PATH]` | Install pre-commit hook (default path: `.`) |
+| `remove [PATH]` | Remove pre-commit hook (default path: `.`) |
+
+---
+
+## `serve` Command
+
+Run as MCP server.
+
+```
+cc-audit serve
+```
+
+---
+
+## `proxy` Command
+
+Run as MCP proxy for runtime monitoring.
+
+```
+cc-audit proxy [OPTIONS] --target <HOST:PORT>
+```
+
+### Options
 
 | Option | Description |
 |--------|-------------|
-| `--init` | Generate a default configuration file template |
-| `--mcp-server` | Run as MCP server |
-| `-h, --help` | Print help |
-| `-V, --version` | Print version |
+| `--port <PORT>` | Proxy listen port (default: 8080) |
+| `--target <HOST:PORT>` | Target MCP server address (required) |
+| `--tls` | Enable TLS termination in proxy mode |
+| `--block` | Enable blocking mode (block messages with findings) |
+| `--log <FILE>` | Log file for proxy traffic (JSONL format) |
+
+---
 
 ## Scan Types
 
@@ -234,56 +304,75 @@ Use `--compact` for traditional output format:
 
 ```bash
 # Basic scan
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # Scan with JSON output to file
-cc-audit ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format json --output results.json
 
 # Scan with HTML report
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format html --output report.html
 
 # Strict mode with verbose output
-cc-audit --strict --verbose ./skill/
+cc-audit check --strict ./skill/ --verbose
 
 # Scan MCP configuration
-cc-audit --type mcp ~/.claude/mcp.json
+cc-audit check --type mcp ~/.claude/mcp.json
 
 # Watch mode for development
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 
 # CI pipeline scan
-cc-audit --ci --format sarif --strict ./
+cc-audit check --ci --format sarif --strict ./
 
 # High confidence only
-cc-audit --min-confidence certain ./skill/
+cc-audit check --min-confidence certain ./skill/
 
 # Scan all installed AI coding clients
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # Scan a specific client
-cc-audit --client cursor
+cc-audit check --client cursor
 
 # Scan a remote repository
-cc-audit --remote https://github.com/user/awesome-skill
+cc-audit check --remote https://github.com/user/awesome-skill
 
 # Scan a remote repository at specific branch
-cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+cc-audit check --remote https://github.com/user/repo --git-ref v1.0.0
 
 # Scan all repositories from awesome-claude-code
-cc-audit --awesome-claude-code --summary
+cc-audit check --awesome-claude-code --summary
 
 # Generate security badge
-cc-audit ./skill/ --badge --badge-format markdown
+cc-audit check ./skill/ --badge --badge-format markdown
 
 # Pin MCP tool configuration
-cc-audit --type mcp ~/.claude/mcp.json --pin
+cc-audit check --type mcp ~/.claude/mcp.json --pin
 
 # Verify MCP pins
-cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+cc-audit check --type mcp ~/.claude/mcp.json --pin-verify
 
 # Generate SBOM
-cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+cc-audit check ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# Generate config file
+cc-audit init
+
+# Generate config file with custom path
+cc-audit init my-config.yaml
+
+# Install pre-commit hook
+cc-audit hook init
+
+# Install pre-commit hook in specific repo
+cc-audit hook init ./my-repo/
+
+# Remove pre-commit hook
+cc-audit hook remove
+
+# Run as MCP server
+cc-audit serve
 
 # Run as proxy for runtime monitoring
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+cc-audit proxy --target localhost:9000
+cc-audit proxy --target localhost:9000 --port 3000 --tls --block
 ```

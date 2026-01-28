@@ -1,29 +1,18 @@
 //! MCP tool pinning handler.
 
-use crate::Config;
-use crate::cli::Cli;
+use crate::CheckArgs;
 use crate::pinning::{PINNING_FILENAME, ToolPins};
-use crate::run::EffectiveConfig;
 use colored::Colorize;
 use std::path::Path;
 use std::process::ExitCode;
 
 /// Handle the `pin` command to create or update pins.
-pub fn handle_pin(cli: &Cli) -> ExitCode {
-    let target_path = cli
+pub fn handle_pin(args: &CheckArgs, verbose: bool) -> ExitCode {
+    let target_path = args
         .paths
         .first()
         .cloned()
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-
-    // Load config to get effective settings
-    let project_root = if target_path.is_dir() {
-        Some(target_path.as_path())
-    } else {
-        target_path.parent()
-    };
-    let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
 
     // Find MCP config file
     let mcp_path = find_mcp_config(&target_path);
@@ -44,12 +33,12 @@ pub fn handle_pin(cli: &Cli) -> ExitCode {
     let mcp_path = mcp_path.unwrap();
 
     // Check if we're updating existing pins
-    if cli.pin_update {
+    if args.pin_update {
         return handle_pin_update(&target_path, &mcp_path);
     }
 
     // Check if pins already exist
-    if ToolPins::exists(&target_path) && !cli.pin_force {
+    if ToolPins::exists(&target_path) && !args.pin_force {
         eprintln!(
             "{} Pins already exist at {}",
             "Warning:".yellow().bold(),
@@ -75,7 +64,7 @@ pub fn handle_pin(cli: &Cli) -> ExitCode {
                 target_path.join(PINNING_FILENAME).display()
             );
 
-            if effective.verbose {
+            if verbose {
                 println!();
                 for (name, tool) in &pins.tools {
                     println!("  {} {}", "📌".dimmed(), name);
@@ -94,8 +83,8 @@ pub fn handle_pin(cli: &Cli) -> ExitCode {
 }
 
 /// Handle the `pin --verify` command.
-pub fn handle_pin_verify(cli: &Cli) -> ExitCode {
-    let target_path = cli
+pub fn handle_pin_verify(args: &CheckArgs) -> ExitCode {
+    let target_path = args
         .paths
         .first()
         .cloned()
@@ -230,14 +219,15 @@ fn find_mcp_config(dir: &Path) -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
     use std::fs;
     use tempfile::TempDir;
 
-    fn create_test_cli(args: &[&str]) -> Cli {
-        let mut full_args = vec!["cc-audit"];
-        full_args.extend(args);
-        Cli::parse_from(full_args)
+    fn create_test_args(paths: Vec<std::path::PathBuf>) -> CheckArgs {
+        CheckArgs {
+            paths,
+            pin: true,
+            ..Default::default()
+        }
     }
 
     fn create_test_mcp_config() -> &'static str {
@@ -254,9 +244,9 @@ mod tests {
     #[test]
     fn test_handle_pin_no_mcp_config() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
 
-        let result = handle_pin(&cli);
+        let result = handle_pin(&args, false);
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -266,9 +256,9 @@ mod tests {
         let mcp_path = temp_dir.path().join("mcp.json");
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
 
-        let result = handle_pin(&cli);
+        let result = handle_pin(&args, false);
         assert_eq!(result, ExitCode::SUCCESS);
 
         let pins_path = temp_dir.path().join(PINNING_FILENAME);
@@ -282,12 +272,12 @@ mod tests {
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
         // Create pins first
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        handle_pin(&args, false);
 
         // Try to create again without force
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        let result = handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        let result = handle_pin(&args, false);
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -298,21 +288,23 @@ mod tests {
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
         // Create pins first
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        handle_pin(&args, false);
 
         // Create again with force
-        let cli = create_test_cli(&["--pin", "--pin-force", temp_dir.path().to_str().unwrap()]);
-        let result = handle_pin(&cli);
+        let mut args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        args.pin_force = true;
+        let result = handle_pin(&args, false);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
     fn test_handle_pin_verify_no_pins() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&["--pin-verify", temp_dir.path().to_str().unwrap()]);
+        let mut args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        args.pin_verify = true;
 
-        let result = handle_pin_verify(&cli);
+        let result = handle_pin_verify(&args);
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -323,12 +315,13 @@ mod tests {
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
         // Create pins
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        handle_pin(&args, false);
 
         // Verify - no changes
-        let cli = create_test_cli(&["--pin-verify", temp_dir.path().to_str().unwrap()]);
-        let result = handle_pin_verify(&cli);
+        let mut args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        args.pin_verify = true;
+        let result = handle_pin_verify(&args);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
@@ -339,8 +332,8 @@ mod tests {
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
         // Create pins
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        handle_pin(&args, false);
 
         // Modify config
         let modified_config = r#"{
@@ -354,8 +347,9 @@ mod tests {
         fs::write(&mcp_path, modified_config).unwrap();
 
         // Verify - should detect changes
-        let cli = create_test_cli(&["--pin-verify", temp_dir.path().to_str().unwrap()]);
-        let result = handle_pin_verify(&cli);
+        let mut args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        args.pin_verify = true;
+        let result = handle_pin_verify(&args);
         assert_eq!(result, ExitCode::from(1));
     }
 
@@ -366,8 +360,8 @@ mod tests {
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
         // Create pins
-        let cli = create_test_cli(&["--pin", temp_dir.path().to_str().unwrap()]);
-        handle_pin(&cli);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        handle_pin(&args, false);
 
         // Modify config
         let modified_config = r#"{
@@ -381,8 +375,9 @@ mod tests {
         fs::write(&mcp_path, modified_config).unwrap();
 
         // Update pins
-        let cli = create_test_cli(&["--pin-update", temp_dir.path().to_str().unwrap()]);
-        let result = handle_pin(&cli);
+        let mut args = create_test_args(vec![temp_dir.path().to_path_buf()]);
+        args.pin_update = true;
+        let result = handle_pin(&args, false);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
@@ -432,9 +427,9 @@ mod tests {
         let mcp_path = temp_dir.path().join("mcp.json");
         fs::write(&mcp_path, create_test_mcp_config()).unwrap();
 
-        let cli = create_test_cli(&["--pin", "--verbose", temp_dir.path().to_str().unwrap()]);
+        let args = create_test_args(vec![temp_dir.path().to_path_buf()]);
 
-        let result = handle_pin(&cli);
+        let result = handle_pin(&args, true);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 }

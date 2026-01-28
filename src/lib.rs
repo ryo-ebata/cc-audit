@@ -89,14 +89,16 @@ pub mod test_utils;
 // ============================================
 
 // L1: Input
-pub use cli::{BadgeFormat, Cli, Commands, OutputFormat, ScanType};
+pub use cli::{
+    BadgeFormat, CheckArgs, Cli, Commands, HookAction, OutputFormat, ProxyArgs, ScanType,
+};
 pub use client::{
     ClientType, DetectedClient, detect_client, detect_installed_clients, list_installed_clients,
 };
 
 // L2: Configuration
 pub use config::{Config, ConfigError, ConfigLoadResult, TextFilesConfig, WatchConfig};
-pub use profile::{Profile, profile_from_cli};
+pub use profile::{Profile, profile_from_check_args};
 
 // L3: Discovery
 pub use discovery::{DirectoryWalker, WalkConfig};
@@ -138,9 +140,9 @@ pub use reporter::{
 
 // Runtime & Orchestration
 pub use run::{
-    ScanMode, WatchModeResult, format_result, is_text_file, is_text_file_with_config, run_scan,
-    run_scan_with_config, scan_path_with_cve_db, scan_path_with_malware_db, setup_watch_mode,
-    watch_iteration,
+    ScanMode, WatchModeResult, format_result_check_args, format_result_with_config, is_text_file,
+    is_text_file_with_config, run_scan_with_check_args, run_scan_with_check_args_config,
+    scan_path_with_cve_db, scan_path_with_malware_db, setup_watch_mode, watch_iteration,
 };
 pub use runtime::{HookRunner, Pipeline, PipelineStage, ScanContext, ScanExecutor};
 

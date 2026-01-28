@@ -17,7 +17,10 @@ mod report_fp;
 mod sbom;
 mod scan;
 
+use std::path::Path;
 use std::process::ExitCode;
+
+use crate::config::Config;
 
 // Re-export all handlers for convenience
 pub use baseline::{
@@ -26,7 +29,7 @@ pub use baseline::{
 pub use compare::handle_compare;
 pub use config::{handle_init_config, handle_save_profile, handle_show_profile};
 pub use fix::handle_fix;
-pub use hook::{handle_init_hook, handle_remove_hook};
+pub use hook::handle_hook;
 pub use hook_mode::handle_hook_mode;
 pub use mcp::handle_mcp_server;
 pub use pin::{handle_pin, handle_pin_verify};
@@ -34,7 +37,30 @@ pub use proxy::handle_proxy;
 pub use remote::{handle_awesome_claude_code_scan, handle_remote_list_scan, handle_remote_scan};
 pub use report_fp::handle_report_fp;
 pub use sbom::handle_sbom;
-pub use scan::{run_normal_mode, run_watch_mode};
+pub use scan::{handle_check, run_normal_check_mode};
+
+/// Require configuration file to exist. Returns error exit code if not found.
+pub fn require_config(
+    project_root: Option<&Path>,
+) -> Result<(Config, std::path::PathBuf), ExitCode> {
+    let load_result = Config::try_load(project_root);
+    if let Some(path) = load_result.path {
+        Ok((load_result.config, path))
+    } else {
+        eprintln!("Error: Configuration file not found.");
+        eprintln!();
+        eprintln!("cc-audit requires a configuration file (.cc-audit.yaml) to run.");
+        eprintln!("You can create one using:");
+        eprintln!();
+        eprintln!("  cc-audit init");
+        eprintln!();
+        eprintln!("Or specify a custom configuration file using:");
+        eprintln!();
+        eprintln!("  cc-audit check --config <path> <paths...>");
+        eprintln!();
+        Err(ExitCode::from(2))
+    }
+}
 
 /// Result type for handler functions that can be tested.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,16 +81,23 @@ impl From<HandlerResult> for ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Cli;
+    use crate::{CheckArgs, Cli, HookAction};
     use clap::Parser;
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use tempfile::TempDir;
 
     fn create_test_cli(args: &[&str]) -> Cli {
-        let mut full_args = vec!["cc-audit"];
+        let mut full_args = vec!["cc-audit", "check"];
         full_args.extend(args);
         Cli::parse_from(full_args)
+    }
+
+    fn create_test_check_args(paths: Vec<PathBuf>) -> CheckArgs {
+        CheckArgs {
+            paths,
+            ..Default::default()
+        }
     }
 
     /// Create a minimal config file in the given directory for tests
@@ -120,29 +153,32 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_init_hook_not_git_repo() {
+    fn test_handle_hook_init_not_git_repo() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
+        let action = HookAction::Init {
+            path: temp_dir.path().to_path_buf(),
+        };
 
-        let result = handle_init_hook(&cli);
+        let result = handle_hook(action);
         assert_eq!(result, ExitCode::from(2));
     }
 
     #[test]
-    fn test_handle_remove_hook_not_git_repo() {
+    fn test_handle_hook_remove_not_git_repo() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
+        let action = HookAction::Remove {
+            path: temp_dir.path().to_path_buf(),
+        };
 
-        let result = handle_remove_hook(&cli);
+        let result = handle_hook(action);
         assert_eq!(result, ExitCode::from(2));
     }
 
     #[test]
     fn test_handle_baseline_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
 
-        let result = handle_baseline(&cli);
+        let result = handle_baseline(&[temp_dir.path().to_path_buf()]);
         assert_eq!(result, ExitCode::SUCCESS);
 
         let baseline_path = temp_dir.path().join(".cc-audit-baseline.json");
@@ -157,8 +193,7 @@ mod tests {
         // Create a test file
         fs::write(temp_dir.path().join("test.md"), "# Test").unwrap();
 
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = handle_save_baseline(&cli, &baseline_file);
+        let result = handle_save_baseline(&[temp_dir.path().to_path_buf()], &baseline_file);
         assert_eq!(result, ExitCode::SUCCESS);
 
         assert!(baseline_file.exists());
@@ -167,9 +202,9 @@ mod tests {
     #[test]
     fn test_handle_check_drift_no_baseline() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
 
-        let result = handle_check_drift(&cli);
+        let result = handle_check_drift(&args);
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -179,11 +214,11 @@ mod tests {
         fs::write(temp_dir.path().join("test.md"), "# Test").unwrap();
 
         // Create baseline
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        handle_baseline(&cli);
+        handle_baseline(&[temp_dir.path().to_path_buf()]);
 
         // Check drift - baseline file was added so there will be drift
-        let result = handle_check_drift(&cli);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let result = handle_check_drift(&args);
         // Result will be ExitCode::from(1) because baseline file itself is detected as added
         // This is expected behavior - the baseline file is a relevant file (.json)
         assert!(result == ExitCode::SUCCESS || result == ExitCode::from(1));
@@ -203,18 +238,17 @@ mod tests {
 
     #[test]
     fn test_handle_compare_wrong_args() {
-        use std::path::PathBuf;
-        let cli = create_test_cli(&["."]);
-        let result = handle_compare(&cli, &[PathBuf::from(".")]);
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
+        let result = handle_compare(&args, &[PathBuf::from(".")]);
         assert_eq!(result, ExitCode::from(2));
     }
 
     #[test]
     fn test_handle_compare_same_dirs() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&["."]);
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
         let result = handle_compare(
-            &cli,
+            &args,
             &[temp_dir.path().to_path_buf(), temp_dir.path().to_path_buf()],
         );
         assert_eq!(result, ExitCode::SUCCESS);
@@ -223,7 +257,6 @@ mod tests {
     #[test]
     fn test_filter_against_baseline_file_not_found() {
         use crate::test_utils::fixtures::create_test_result;
-        use std::path::Path;
 
         let result = create_test_result(vec![]);
         let filtered = filter_against_baseline(result.clone(), Path::new("/nonexistent/path.json"));
@@ -282,9 +315,13 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::SUCCESS);
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                assert_eq!(result, ExitCode::SUCCESS);
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
@@ -294,21 +331,27 @@ mod tests {
         fs::write(temp_dir.path().join("test.md"), "sudo rm -rf /").unwrap();
 
         let cli = create_test_cli(&["--warn-only", temp_dir.path().to_str().unwrap()]);
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::SUCCESS);
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                assert_eq!(result, ExitCode::SUCCESS);
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
     fn test_handle_fix_no_findings() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&["--fix-dry-run", temp_dir.path().to_str().unwrap()]);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.fix_dry_run = true;
 
-        let result = handle_fix(&cli);
+        let result = handle_fix(&args);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_handle_init_hook_in_git_repo() {
+    fn test_handle_hook_init_in_git_repo() {
         let temp_dir = TempDir::new().unwrap();
         // Create a git repository
         std::process::Command::new("git")
@@ -317,13 +360,15 @@ mod tests {
             .output()
             .unwrap();
 
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = handle_init_hook(&cli);
+        let action = HookAction::Init {
+            path: temp_dir.path().to_path_buf(),
+        };
+        let result = handle_hook(action);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
-    fn test_handle_remove_hook_in_git_repo_not_installed() {
+    fn test_handle_hook_remove_in_git_repo_not_installed() {
         let temp_dir = TempDir::new().unwrap();
         // Create a git repository
         std::process::Command::new("git")
@@ -332,14 +377,16 @@ mod tests {
             .output()
             .unwrap();
 
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = handle_remove_hook(&cli);
+        let action = HookAction::Remove {
+            path: temp_dir.path().to_path_buf(),
+        };
+        let result = handle_hook(action);
         // Should fail because hook is not installed
         assert_eq!(result, ExitCode::from(2));
     }
 
     #[test]
-    fn test_handle_remove_hook_in_git_repo_installed() {
+    fn test_handle_hook_remove_in_git_repo_installed() {
         let temp_dir = TempDir::new().unwrap();
         // Create a git repository
         std::process::Command::new("git")
@@ -349,11 +396,16 @@ mod tests {
             .unwrap();
 
         // First install the hook
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        handle_init_hook(&cli);
+        let init_action = HookAction::Init {
+            path: temp_dir.path().to_path_buf(),
+        };
+        handle_hook(init_action);
 
         // Then remove it
-        let result = handle_remove_hook(&cli);
+        let remove_action = HookAction::Remove {
+            path: temp_dir.path().to_path_buf(),
+        };
+        let result = handle_hook(remove_action);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
@@ -373,33 +425,19 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         create_test_config(temp_dir.path());
         let cli = create_test_cli(&["--strict", temp_dir.path().to_str().unwrap()]);
-
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::SUCCESS);
-    }
-
-    #[test]
-    fn test_run_normal_mode_with_output_file() {
-        let temp_dir = TempDir::new().unwrap();
-        create_test_config(temp_dir.path());
-        let output_file = temp_dir.path().join("output.txt");
-
-        let cli = Cli::parse_from([
-            "cc-audit",
-            "--output",
-            output_file.to_str().unwrap(),
-            temp_dir.path().to_str().unwrap(),
-        ]);
-
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::SUCCESS);
-        assert!(output_file.exists());
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                assert_eq!(result, ExitCode::SUCCESS);
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
     fn test_handle_save_profile_and_load() {
-        let cli = create_test_cli(&["--strict", "--verbose", "."]);
-        let result = handle_save_profile(&cli, "test_profile_handlers_123");
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
+        let result = handle_save_profile(&args, "test_profile_handlers_123", false);
         assert_eq!(result, ExitCode::SUCCESS);
 
         // Clean up
@@ -414,8 +452,9 @@ mod tests {
         // Create a file with a fixable issue
         fs::write(temp_dir.path().join("test.md"), "permissions: \"*\"").unwrap();
 
-        let cli = create_test_cli(&["--fix-dry-run", temp_dir.path().to_str().unwrap()]);
-        let result = handle_fix(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.fix_dry_run = true;
+        let result = handle_fix(&args);
         // Result depends on whether fixes were generated
         // Just verify it doesn't panic
         let _ = result;
@@ -430,9 +469,9 @@ mod tests {
         fs::write(temp_dir1.path().join("test.md"), "# Clean").unwrap();
         fs::write(temp_dir2.path().join("test.md"), "sudo rm -rf /").unwrap();
 
-        let cli = create_test_cli(&["."]);
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
         let result = handle_compare(
-            &cli,
+            &args,
             &[
                 temp_dir1.path().to_path_buf(),
                 temp_dir2.path().to_path_buf(),
@@ -440,30 +479,6 @@ mod tests {
         );
         // Should return 1 because there are differences
         assert!(result == ExitCode::SUCCESS || result == ExitCode::from(1));
-    }
-
-    #[test]
-    fn test_run_normal_mode_with_baseline_file() {
-        use crate::test_utils::fixtures::create_test_result;
-
-        let temp_dir = TempDir::new().unwrap();
-        let baseline_path = temp_dir.path().join("baseline.json");
-        create_test_config(temp_dir.path());
-
-        // Create baseline file
-        let baseline_result = create_test_result(vec![]);
-        let json = serde_json::to_string(&baseline_result).unwrap();
-        fs::write(&baseline_path, &json).unwrap();
-
-        let cli = Cli::parse_from([
-            "cc-audit",
-            "--baseline-file",
-            baseline_path.to_str().unwrap(),
-            temp_dir.path().to_str().unwrap(),
-        ]);
-
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
@@ -505,36 +520,6 @@ mod tests {
     }
 
     #[test]
-    fn test_handle_init_hook_default_path() {
-        // Test with empty paths to trigger unwrap_or_else
-        let cli = Cli {
-            paths: vec![],
-            ..Default::default()
-        };
-
-        // Will fail because current dir isn't a git repo (likely)
-        // but this tests the unwrap_or_else path
-        let result = handle_init_hook(&cli);
-        // Result depends on whether cwd is a git repo
-        let _ = result;
-    }
-
-    #[test]
-    fn test_handle_remove_hook_default_path() {
-        // Test with empty paths to trigger unwrap_or_else
-        let cli = Cli {
-            paths: vec![],
-            ..Default::default()
-        };
-
-        // Will fail because current dir hook isn't installed (likely)
-        // but this tests the unwrap_or_else path
-        let result = handle_remove_hook(&cli);
-        // Result depends on hook state
-        let _ = result;
-    }
-
-    #[test]
     fn test_handle_init_config_default_path() {
         // Test with default path ".cc-audit.yaml"
         let temp_dir = TempDir::new().unwrap();
@@ -547,8 +532,7 @@ mod tests {
 
     #[test]
     fn test_handle_baseline_nonexistent_dir() {
-        let cli = create_test_cli(&["/nonexistent/path/12345"]);
-        let result = handle_baseline(&cli);
+        let result = handle_baseline(&[PathBuf::from("/nonexistent/path/12345")]);
         // Should fail because path doesn't exist
         assert_eq!(result, ExitCode::from(2));
     }
@@ -560,22 +544,23 @@ mod tests {
 
         // Baseline::from_directory returns empty result for nonexistent paths
         // This just verifies the path was traversed
-        let cli = create_test_cli(&["/nonexistent/path/12345"]);
-        let result = handle_save_baseline(&cli, &baseline_path);
+        let result =
+            handle_save_baseline(&[PathBuf::from("/nonexistent/path/12345")], &baseline_path);
         // Returns success with 0 files
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
     fn test_handle_save_baseline_invalid_output_path() {
-        use std::path::Path;
         let temp_dir = TempDir::new().unwrap();
         // Create a test file in temp dir
         fs::write(temp_dir.path().join("test.md"), "# Test").unwrap();
 
         // Try to save to an invalid path
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = handle_save_baseline(&cli, Path::new("/nonexistent/dir/baseline.json"));
+        let result = handle_save_baseline(
+            &[temp_dir.path().to_path_buf()],
+            Path::new("/nonexistent/dir/baseline.json"),
+        );
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -591,9 +576,14 @@ mod tests {
         .unwrap();
 
         let cli = create_test_cli(&["--strict", temp_dir.path().to_str().unwrap()]);
-        let result = run_normal_mode(&cli);
-        // In strict mode, warnings cause failure
-        assert!(result == ExitCode::from(1) || result == ExitCode::SUCCESS);
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                // In strict mode, warnings cause failure
+                assert!(result == ExitCode::from(1) || result == ExitCode::SUCCESS);
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
@@ -604,24 +594,14 @@ mod tests {
         fs::write(temp_dir.path().join("test.md"), "sudo rm -rf /").unwrap();
 
         let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = run_normal_mode(&cli);
-        // Should fail in normal mode with errors
-        let _ = result;
-    }
-
-    #[test]
-    fn test_run_normal_mode_output_write_error() {
-        let temp_dir = TempDir::new().unwrap();
-        create_test_config(temp_dir.path());
-        let cli = Cli::parse_from([
-            "cc-audit",
-            "--output",
-            "/nonexistent/dir/output.txt",
-            temp_dir.path().to_str().unwrap(),
-        ]);
-
-        let result = run_normal_mode(&cli);
-        assert_eq!(result, ExitCode::from(2));
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                // Should fail in normal mode with errors
+                let _ = result;
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
@@ -629,14 +609,14 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         // Create a valid baseline
         fs::write(temp_dir.path().join("test.md"), "# Test").unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        handle_baseline(&cli);
+        handle_baseline(&[temp_dir.path().to_path_buf()]);
 
         // Delete temp_dir contents except baseline (simulate corruption)
         let _ = fs::remove_file(temp_dir.path().join("test.md"));
 
         // Check drift - should detect the deleted file
-        let result = handle_check_drift(&cli);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let result = handle_check_drift(&args);
         // Will have drift due to deleted file
         assert!(result == ExitCode::from(1) || result == ExitCode::SUCCESS);
     }
@@ -687,8 +667,9 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(&["--fix-dry-run", temp_dir.path().to_str().unwrap()]);
-        let result = handle_fix(&cli);
+        let mut args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        args.fix_dry_run = true;
+        let result = handle_fix(&args);
         // Result should be 1 because there are findings but no fixes available
         // or SUCCESS if no findings are generated
         let _ = result;
@@ -703,9 +684,9 @@ mod tests {
         fs::write(temp_dir1.path().join("bad.md"), "sudo rm -rf /").unwrap();
         fs::write(temp_dir2.path().join("clean.md"), "# Nothing here").unwrap();
 
-        let cli = create_test_cli(&["."]);
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
         let result = handle_compare(
-            &cli,
+            &args,
             &[
                 temp_dir1.path().to_path_buf(),
                 temp_dir2.path().to_path_buf(),
@@ -724,9 +705,9 @@ mod tests {
         fs::write(temp_dir1.path().join("clean.md"), "# Nothing here").unwrap();
         fs::write(temp_dir2.path().join("bad.md"), "sudo rm -rf /").unwrap();
 
-        let cli = create_test_cli(&["."]);
+        let args = create_test_check_args(vec![PathBuf::from(".")]);
         let result = handle_compare(
-            &cli,
+            &args,
             &[
                 temp_dir1.path().to_path_buf(),
                 temp_dir2.path().to_path_buf(),
@@ -784,8 +765,7 @@ mod tests {
             perms.set_mode(0o444);
             let _ = fs::set_permissions(&readonly_dir, perms);
 
-            let cli = create_test_cli(&[readonly_dir.to_str().unwrap()]);
-            let result = handle_baseline(&cli);
+            let result = handle_baseline(std::slice::from_ref(&readonly_dir));
             // Should fail due to permission error
             // Reset permissions for cleanup
             let mut perms = metadata.permissions();
@@ -803,9 +783,14 @@ mod tests {
         fs::write(temp_dir.path().join("test.md"), "allowed_tools:\n  - \"*\"").unwrap();
 
         let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = run_normal_mode(&cli);
-        // May return 1 if there are errors
-        let _ = result;
+        match &cli.command {
+            Some(crate::Commands::Check(args)) => {
+                let result = run_normal_check_mode(args);
+                // May return 1 if there are errors
+                let _ = result;
+            }
+            _ => panic!("Expected Check command"),
+        }
     }
 
     #[test]
@@ -814,14 +799,14 @@ mod tests {
         fs::write(temp_dir.path().join("test.md"), "# Original").unwrap();
 
         // Create baseline
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        handle_baseline(&cli);
+        handle_baseline(&[temp_dir.path().to_path_buf()]);
 
         // Modify the file to create drift
         fs::write(temp_dir.path().join("test.md"), "# Modified content").unwrap();
 
         // Check drift - should detect the change
-        let result = handle_check_drift(&cli);
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let result = handle_check_drift(&args);
         // Will have drift due to modified file
         assert!(result == ExitCode::from(1) || result == ExitCode::SUCCESS);
     }

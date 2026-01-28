@@ -1,5 +1,5 @@
 # cc-audit with SARIF Integration
-# GitHub Security tabに結果を表示するワークフロー
+# Workflow to display results in GitHub Security tab
 
 name: CC Audit (SARIF)
 
@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # 毎週月曜日の朝9時(JST)に実行
+    # Run every Monday at 9:00 AM JST (0:00 UTC)
     - cron: '0 0 * * 1'
 
 permissions:
@@ -27,20 +27,20 @@ jobs:
         run: cargo install cc-audit
 
       - name: Run cc-audit (Skills)
-        run: cc-audit --type skill --format sarif -o skill-results.sarif . || true
+        run: cc-audit check --type skill --format sarif -o skill-results.sarif . || true
 
       - name: Run cc-audit (Hooks)
-        run: cc-audit --type hook --format sarif -o hook-results.sarif . || true
+        run: cc-audit check --type hook --format sarif -o hook-results.sarif . || true
 
       - name: Run cc-audit (MCP)
-        run: cc-audit --type mcp --format sarif -o mcp-results.sarif . || true
+        run: cc-audit check --type mcp --format sarif -o mcp-results.sarif . || true
 
       - name: Run cc-audit (Dependencies)
-        run: cc-audit --type dependency --format sarif -o dependency-results.sarif . || true
+        run: cc-audit check --type dependency --format sarif -o dependency-results.sarif . || true
 
       - name: Merge SARIF files
         run: |
-          # jqで複数のSARIFファイルをマージ
+          # Merge multiple SARIF files using jq
           jq -s '{
             "$schema": .[0]["$schema"],
             version: .[0].version,

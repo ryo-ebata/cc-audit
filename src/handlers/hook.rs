@@ -1,16 +1,19 @@
 //! Git hook management handlers.
 
-use crate::{Cli, HookInstaller};
+use crate::{HookAction, HookInstaller};
 use std::path::Path;
 use std::process::ExitCode;
 
-/// Handle --init-hook command.
-pub fn handle_init_hook(cli: &Cli) -> ExitCode {
-    let path = cli
-        .paths
-        .first()
-        .map(|p| p.as_path())
-        .unwrap_or_else(|| Path::new("."));
+/// Handle `cc-audit hook <init|remove>` subcommand.
+pub fn handle_hook(action: HookAction) -> ExitCode {
+    match action {
+        HookAction::Init { path } => handle_init_hook_path(&path),
+        HookAction::Remove { path } => handle_remove_hook_path(&path),
+    }
+}
+
+/// Handle `cc-audit hook init [path]`.
+fn handle_init_hook_path(path: &Path) -> ExitCode {
     match HookInstaller::install(path) {
         Ok(()) => {
             println!("Pre-commit hook installed successfully.");
@@ -24,13 +27,8 @@ pub fn handle_init_hook(cli: &Cli) -> ExitCode {
     }
 }
 
-/// Handle --remove-hook command.
-pub fn handle_remove_hook(cli: &Cli) -> ExitCode {
-    let path = cli
-        .paths
-        .first()
-        .map(|p| p.as_path())
-        .unwrap_or_else(|| Path::new("."));
+/// Handle `cc-audit hook remove [path]`.
+fn handle_remove_hook_path(path: &Path) -> ExitCode {
     match HookInstaller::uninstall(path) {
         Ok(()) => {
             println!("Pre-commit hook removed successfully.");

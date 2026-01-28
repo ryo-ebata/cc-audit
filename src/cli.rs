@@ -1,6 +1,6 @@
 use crate::client::ClientType;
 use crate::rules::{Confidence, ParseEnumError, RuleSeverity, Severity};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -92,35 +92,31 @@ impl std::str::FromStr for ScanType {
     }
 }
 
-/// Subcommands for cc-audit
+/// Hook subcommand actions
 #[derive(Subcommand, Debug, Clone)]
-pub enum Commands {
-    /// Generate a default configuration file template
+pub enum HookAction {
+    /// Install pre-commit hook
     Init {
-        /// Output path for the configuration file (default: .cc-audit.yaml)
-        #[arg(default_value = ".cc-audit.yaml")]
+        /// Path to git repository
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Remove pre-commit hook
+    Remove {
+        /// Path to git repository
+        #[arg(default_value = ".")]
         path: PathBuf,
     },
 }
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "cc-audit",
-    version,
-    about = "Security auditor for Claude Code skills, hooks, and MCP servers",
-    long_about = "cc-audit scans Claude Code skills, hooks, and MCP servers for security vulnerabilities before installation.",
-    subcommand_negates_reqs = true
-)]
-pub struct Cli {
-    /// Subcommand to run
-    #[command(subcommand)]
-    pub command: Option<Commands>,
-
+/// Arguments for the check subcommand
+#[derive(Args, Debug, Clone)]
+pub struct CheckArgs {
     /// Paths to scan (files or directories)
-    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "all_clients", "client", "hook_mode", "mcp_server", "compare"])]
+    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "all_clients", "client", "compare"])]
     pub paths: Vec<PathBuf>,
 
-    /// Path to configuration file (required unless using --all-clients, --remote, etc.)
+    /// Path to configuration file
     #[arg(short = 'c', long = "config", value_name = "FILE")]
     pub config: Option<PathBuf>,
 
@@ -173,7 +169,7 @@ pub struct Cli {
     pub format: OutputFormat,
 
     /// Strict mode: show medium/low severity findings and treat warnings as errors
-    #[arg(short, long)]
+    #[arg(short = 'S', long)]
     pub strict: bool,
 
     /// Warn-only mode: treat all findings as warnings (exit code 0)
@@ -192,17 +188,13 @@ pub struct Cli {
     #[arg(short = 't', long = "type", value_enum, default_value_t = ScanType::Skill)]
     pub scan_type: ScanType,
 
-    /// Recursive scan
-    #[arg(short, long)]
-    pub recursive: bool,
+    /// Disable recursive scanning (default: recursive enabled)
+    #[arg(long = "no-recursive")]
+    pub no_recursive: bool,
 
     /// CI mode: non-interactive output
     #[arg(long)]
     pub ci: bool,
-
-    /// Verbose output
-    #[arg(short, long)]
-    pub verbose: bool,
 
     /// Minimum confidence level for findings to be reported
     #[arg(long, value_enum)]
@@ -213,8 +205,6 @@ pub struct Cli {
     pub skip_comments: bool,
 
     /// Strict secrets mode: disable dummy key heuristics for test files
-    /// By default, findings in test files have their confidence downgraded.
-    /// This option disables that behavior and treats all secrets equally.
     #[arg(long)]
     pub strict_secrets: bool,
 
@@ -229,14 +219,6 @@ pub struct Cli {
     /// Watch mode: continuously monitor files for changes and re-scan
     #[arg(short, long)]
     pub watch: bool,
-
-    /// Install cc-audit pre-commit hook in the git repository
-    #[arg(long)]
-    pub init_hook: bool,
-
-    /// Remove cc-audit pre-commit hook from the git repository
-    #[arg(long)]
-    pub remove_hook: bool,
 
     /// Path to a custom malware signatures database (JSON)
     #[arg(long)]
@@ -289,10 +271,6 @@ pub struct Cli {
     /// Preview auto-fix changes without applying them
     #[arg(long)]
     pub fix_dry_run: bool,
-
-    /// Run as MCP server
-    #[arg(long)]
-    pub mcp_server: bool,
 
     /// Run as Claude Code Hook (reads from stdin, writes to stdout)
     #[arg(long)]
@@ -361,36 +339,78 @@ pub struct Cli {
     /// Include Cargo dependencies in SBOM
     #[arg(long)]
     pub sbom_cargo: bool,
+}
 
-    /// Enable proxy mode for runtime MCP monitoring
-    #[arg(long)]
-    pub proxy: bool,
-
-    /// Proxy listen port (default: 8080)
-    #[arg(long, value_name = "PORT")]
-    pub proxy_port: Option<u16>,
+/// Arguments for the proxy subcommand
+#[derive(Args, Debug, Clone)]
+pub struct ProxyArgs {
+    /// Proxy listen port
+    #[arg(long, default_value = "8080")]
+    pub port: u16,
 
     /// Target MCP server address (host:port)
-    #[arg(long, value_name = "HOST:PORT")]
-    pub proxy_target: Option<String>,
+    #[arg(long, required = true, value_name = "HOST:PORT")]
+    pub target: String,
 
     /// Enable TLS termination in proxy mode
     #[arg(long)]
-    pub proxy_tls: bool,
+    pub tls: bool,
 
     /// Enable blocking mode (block messages with findings)
     #[arg(long)]
-    pub proxy_block: bool,
+    pub block: bool,
 
     /// Log file for proxy traffic (JSONL format)
     #[arg(long, value_name = "FILE")]
-    pub proxy_log: Option<std::path::PathBuf>,
+    pub log: Option<PathBuf>,
 }
 
-impl Default for Cli {
+/// Subcommands for cc-audit
+#[derive(Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Generate a default configuration file template
+    Init {
+        /// Output path for the configuration file (default: .cc-audit.yaml)
+        #[arg(default_value = ".cc-audit.yaml")]
+        path: PathBuf,
+    },
+
+    /// Scan paths for security vulnerabilities
+    Check(Box<CheckArgs>),
+
+    /// Manage Git pre-commit hook
+    Hook {
+        #[command(subcommand)]
+        action: HookAction,
+    },
+
+    /// Run as MCP server
+    Serve,
+
+    /// Run as MCP proxy for runtime monitoring
+    Proxy(ProxyArgs),
+}
+
+#[derive(Parser, Debug, Default)]
+#[command(
+    name = "cc-audit",
+    version,
+    about = "Security auditor for Claude Code skills, hooks, and MCP servers",
+    long_about = "cc-audit scans Claude Code skills, hooks, and MCP servers for security vulnerabilities before installation."
+)]
+pub struct Cli {
+    /// Subcommand to run
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
+    /// Verbose output
+    #[arg(short, long, global = true)]
+    pub verbose: bool,
+}
+
+impl Default for CheckArgs {
     fn default() -> Self {
         Self {
-            command: None,
             paths: Vec::new(),
             config: None,
             all_clients: false,
@@ -410,17 +430,14 @@ impl Default for Cli {
             min_severity: None,
             min_rule_severity: None,
             scan_type: ScanType::Skill,
-            recursive: true,
+            no_recursive: false,
             ci: false,
-            verbose: false,
             min_confidence: None,
             skip_comments: false,
             strict_secrets: false,
             fix_hint: false,
             compact: false,
             watch: false,
-            init_hook: false,
-            remove_hook: false,
             malware_db: None,
             no_malware_scan: false,
             cve_db: None,
@@ -434,7 +451,6 @@ impl Default for Cli {
             compare: None,
             fix: false,
             fix_dry_run: false,
-            mcp_server: false,
             hook_mode: false,
             pin: false,
             pin_verify: false,
@@ -452,12 +468,18 @@ impl Default for Cli {
             sbom_format: None,
             sbom_npm: false,
             sbom_cargo: false,
-            proxy: false,
-            proxy_port: None,
-            proxy_target: None,
-            proxy_tls: false,
-            proxy_block: false,
-            proxy_log: None,
+        }
+    }
+}
+
+impl Default for ProxyArgs {
+    fn default() -> Self {
+        Self {
+            port: 8080,
+            target: String::new(),
+            tls: false,
+            block: false,
+            log: None,
         }
     }
 }
@@ -473,253 +495,15 @@ mod tests {
         Cli::command().debug_assert();
     }
 
-    #[test]
-    fn test_parse_basic_args() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert_eq!(cli.paths.len(), 1);
-        assert!(!cli.strict);
-        assert!(!cli.recursive);
-    }
+    // ===== Test: No args shows help (command is None) =====
 
     #[test]
-    fn test_parse_multiple_paths() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill1/", "./skill2/"]).unwrap();
-        assert_eq!(cli.paths.len(), 2);
+    fn test_no_args_succeeds() {
+        let cli = Cli::try_parse_from(["cc-audit"]).unwrap();
+        assert!(cli.command.is_none());
     }
 
-    #[test]
-    fn test_parse_format_json() {
-        let cli = Cli::try_parse_from(["cc-audit", "--format", "json", "./skill/"]).unwrap();
-        assert!(matches!(cli.format, OutputFormat::Json));
-    }
-
-    #[test]
-    fn test_parse_strict_mode() {
-        let cli = Cli::try_parse_from(["cc-audit", "--strict", "./skill/"]).unwrap();
-        assert!(cli.strict);
-    }
-
-    #[test]
-    fn test_parse_recursive() {
-        let cli = Cli::try_parse_from(["cc-audit", "-r", "./skills/"]).unwrap();
-        assert!(cli.recursive);
-    }
-
-    #[test]
-    fn test_parse_format_sarif() {
-        let cli = Cli::try_parse_from(["cc-audit", "--format", "sarif", "./skill/"]).unwrap();
-        assert!(matches!(cli.format, OutputFormat::Sarif));
-    }
-
-    #[test]
-    fn test_parse_type_hook() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "hook", "./settings.json"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Hook));
-    }
-
-    #[test]
-    fn test_parse_type_mcp() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "mcp", "./mcp.json"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Mcp));
-    }
-
-    #[test]
-    fn test_parse_type_command() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "command", "./"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Command));
-    }
-
-    #[test]
-    fn test_parse_type_rules() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "rules", "./"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Rules));
-    }
-
-    #[test]
-    fn test_parse_type_docker() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "docker", "./"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Docker));
-    }
-
-    #[test]
-    fn test_parse_type_dependency() {
-        let cli = Cli::try_parse_from(["cc-audit", "--type", "dependency", "./"]).unwrap();
-        assert!(matches!(cli.scan_type, ScanType::Dependency));
-    }
-
-    #[test]
-    fn test_parse_ci_mode() {
-        let cli = Cli::try_parse_from(["cc-audit", "--ci", "./skill/"]).unwrap();
-        assert!(cli.ci);
-    }
-
-    #[test]
-    fn test_parse_verbose() {
-        let cli = Cli::try_parse_from(["cc-audit", "-v", "./skill/"]).unwrap();
-        assert!(cli.verbose);
-    }
-
-    #[test]
-    fn test_parse_all_options() {
-        let cli = Cli::try_parse_from([
-            "cc-audit",
-            "--format",
-            "json",
-            "--strict",
-            "--type",
-            "hook",
-            "--recursive",
-            "--ci",
-            "--verbose",
-            "./path/",
-        ])
-        .unwrap();
-        assert!(matches!(cli.format, OutputFormat::Json));
-        assert!(cli.strict);
-        assert!(matches!(cli.scan_type, ScanType::Hook));
-        assert!(cli.recursive);
-        assert!(cli.ci);
-        assert!(cli.verbose);
-    }
-
-    #[test]
-    fn test_default_values() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(matches!(cli.format, OutputFormat::Terminal));
-        assert!(matches!(cli.scan_type, ScanType::Skill));
-        assert!(!cli.strict);
-        assert!(!cli.recursive);
-        assert!(!cli.ci);
-        assert!(!cli.verbose);
-        assert!(cli.min_confidence.is_none());
-    }
-
-    #[test]
-    fn test_parse_min_confidence_tentative() {
-        let cli =
-            Cli::try_parse_from(["cc-audit", "--min-confidence", "tentative", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Some(Confidence::Tentative)));
-    }
-
-    #[test]
-    fn test_parse_min_confidence_firm() {
-        let cli =
-            Cli::try_parse_from(["cc-audit", "--min-confidence", "firm", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Some(Confidence::Firm)));
-    }
-
-    #[test]
-    fn test_parse_min_confidence_certain() {
-        let cli =
-            Cli::try_parse_from(["cc-audit", "--min-confidence", "certain", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Some(Confidence::Certain)));
-    }
-
-    #[test]
-    fn test_parse_skip_comments() {
-        let cli = Cli::try_parse_from(["cc-audit", "--skip-comments", "./skill/"]).unwrap();
-        assert!(cli.skip_comments);
-    }
-
-    #[test]
-    fn test_default_skip_comments_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.skip_comments);
-    }
-
-    #[test]
-    fn test_parse_fix_hint() {
-        let cli = Cli::try_parse_from(["cc-audit", "--fix-hint", "./skill/"]).unwrap();
-        assert!(cli.fix_hint);
-    }
-
-    #[test]
-    fn test_default_fix_hint_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.fix_hint);
-    }
-
-    #[test]
-    fn test_parse_watch() {
-        let cli = Cli::try_parse_from(["cc-audit", "--watch", "./skill/"]).unwrap();
-        assert!(cli.watch);
-    }
-
-    #[test]
-    fn test_parse_watch_short() {
-        let cli = Cli::try_parse_from(["cc-audit", "-w", "./skill/"]).unwrap();
-        assert!(cli.watch);
-    }
-
-    #[test]
-    fn test_default_watch_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.watch);
-    }
-
-    #[test]
-    fn test_parse_init_hook() {
-        let cli = Cli::try_parse_from(["cc-audit", "--init-hook", "./repo/"]).unwrap();
-        assert!(cli.init_hook);
-    }
-
-    #[test]
-    fn test_parse_remove_hook() {
-        let cli = Cli::try_parse_from(["cc-audit", "--remove-hook", "./repo/"]).unwrap();
-        assert!(cli.remove_hook);
-    }
-
-    #[test]
-    fn test_default_init_hook_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.init_hook);
-    }
-
-    #[test]
-    fn test_default_remove_hook_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.remove_hook);
-    }
-
-    #[test]
-    fn test_parse_malware_db() {
-        let cli =
-            Cli::try_parse_from(["cc-audit", "--malware-db", "./custom.json", "./skill/"]).unwrap();
-        assert!(cli.malware_db.is_some());
-        assert_eq!(cli.malware_db.unwrap().to_str().unwrap(), "./custom.json");
-    }
-
-    #[test]
-    fn test_default_malware_db_none() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(cli.malware_db.is_none());
-    }
-
-    #[test]
-    fn test_parse_no_malware_scan() {
-        let cli = Cli::try_parse_from(["cc-audit", "--no-malware-scan", "./skill/"]).unwrap();
-        assert!(cli.no_malware_scan);
-    }
-
-    #[test]
-    fn test_default_no_malware_scan_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.no_malware_scan);
-    }
-
-    #[test]
-    fn test_parse_custom_rules() {
-        let cli = Cli::try_parse_from(["cc-audit", "--custom-rules", "./rules.yaml", "./skill/"])
-            .unwrap();
-        assert!(cli.custom_rules.is_some());
-        assert_eq!(cli.custom_rules.unwrap().to_str().unwrap(), "./rules.yaml");
-    }
-
-    #[test]
-    fn test_default_custom_rules_none() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(cli.custom_rules.is_none());
-    }
+    // ===== Test: init subcommand =====
 
     #[test]
     fn test_parse_init_subcommand() {
@@ -737,143 +521,427 @@ mod tests {
         }
     }
 
+    // ===== Test: check subcommand =====
+
     #[test]
-    fn test_parse_config_option() {
-        let cli = Cli::try_parse_from(["cc-audit", "-c", "custom.yaml", "./skill/"]).unwrap();
-        assert_eq!(cli.config.unwrap().to_str().unwrap(), "custom.yaml");
+    fn test_parse_check_subcommand() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.paths.len(), 1);
+            assert!(!args.strict);
+            assert!(!args.no_recursive); // recursive is enabled by default
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_config_option_long() {
-        let cli = Cli::try_parse_from(["cc-audit", "--config", "custom.yaml", "./skill/"]).unwrap();
-        assert_eq!(cli.config.unwrap().to_str().unwrap(), "custom.yaml");
+    fn test_parse_check_multiple_paths() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "./skill1/", "./skill2/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.paths.len(), 2);
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_warn_only() {
-        let cli = Cli::try_parse_from(["cc-audit", "--warn-only", "./skill/"]).unwrap();
-        assert!(cli.warn_only);
-    }
-
-    #[test]
-    fn test_default_warn_only_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.warn_only);
-    }
-
-    #[test]
-    fn test_parse_min_severity_critical() {
+    fn test_parse_check_format_json() {
         let cli =
-            Cli::try_parse_from(["cc-audit", "--min-severity", "critical", "./skill/"]).unwrap();
-        assert_eq!(cli.min_severity, Some(Severity::Critical));
+            Cli::try_parse_from(["cc-audit", "check", "--format", "json", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.format, OutputFormat::Json));
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_min_severity_high() {
-        let cli = Cli::try_parse_from(["cc-audit", "--min-severity", "high", "./skill/"]).unwrap();
-        assert_eq!(cli.min_severity, Some(Severity::High));
+    fn test_parse_check_strict_mode() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--strict", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.strict);
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_min_severity_medium() {
+    fn test_parse_check_no_recursive() {
         let cli =
-            Cli::try_parse_from(["cc-audit", "--min-severity", "medium", "./skill/"]).unwrap();
-        assert_eq!(cli.min_severity, Some(Severity::Medium));
+            Cli::try_parse_from(["cc-audit", "check", "--no-recursive", "./skills/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.no_recursive);
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_min_severity_low() {
-        let cli = Cli::try_parse_from(["cc-audit", "--min-severity", "low", "./skill/"]).unwrap();
-        assert_eq!(cli.min_severity, Some(Severity::Low));
-    }
-
-    #[test]
-    fn test_default_min_severity_none() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(cli.min_severity.is_none());
-    }
-
-    #[test]
-    fn test_parse_min_rule_severity_error() {
+    fn test_parse_check_format_sarif() {
         let cli =
-            Cli::try_parse_from(["cc-audit", "--min-rule-severity", "error", "./skill/"]).unwrap();
-        assert_eq!(cli.min_rule_severity, Some(RuleSeverity::Error));
+            Cli::try_parse_from(["cc-audit", "check", "--format", "sarif", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.format, OutputFormat::Sarif));
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_min_rule_severity_warn() {
+    fn test_parse_check_type_hook() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--type", "hook", "./settings.json"])
+            .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.scan_type, ScanType::Hook));
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_type_mcp() {
         let cli =
-            Cli::try_parse_from(["cc-audit", "--min-rule-severity", "warn", "./skill/"]).unwrap();
-        assert_eq!(cli.min_rule_severity, Some(RuleSeverity::Warn));
+            Cli::try_parse_from(["cc-audit", "check", "--type", "mcp", "./mcp.json"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.scan_type, ScanType::Mcp));
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_default_min_rule_severity_none() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(cli.min_rule_severity.is_none());
+    fn test_parse_check_ci_mode() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--ci", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.ci);
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_warn_only_with_strict_conflict() {
-        // Both options can be parsed, but logic will determine behavior
-        let cli = Cli::try_parse_from(["cc-audit", "--warn-only", "--strict", "./skill/"]).unwrap();
-        assert!(cli.warn_only);
-        assert!(cli.strict);
+    fn test_parse_check_verbose() {
+        let cli = Cli::try_parse_from(["cc-audit", "-v", "check", "./skill/"]).unwrap();
+        assert!(cli.verbose);
     }
 
     #[test]
-    fn test_parse_all_clients() {
-        let cli = Cli::try_parse_from(["cc-audit", "--all-clients"]).unwrap();
-        assert!(cli.all_clients);
-        assert!(cli.paths.is_empty());
+    fn test_parse_check_all_options() {
+        let cli = Cli::try_parse_from([
+            "cc-audit", "check", "--format", "json", "--strict", "--type", "hook", "--ci",
+            "./path/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.format, OutputFormat::Json));
+            assert!(args.strict);
+            assert!(matches!(args.scan_type, ScanType::Hook));
+            assert!(args.ci);
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_client_claude() {
-        let cli = Cli::try_parse_from(["cc-audit", "--client", "claude"]).unwrap();
-        assert_eq!(cli.client, Some(ClientType::Claude));
-        assert!(cli.paths.is_empty());
+    fn test_parse_check_default_values() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.format, OutputFormat::Terminal));
+            assert!(matches!(args.scan_type, ScanType::Skill));
+            assert!(!args.strict);
+            assert!(!args.no_recursive);
+            assert!(!args.ci);
+            assert!(args.min_confidence.is_none());
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_parse_client_cursor() {
-        let cli = Cli::try_parse_from(["cc-audit", "--client", "cursor"]).unwrap();
-        assert_eq!(cli.client, Some(ClientType::Cursor));
-    }
-
-    #[test]
-    fn test_parse_client_windsurf() {
-        let cli = Cli::try_parse_from(["cc-audit", "--client", "windsurf"]).unwrap();
-        assert_eq!(cli.client, Some(ClientType::Windsurf));
-    }
-
-    #[test]
-    fn test_parse_client_vscode() {
-        let cli = Cli::try_parse_from(["cc-audit", "--client", "vscode"]).unwrap();
-        assert_eq!(cli.client, Some(ClientType::Vscode));
-    }
-
-    #[test]
-    fn test_all_clients_conflicts_with_client() {
-        let result = Cli::try_parse_from(["cc-audit", "--all-clients", "--client", "claude"]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_all_clients_conflicts_with_remote() {
-        let result = Cli::try_parse_from([
+    fn test_parse_check_min_confidence() {
+        let cli = Cli::try_parse_from([
             "cc-audit",
-            "--all-clients",
-            "--remote",
-            "https://github.com/x/y",
-        ]);
-        assert!(result.is_err());
+            "check",
+            "--min-confidence",
+            "tentative",
+            "./skill/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(matches!(args.min_confidence, Some(Confidence::Tentative)));
+        } else {
+            panic!("Expected Check command");
+        }
     }
 
     #[test]
-    fn test_default_client_none() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(cli.client.is_none());
-        assert!(!cli.all_clients);
+    fn test_parse_check_skip_comments() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "check", "--skip-comments", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.skip_comments);
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_watch() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--watch", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.watch);
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_watch_short() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "-w", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.watch);
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_malware_db() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "check",
+            "--malware-db",
+            "./custom.json",
+            "./skill/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.malware_db.is_some());
+            assert_eq!(args.malware_db.unwrap().to_str().unwrap(), "./custom.json");
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_custom_rules() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "check",
+            "--custom-rules",
+            "./rules.yaml",
+            "./skill/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.custom_rules.is_some());
+            assert_eq!(args.custom_rules.unwrap().to_str().unwrap(), "./rules.yaml");
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_config_option() {
+        let cli =
+            Cli::try_parse_from(["cc-audit", "check", "-c", "custom.yaml", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.config.unwrap().to_str().unwrap(), "custom.yaml");
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_warn_only() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--warn-only", "./skill/"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.warn_only);
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_min_severity() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "check",
+            "--min-severity",
+            "critical",
+            "./skill/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.min_severity, Some(Severity::Critical));
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_min_rule_severity() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "check",
+            "--min-rule-severity",
+            "error",
+            "./skill/",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.min_rule_severity, Some(RuleSeverity::Error));
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_all_clients() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--all-clients"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.all_clients);
+            assert!(args.paths.is_empty());
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_check_client_claude() {
+        let cli = Cli::try_parse_from(["cc-audit", "check", "--client", "claude"]).unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert_eq!(args.client, Some(ClientType::Claude));
+            assert!(args.paths.is_empty());
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_check_all_clients_conflicts_with_client() {
+        let result =
+            Cli::try_parse_from(["cc-audit", "check", "--all-clients", "--client", "claude"]);
+        assert!(result.is_err());
+    }
+
+    // ===== Test: hook subcommand =====
+
+    #[test]
+    fn test_parse_hook_init() {
+        let cli = Cli::try_parse_from(["cc-audit", "hook", "init"]).unwrap();
+        if let Some(Commands::Hook { action }) = cli.command {
+            assert!(matches!(action, HookAction::Init { .. }));
+        } else {
+            panic!("Expected Hook command");
+        }
+    }
+
+    #[test]
+    fn test_parse_hook_init_with_path() {
+        let cli = Cli::try_parse_from(["cc-audit", "hook", "init", "./repo/"]).unwrap();
+        if let Some(Commands::Hook { action }) = cli.command {
+            if let HookAction::Init { path } = action {
+                assert_eq!(path.to_str().unwrap(), "./repo/");
+            } else {
+                panic!("Expected HookAction::Init");
+            }
+        } else {
+            panic!("Expected Hook command");
+        }
+    }
+
+    #[test]
+    fn test_parse_hook_remove() {
+        let cli = Cli::try_parse_from(["cc-audit", "hook", "remove"]).unwrap();
+        if let Some(Commands::Hook { action }) = cli.command {
+            assert!(matches!(action, HookAction::Remove { .. }));
+        } else {
+            panic!("Expected Hook command");
+        }
+    }
+
+    #[test]
+    fn test_parse_hook_remove_with_path() {
+        let cli = Cli::try_parse_from(["cc-audit", "hook", "remove", "./repo/"]).unwrap();
+        if let Some(Commands::Hook { action }) = cli.command {
+            if let HookAction::Remove { path } = action {
+                assert_eq!(path.to_str().unwrap(), "./repo/");
+            } else {
+                panic!("Expected HookAction::Remove");
+            }
+        } else {
+            panic!("Expected Hook command");
+        }
+    }
+
+    // ===== Test: serve subcommand =====
+
+    #[test]
+    fn test_parse_serve() {
+        let cli = Cli::try_parse_from(["cc-audit", "serve"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Serve)));
+    }
+
+    // ===== Test: proxy subcommand =====
+
+    #[test]
+    fn test_parse_proxy() {
+        let cli = Cli::try_parse_from(["cc-audit", "proxy", "--target", "localhost:9000"]).unwrap();
+        if let Some(Commands::Proxy(args)) = cli.command {
+            assert_eq!(args.target, "localhost:9000");
+            assert_eq!(args.port, 8080); // default
+            assert!(!args.tls);
+            assert!(!args.block);
+        } else {
+            panic!("Expected Proxy command");
+        }
+    }
+
+    #[test]
+    fn test_parse_proxy_with_all_options() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "proxy",
+            "--target",
+            "localhost:9000",
+            "--port",
+            "3000",
+            "--tls",
+            "--block",
+            "--log",
+            "proxy.log",
+        ])
+        .unwrap();
+        if let Some(Commands::Proxy(args)) = cli.command {
+            assert_eq!(args.target, "localhost:9000");
+            assert_eq!(args.port, 3000);
+            assert!(args.tls);
+            assert!(args.block);
+            assert_eq!(args.log.unwrap().to_str().unwrap(), "proxy.log");
+        } else {
+            panic!("Expected Proxy command");
+        }
+    }
+
+    #[test]
+    fn test_proxy_requires_target() {
+        let result = Cli::try_parse_from(["cc-audit", "proxy"]);
+        assert!(result.is_err());
+    }
+
+    // ===== Test: global verbose flag =====
+
+    #[test]
+    fn test_verbose_global_flag() {
+        let cli = Cli::try_parse_from(["cc-audit", "-v", "check", "./skill/"]).unwrap();
+        assert!(cli.verbose);
+
+        let cli2 = Cli::try_parse_from(["cc-audit", "check", "-v", "./skill/"]).unwrap();
+        assert!(cli2.verbose);
+
+        let cli3 = Cli::try_parse_from(["cc-audit", "check", "./skill/", "-v"]).unwrap();
+        assert!(cli3.verbose);
     }
 }

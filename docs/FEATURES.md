@@ -9,13 +9,13 @@ Detect changes ("drift") between scans to prevent rug pull attacks.
 ### Create a Baseline
 
 ```bash
-cc-audit --save-baseline baseline.json ./my-skill/
+cc-audit check --save-baseline baseline.json ./my-skill/
 ```
 
 ### Check for Drift
 
 ```bash
-cc-audit --baseline-file baseline.json ./my-skill/
+cc-audit check --baseline-file baseline.json ./my-skill/
 ```
 
 Output shows:
@@ -26,7 +26,7 @@ Output shows:
 ### Compare Two Versions
 
 ```bash
-cc-audit --compare ./skill-v1.0/ ./skill-v1.1/
+cc-audit check --compare ./skill-v1.0/ ./skill-v1.1/
 ```
 
 ---
@@ -37,10 +37,10 @@ Automatically fix certain issues:
 
 ```bash
 # Preview fixes without applying
-cc-audit --fix-dry-run ./my-skill/
+cc-audit check --fix-dry-run ./my-skill/
 
 # Apply auto-fixes
-cc-audit --fix ./my-skill/
+cc-audit check --fix ./my-skill/
 ```
 
 **Fixable Issues:**
@@ -54,7 +54,7 @@ cc-audit --fix ./my-skill/
 Detect encoded or obfuscated malicious patterns:
 
 ```bash
-cc-audit --deep-scan ./my-skill/
+cc-audit check --deep-scan ./my-skill/
 ```
 
 **Detected Encodings:**
@@ -70,7 +70,7 @@ cc-audit --deep-scan ./my-skill/
 Run cc-audit as an MCP server for integration with Claude Code:
 
 ```bash
-cc-audit --mcp-server ./
+cc-audit serve
 ```
 
 This exposes scanning functionality as MCP tools that Claude Code can invoke.
@@ -83,10 +83,10 @@ Save and reuse scan configurations:
 
 ```bash
 # Save current settings as a profile
-cc-audit --save-profile strict-ci --strict --ci --format sarif ./
+cc-audit check --save-profile strict-ci --strict --ci --format sarif ./
 
 # Load settings from profile
-cc-audit --profile strict-ci ./my-skill/
+cc-audit check --profile strict-ci ./my-skill/
 ```
 
 Profiles are stored in `~/.config/cc-audit/profiles/`.
@@ -98,7 +98,7 @@ Profiles are stored in `~/.config/cc-audit/profiles/`.
 Continuously monitor files and re-scan on changes:
 
 ```bash
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 ```
 
 Useful during skill development to catch issues immediately.
@@ -116,7 +116,7 @@ Human-readable colored output with risk score visualization.
 Machine-readable format for programmatic processing:
 
 ```bash
-cc-audit ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format json --output results.json
 ```
 
 ### SARIF
@@ -124,7 +124,7 @@ cc-audit ./skill/ --format json --output results.json
 Static Analysis Results Interchange Format for CI/CD integration:
 
 ```bash
-cc-audit ./skill/ --format sarif --output results.sarif
+cc-audit check ./skill/ --format sarif --output results.sarif
 ```
 
 ### HTML
@@ -132,7 +132,7 @@ cc-audit ./skill/ --format sarif --output results.sarif
 Interactive HTML reports for security reviews:
 
 ```bash
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format html --output report.html
 ```
 
 Includes:
@@ -147,7 +147,7 @@ Includes:
 Plain Markdown format for documentation and reports:
 
 ```bash
-cc-audit ./skill/ --format markdown --output report.md
+cc-audit check ./skill/ --format markdown --output report.md
 ```
 
 ---
@@ -158,13 +158,13 @@ Scan installed AI coding client configurations automatically:
 
 ```bash
 # Scan all installed clients
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # Scan a specific client
-cc-audit --client claude
-cc-audit --client cursor
-cc-audit --client windsurf
-cc-audit --client vscode
+cc-audit check --client claude
+cc-audit check --client cursor
+cc-audit check --client windsurf
+cc-audit check --client vscode
 ```
 
 Detects and scans:
@@ -181,19 +181,19 @@ Scan remote GitHub repositories without cloning manually:
 
 ```bash
 # Scan a single repository
-cc-audit --remote https://github.com/user/awesome-skill
+cc-audit check --remote https://github.com/user/awesome-skill
 
 # Scan at specific branch/tag/commit
-cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+cc-audit check --remote https://github.com/user/repo --git-ref v1.0.0
 
 # Scan with authentication (for private repos)
-cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+cc-audit check --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
 
 # Scan multiple repositories from file
-cc-audit --remote-list repos.txt --parallel-clones 8
+cc-audit check --remote-list repos.txt --parallel-clones 8
 
 # Scan all awesome-claude-code repositories
-cc-audit --awesome-claude-code --summary
+cc-audit check --awesome-claude-code --summary
 ```
 
 ---
@@ -204,13 +204,13 @@ Generate security badges for your project:
 
 ```bash
 # Generate Markdown badge
-cc-audit ./skill/ --badge --badge-format markdown
+cc-audit check ./skill/ --badge --badge-format markdown
 
 # Generate HTML badge
-cc-audit ./skill/ --badge --badge-format html
+cc-audit check ./skill/ --badge --badge-format html
 
 # Generate shields.io URL only
-cc-audit ./skill/ --badge --badge-format url
+cc-audit check ./skill/ --badge --badge-format url
 ```
 
 Example output:
@@ -226,16 +226,16 @@ Pin MCP tool configurations to detect unauthorized changes:
 
 ```bash
 # Pin current configuration
-cc-audit --type mcp ~/.claude/mcp.json --pin
+cc-audit check --type mcp ~/.claude/mcp.json --pin
 
 # Verify pins haven't changed
-cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+cc-audit check --type mcp ~/.claude/mcp.json --pin-verify
 
 # Update pins after authorized changes
-cc-audit --type mcp ~/.claude/mcp.json --pin-update
+cc-audit check --type mcp ~/.claude/mcp.json --pin-update
 
 # Force overwrite existing pins
-cc-audit --type mcp ~/.claude/mcp.json --pin-update --pin-force
+cc-audit check --type mcp ~/.claude/mcp.json --pin-update --pin-force
 ```
 
 Pins include:
@@ -251,7 +251,7 @@ Pins include:
 Run cc-audit as a Claude Code hook for real-time scanning:
 
 ```bash
-cc-audit --hook-mode
+cc-audit check --hook-mode
 ```
 
 Configure in your Claude Code settings:
@@ -259,7 +259,7 @@ Configure in your Claude Code settings:
 {
   "hooks": {
     "pre-tool-call": {
-      "command": "cc-audit --hook-mode"
+      "command": "cc-audit check --hook-mode"
     }
   }
 }
@@ -273,10 +273,10 @@ Generate Software Bill of Materials (CycloneDX format):
 
 ```bash
 # Generate CycloneDX SBOM
-cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+cc-audit check ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
 
 # Include specific ecosystems
-cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo
+cc-audit check ./skill/ --sbom --sbom-npm --sbom-cargo
 ```
 
 ---
@@ -287,16 +287,19 @@ Runtime MCP monitoring with transparent proxy:
 
 ```bash
 # Start proxy
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+cc-audit proxy --target localhost:9000
+
+# Custom port
+cc-audit proxy --target localhost:9000 --port 8080
 
 # With TLS termination
-cc-audit --proxy --proxy-port 8443 --proxy-target localhost:9000 --proxy-tls
+cc-audit proxy --target localhost:9000 --port 8443 --tls
 
 # Block mode (stop messages with findings)
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-block
+cc-audit proxy --target localhost:9000 --block
 
 # Log all traffic
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-log traffic.jsonl
+cc-audit proxy --target localhost:9000 --log traffic.jsonl
 ```
 
 ---
@@ -307,16 +310,16 @@ Report false positives to improve detection accuracy:
 
 ```bash
 # Report a false positive
-cc-audit ./skill/ --report-fp
+cc-audit check ./skill/ --report-fp
 
 # Preview without submitting
-cc-audit ./skill/ --report-fp --report-fp-dry-run
+cc-audit check ./skill/ --report-fp --report-fp-dry-run
 
 # Use custom endpoint
-cc-audit ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
+cc-audit check ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
 
 # Disable telemetry entirely
-cc-audit ./skill/ --no-telemetry
+cc-audit check ./skill/ --no-telemetry
 ```
 
 ---

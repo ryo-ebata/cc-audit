@@ -2,15 +2,15 @@
 
 use crate::run::EffectiveConfig;
 use crate::sbom::{SbomBuilder, SbomFormat};
-use crate::{Cli, Config};
+use crate::{CheckArgs, Config};
 use colored::Colorize;
 use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Handle the --sbom command.
-pub fn handle_sbom(cli: &Cli) -> ExitCode {
-    let path = cli
+pub fn handle_sbom(args: &CheckArgs) -> ExitCode {
+    let path = args
         .paths
         .first()
         .cloned()
@@ -28,7 +28,7 @@ pub fn handle_sbom(cli: &Cli) -> ExitCode {
         path.parent()
     };
     let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Determine format (effective config includes merged CLI and config file)
     let format = effective
@@ -99,22 +99,78 @@ pub fn handle_sbom(cli: &Cli) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::CheckArgs;
     use std::fs;
     use tempfile::TempDir;
 
-    fn create_test_cli(args: &[&str]) -> Cli {
-        use clap::Parser;
-        let mut full_args = vec!["cc-audit"];
-        full_args.extend(args);
-        Cli::parse_from(full_args)
+    fn create_test_check_args(path: PathBuf) -> CheckArgs {
+        CheckArgs {
+            paths: vec![path],
+            config: None,
+            remote: None,
+            git_ref: "HEAD".to_string(),
+            remote_auth: None,
+            remote_list: None,
+            awesome_claude_code: false,
+            parallel_clones: 4,
+            badge: false,
+            badge_format: crate::BadgeFormat::Markdown,
+            summary: false,
+            format: crate::OutputFormat::Terminal,
+            strict: false,
+            warn_only: false,
+            min_severity: None,
+            min_rule_severity: None,
+            scan_type: crate::ScanType::Skill,
+            no_recursive: false,
+            ci: false,
+            min_confidence: None,
+            watch: false,
+            skip_comments: false,
+            strict_secrets: false,
+            fix_hint: false,
+            compact: false,
+            no_malware_scan: false,
+            cve_db: None,
+            no_cve_scan: false,
+            malware_db: None,
+            custom_rules: None,
+            baseline: false,
+            check_drift: false,
+            output: None,
+            save_baseline: None,
+            baseline_file: None,
+            compare: None,
+            fix: false,
+            fix_dry_run: false,
+            pin: false,
+            pin_verify: false,
+            pin_update: false,
+            pin_force: false,
+            ignore_pin: false,
+            deep_scan: false,
+            profile: None,
+            save_profile: None,
+            all_clients: false,
+            client: None,
+            report_fp: false,
+            report_fp_dry_run: false,
+            report_fp_endpoint: None,
+            no_telemetry: false,
+            sbom: true,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
+            hook_mode: false,
+        }
     }
 
     #[test]
     fn test_handle_sbom_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&["--sbom", temp_dir.path().to_str().unwrap()]);
+        let args = create_test_check_args(temp_dir.path().to_path_buf());
 
-        let result = handle_sbom(&cli);
+        let result = handle_sbom(&args);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
@@ -127,8 +183,8 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(&["--sbom", temp_dir.path().to_str().unwrap()]);
-        let result = handle_sbom(&cli);
+        let args = create_test_check_args(temp_dir.path().to_path_buf());
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::SUCCESS);
     }
@@ -138,10 +194,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("sbom.json");
 
-        let mut cli = create_test_cli(&["--sbom", temp_dir.path().to_str().unwrap()]);
-        cli.output = Some(output_path.clone());
+        let mut args = create_test_check_args(temp_dir.path().to_path_buf());
+        args.output = Some(output_path.clone());
 
-        let result = handle_sbom(&cli);
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::SUCCESS);
         assert!(output_path.exists());
@@ -152,8 +208,8 @@ mod tests {
 
     #[test]
     fn test_handle_sbom_nonexistent_path() {
-        let cli = create_test_cli(&["--sbom", "/nonexistent/path/12345"]);
-        let result = handle_sbom(&cli);
+        let args = create_test_check_args(PathBuf::from("/nonexistent/path/12345"));
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::from(2));
     }
@@ -167,8 +223,9 @@ mod tests {
         )
         .unwrap();
 
-        let cli = create_test_cli(&["--sbom", "--sbom-npm", temp_dir.path().to_str().unwrap()]);
-        let result = handle_sbom(&cli);
+        let mut args = create_test_check_args(temp_dir.path().to_path_buf());
+        args.sbom_npm = true;
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::SUCCESS);
     }
@@ -184,8 +241,9 @@ serde = "1.0"
         )
         .unwrap();
 
-        let cli = create_test_cli(&["--sbom", "--sbom-cargo", temp_dir.path().to_str().unwrap()]);
-        let result = handle_sbom(&cli);
+        let mut args = create_test_check_args(temp_dir.path().to_path_buf());
+        args.sbom_cargo = true;
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::SUCCESS);
     }
@@ -193,29 +251,21 @@ serde = "1.0"
     #[test]
     fn test_handle_sbom_with_cyclonedx_format() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[
-            "--sbom",
-            "--sbom-format",
-            "cyclonedx",
-            temp_dir.path().to_str().unwrap(),
-        ]);
+        let mut args = create_test_check_args(temp_dir.path().to_path_buf());
+        args.sbom_format = Some("cyclonedx".to_string());
 
-        let result = handle_sbom(&cli);
+        let result = handle_sbom(&args);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
     #[test]
     fn test_handle_sbom_with_invalid_format() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[
-            "--sbom",
-            "--sbom-format",
-            "invalid",
-            temp_dir.path().to_str().unwrap(),
-        ]);
+        let mut args = create_test_check_args(temp_dir.path().to_path_buf());
+        args.sbom_format = Some("invalid".to_string());
 
         // Should fallback to CycloneDX
-        let result = handle_sbom(&cli);
+        let result = handle_sbom(&args);
         assert_eq!(result, ExitCode::SUCCESS);
     }
 
@@ -234,8 +284,8 @@ description: Test skill
         )
         .unwrap();
 
-        let cli = create_test_cli(&["--sbom", temp_dir.path().to_str().unwrap()]);
-        let result = handle_sbom(&cli);
+        let args = create_test_check_args(temp_dir.path().to_path_buf());
+        let result = handle_sbom(&args);
 
         assert_eq!(result, ExitCode::SUCCESS);
     }
@@ -243,9 +293,9 @@ description: Test skill
     #[test]
     fn test_handle_sbom_default_path() {
         // When paths provided as ".", should use current directory
-        let cli = create_test_cli(&["--sbom", "."]);
+        let args = create_test_check_args(PathBuf::from("."));
         // This test just verifies the default path logic doesn't panic
         // Result depends on whether current dir exists
-        let _ = handle_sbom(&cli);
+        let _ = handle_sbom(&args);
     }
 }

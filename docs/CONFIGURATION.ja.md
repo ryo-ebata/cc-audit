@@ -20,10 +20,10 @@ cc-auditはプロジェクトレベルの設定ファイルをサポートして
 
 ```bash
 # カレントディレクトリに.cc-audit.yamlを作成
-cc-audit --init ./
+cc-audit init
 
 # 特定のディレクトリに作成
-cc-audit --init /path/to/project/
+cc-audit init /path/to/project/.cc-audit.yaml
 ```
 
 ## 設定例
@@ -162,10 +162,10 @@ CLIフラグと設定ファイルの設定はマージされます：
 
 ```bash
 # 設定でstrict: true - --strictなしでも厳格モードがアクティブ
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # CLI --verbose + 設定のstrict: true - 両方がアクティブ
-cc-audit --verbose ./my-skill/
+cc-audit check ./my-skill/ --verbose
 ```
 
 ---
@@ -243,7 +243,7 @@ Result: FAIL (exit code 1)
 以前の動作に戻すには：
 ```bash
 # オプション1: 初回ベースラインスキャンに--warn-onlyを使用
-cc-audit --warn-only ./my-skill/
+cc-audit check --warn-only ./my-skill/
 
 # オプション2: 設定で特定のルールを警告として設定
 ```
@@ -294,7 +294,7 @@ rules:
 ## 使用方法
 
 ```bash
-cc-audit ./my-skill/ --custom-rules ./my-rules.yaml
+cc-audit check ./my-skill/ --custom-rules ./my-rules.yaml
 ```
 
 ---
@@ -343,8 +343,8 @@ cc-auditには組み込みのマルウェアシグネチャDBが含まれてい�
 
 ```bash
 # カスタムマルウェアDBを使用
-cc-audit ./my-skill/ --malware-db ./custom-signatures.json
+cc-audit check ./my-skill/ --malware-db ./custom-signatures.json
 
 # マルウェアスキャンを無効化
-cc-audit ./my-skill/ --no-malware-scan
+cc-audit check ./my-skill/ --no-malware-scan
 ```

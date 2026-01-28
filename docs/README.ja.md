@@ -38,48 +38,73 @@ Claude Code エコシステムは急速に拡大しており、[awesome-claude-c
 
 ## インストール
 
+### Homebrew (macOS/Linux)
+
 ```bash
-# crates.io から（推奨）
-cargo install cc-audit
-
-# ソースから
-git clone https://github.com/ryo-ebata/cc-audit.git
-cd cc-audit && cargo install --path .
-
-# Homebrew（macOS/Linux）
 brew install ryo-ebata/tap/cc-audit
 ```
+
+### Cargo (Rust)
+
+```bash
+cargo install cc-audit
+```
+
+### npm (Node.js)
+
+```bash
+# 直接実行
+npx @cc-audit/cc-audit check ./my-skill/
+
+# またはグローバルインストール
+npm install -g @cc-audit/cc-audit
+cc-audit check ./my-skill/
+```
+
+### ソースから
+
+```bash
+git clone https://github.com/ryo-ebata/cc-audit.git
+cd cc-audit && cargo install --path .
+```
+
+### 直接ダウンロード
+
+[GitHub Releases](https://github.com/ryo-ebata/cc-audit/releases) からバイナリをダウンロードできます。
 
 ## クイックスタート
 
 ```bash
 # Skill ディレクトリをスキャン
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # JSON/HTML 形式で出力
-cc-audit ./skill/ --format json --output results.json
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format html --output report.html
 
 # 厳格モード（medium/low の問題も表示）
-cc-audit ./skill/ --strict
+cc-audit check ./skill/ --strict
 
 # 異なるアーティファクトタイプをスキャン
-cc-audit --type mcp ~/.claude/mcp.json
-cc-audit --type docker ./
-cc-audit --type dependency ./
+cc-audit check --type mcp ~/.claude/mcp.json
+cc-audit check --type docker ./
+cc-audit check --type dependency ./
 
 # 開発時のウォッチモード
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 
 # インストール済みの全AIクライアントをスキャン
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # 特定のクライアントをスキャン
-cc-audit --client cursor
-cc-audit --client claude
+cc-audit check --client cursor
+cc-audit check --client claude
 
 # 設定ファイルを生成
-cc-audit --init ./
+cc-audit init
+
+# pre-commitフックをインストール
+cc-audit hook init
 ```
 
 ## 出力例
@@ -109,6 +134,16 @@ Risk Score: 60/100 [██████░░░░] HIGH
 Summary: 2 errors, 0 warnings (1 critical, 1 high, 0 medium, 0 low)
 Result: FAIL (exit code 1)
 ```
+
+## コマンド
+
+| コマンド | 説明 |
+|----------|------|
+| `check` | パスをスキャンしてセキュリティ脆弱性を検出 |
+| `init`  | デフォルト設定ファイルを生成 |
+| `hook`  | Git pre-commit フックを管理 |
+| `serve` | MCP サーバーとして実行 |
+| `proxy` | MCP プロキシとしてランタイム監視を実行 |
 
 ## ドキュメント
 

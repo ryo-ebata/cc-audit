@@ -1,0 +1,18 @@
+[package]
+name = "dangerous-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Git dependency without version pinning (DEP-002)
+some-crate = { git = "https://github.com/user/some-crate.git" }
+
+# Wildcard version (DEP-003)
+serde = { version = "*" }
+
+# Git dependency with branch (still risky without commit hash)
+another-crate = { git = "https://github.com/org/another-crate", branch = "main" }
+
+[dev-dependencies]
+# Safe pinned dependency for comparison
+tokio = { version = "1.35.0", features = ["full"] }

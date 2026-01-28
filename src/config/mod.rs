@@ -22,7 +22,7 @@ pub use severity::SeverityConfig;
 pub use types::{BaselineConfig, Config, IgnoreConfig, ScanConfig, TextFilesConfig, WatchConfig};
 
 // Re-export from other modules (will be moved here in Phase 10)
-pub use crate::profile::{Profile, profile_from_cli};
+pub use crate::profile::{Profile, profile_from_check_args};
 pub use crate::run::config::{
     EffectiveConfig, load_custom_rules_from_effective, parse_badge_format, parse_client_type,
     parse_confidence, parse_output_format, parse_scan_type,

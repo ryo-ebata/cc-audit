@@ -4,13 +4,12 @@ use std::hint::black_box;
 use tempfile::TempDir;
 
 use cc_audit::{
-    BadgeFormat, Cli, Confidence, HookScanner, McpScanner, OutputFormat, ScanType, Scanner,
-    SkillScanner, run_scan,
+    CheckArgs, Confidence, HookScanner, McpScanner, OutputFormat, ScanType, Scanner, SkillScanner,
+    run_scan_with_check_args,
 };
 
-fn create_test_cli(path: std::path::PathBuf) -> Cli {
-    Cli {
-        command: None,
+fn create_test_check_args(path: std::path::PathBuf) -> CheckArgs {
+    CheckArgs {
         paths: vec![path],
         config: None,
         scan_type: ScanType::Skill,
@@ -19,13 +18,10 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         warn_only: false,
         min_severity: None,
         min_rule_severity: None,
-        verbose: false,
-        recursive: true,
+        no_recursive: false,
         ci: false,
         min_confidence: Some(Confidence::Tentative),
         watch: false,
-        init_hook: false,
-        remove_hook: false,
         skip_comments: false,
         strict_secrets: false,
         fix_hint: false,
@@ -43,8 +39,6 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         compare: None,
         fix: false,
         fix_dry_run: false,
-        mcp_server: false,
-        hook_mode: false,
         pin: false,
         pin_verify: false,
         pin_update: false,
@@ -60,7 +54,7 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         awesome_claude_code: false,
         parallel_clones: 4,
         badge: false,
-        badge_format: BadgeFormat::Markdown,
+        badge_format: cc_audit::BadgeFormat::Markdown,
         summary: false,
         all_clients: false,
         client: None,
@@ -72,12 +66,7 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         sbom_format: None,
         sbom_npm: false,
         sbom_cargo: false,
-        proxy: false,
-        proxy_port: None,
-        proxy_target: None,
-        proxy_tls: false,
-        proxy_block: false,
-        proxy_log: None,
+        hook_mode: false,
     }
 }
 
@@ -193,11 +182,11 @@ fn benchmark_skill_scan(c: &mut Criterion) {
 
     for count in [1, 10, 50, 100].iter() {
         let temp_dir = setup_skill_files(*count);
-        let cli = create_test_cli(temp_dir.path().to_path_buf());
+        let args = create_test_check_args(temp_dir.path().to_path_buf());
 
         group.bench_with_input(BenchmarkId::new("files", count), count, |b, _| {
             b.iter(|| {
-                let result = run_scan(black_box(&cli));
+                let result = run_scan_with_check_args(black_box(&args));
                 black_box(result)
             });
         });
@@ -211,11 +200,11 @@ fn benchmark_malicious_skill_scan(c: &mut Criterion) {
 
     for count in [1, 10, 50].iter() {
         let temp_dir = setup_malicious_skill_files(*count);
-        let cli = create_test_cli(temp_dir.path().to_path_buf());
+        let args = create_test_check_args(temp_dir.path().to_path_buf());
 
         group.bench_with_input(BenchmarkId::new("files", count), count, |b, _| {
             b.iter(|| {
-                let result = run_scan(black_box(&cli));
+                let result = run_scan_with_check_args(black_box(&args));
                 black_box(result)
             });
         });

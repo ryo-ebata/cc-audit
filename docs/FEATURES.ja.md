@@ -269,14 +269,11 @@ Claude Code設定で構成：
 
 ## SBOM生成
 
-ソフトウェア部品表を生成：
+ソフトウェア部品表を生成（CycloneDXフォーマット）：
 
 ```bash
 # CycloneDX SBOMを生成
 cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
-
-# SPDX SBOMを生成
-cc-audit ./skill/ --sbom --sbom-format spdx --output sbom.spdx
 
 # 特定のエコシステムを含める
 cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo

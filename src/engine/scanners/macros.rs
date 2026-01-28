@@ -56,6 +56,14 @@ macro_rules! impl_scanner_builder {
                 self.config = self.config.with_strict_secrets(strict);
                 self
             }
+
+            /// Enables or disables recursive scanning.
+            /// When disabled, only scans the immediate directory (max_depth = 1).
+            #[allow(dead_code)]
+            pub fn with_recursive(mut self, recursive: bool) -> Self {
+                self.config = self.config.with_recursive(recursive);
+                self
+            }
         }
 
         impl Default for $scanner {

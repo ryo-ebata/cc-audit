@@ -269,14 +269,11 @@ Configure in your Claude Code settings:
 
 ## SBOM Generation
 
-Generate Software Bill of Materials:
+Generate Software Bill of Materials (CycloneDX format):
 
 ```bash
 # Generate CycloneDX SBOM
 cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
-
-# Generate SPDX SBOM
-cc-audit ./skill/ --sbom --sbom-format spdx --output sbom.spdx
 
 # Include specific ecosystems
 cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo

@@ -47,7 +47,9 @@ pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
     // Create a new CLI for scanning the cloned repo
     // Use effective config values to ensure config file settings are respected
     let scan_cli = Cli {
+        command: None,
         paths: vec![cloned.path().to_path_buf()],
+        config: cli.config.clone(),
         scan_type: effective.scan_type,
         format: effective.format,
         strict: effective.strict,
@@ -57,7 +59,7 @@ pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
         verbose: effective.verbose,
         recursive: true, // Always recursive for remote repos
         ci: effective.ci,
-        min_confidence: effective.min_confidence,
+        min_confidence: Some(effective.min_confidence),
         watch: false, // No watch mode for remote
         init_hook: false,
         remove_hook: false,
@@ -75,7 +77,6 @@ pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
             .map(std::path::PathBuf::from),
         baseline: false,
         check_drift: false,
-        init: false,
         output: effective.output.as_ref().map(std::path::PathBuf::from),
         save_baseline: None,
         baseline_file: cli.baseline_file.clone(),
@@ -178,7 +179,9 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
                 let cloned: ClonedRepo = cloned;
                 // Use effective config values to ensure config file settings are respected
                 let scan_cli = Cli {
+                    command: None,
                     paths: vec![cloned.path().to_path_buf()],
+                    config: cli.config.clone(),
                     scan_type: effective.scan_type,
                     format: OutputFormat::Terminal, // Always terminal for batch
                     strict: effective.strict,
@@ -188,7 +191,7 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
                     verbose: effective.verbose,
                     recursive: true,
                     ci: false,
-                    min_confidence: effective.min_confidence,
+                    min_confidence: Some(effective.min_confidence),
                     watch: false,
                     init_hook: false,
                     remove_hook: false,
@@ -206,7 +209,6 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
                         .map(std::path::PathBuf::from),
                     baseline: false,
                     check_drift: false,
-                    init: false,
                     output: None,
                     save_baseline: None,
                     baseline_file: None,
@@ -361,7 +363,9 @@ pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
                 let cloned: ClonedRepo = cloned;
                 // Use effective config values to ensure config file settings are respected
                 let scan_cli = Cli {
+                    command: None,
                     paths: vec![cloned.path().to_path_buf()],
+                    config: cli.config.clone(),
                     scan_type: effective.scan_type,
                     format: OutputFormat::Terminal,
                     strict: effective.strict,
@@ -371,7 +375,7 @@ pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
                     verbose: effective.verbose,
                     recursive: true,
                     ci: false,
-                    min_confidence: effective.min_confidence,
+                    min_confidence: Some(effective.min_confidence),
                     watch: false,
                     init_hook: false,
                     remove_hook: false,
@@ -389,7 +393,6 @@ pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
                         .map(std::path::PathBuf::from),
                     baseline: false,
                     check_drift: false,
-                    init: false,
                     output: None,
                     save_baseline: None,
                     baseline_file: None,

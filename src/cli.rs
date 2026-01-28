@@ -1,6 +1,6 @@
 use crate::client::ClientType;
 use crate::rules::{Confidence, ParseEnumError, RuleSeverity, Severity};
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -92,17 +92,37 @@ impl std::str::FromStr for ScanType {
     }
 }
 
+/// Subcommands for cc-audit
+#[derive(Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Generate a default configuration file template
+    Init {
+        /// Output path for the configuration file (default: .cc-audit.yaml)
+        #[arg(default_value = ".cc-audit.yaml")]
+        path: PathBuf,
+    },
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "cc-audit",
     version,
     about = "Security auditor for Claude Code skills, hooks, and MCP servers",
-    long_about = "cc-audit scans Claude Code skills, hooks, and MCP servers for security vulnerabilities before installation."
+    long_about = "cc-audit scans Claude Code skills, hooks, and MCP servers for security vulnerabilities before installation.",
+    subcommand_negates_reqs = true
 )]
 pub struct Cli {
+    /// Subcommand to run
+    #[command(subcommand)]
+    pub command: Option<Commands>,
+
     /// Paths to scan (files or directories)
-    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "init", "all_clients", "client", "hook_mode", "mcp_server"])]
+    #[arg(required_unless_present_any = ["remote", "remote_list", "awesome_claude_code", "all_clients", "client", "hook_mode", "mcp_server", "compare"])]
     pub paths: Vec<PathBuf>,
+
+    /// Path to configuration file (required unless using --all-clients, --remote, etc.)
+    #[arg(short = 'c', long = "config", value_name = "FILE")]
+    pub config: Option<PathBuf>,
 
     /// Scan all installed AI coding clients (Claude, Cursor, Windsurf, VS Code)
     #[arg(long, conflicts_with_all = ["remote", "remote_list", "awesome_claude_code", "client"])]
@@ -185,8 +205,8 @@ pub struct Cli {
     pub verbose: bool,
 
     /// Minimum confidence level for findings to be reported
-    #[arg(long, value_enum, default_value_t = Confidence::Tentative)]
-    pub min_confidence: Confidence,
+    #[arg(long, value_enum)]
+    pub min_confidence: Option<Confidence>,
 
     /// Skip comment lines when scanning (lines starting with #, //, --, etc.)
     #[arg(long)]
@@ -245,10 +265,6 @@ pub struct Cli {
     /// Check for drift against saved baseline
     #[arg(long)]
     pub check_drift: bool,
-
-    /// Generate a default configuration file template
-    #[arg(long)]
-    pub init: bool,
 
     /// Output file path (for HTML/JSON output)
     #[arg(short, long)]
@@ -374,7 +390,9 @@ pub struct Cli {
 impl Default for Cli {
     fn default() -> Self {
         Self {
+            command: None,
             paths: Vec::new(),
+            config: None,
             all_clients: false,
             client: None,
             remote: None,
@@ -395,7 +413,7 @@ impl Default for Cli {
             recursive: true,
             ci: false,
             verbose: false,
-            min_confidence: Confidence::Tentative,
+            min_confidence: None,
             skip_comments: false,
             strict_secrets: false,
             fix_hint: false,
@@ -410,7 +428,6 @@ impl Default for Cli {
             custom_rules: None,
             baseline: false,
             check_drift: false,
-            init: false,
             output: None,
             save_baseline: None,
             baseline_file: None,
@@ -574,28 +591,28 @@ mod tests {
         assert!(!cli.recursive);
         assert!(!cli.ci);
         assert!(!cli.verbose);
-        assert!(matches!(cli.min_confidence, Confidence::Tentative));
+        assert!(cli.min_confidence.is_none());
     }
 
     #[test]
     fn test_parse_min_confidence_tentative() {
         let cli =
             Cli::try_parse_from(["cc-audit", "--min-confidence", "tentative", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Confidence::Tentative));
+        assert!(matches!(cli.min_confidence, Some(Confidence::Tentative)));
     }
 
     #[test]
     fn test_parse_min_confidence_firm() {
         let cli =
             Cli::try_parse_from(["cc-audit", "--min-confidence", "firm", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Confidence::Firm));
+        assert!(matches!(cli.min_confidence, Some(Confidence::Firm)));
     }
 
     #[test]
     fn test_parse_min_confidence_certain() {
         let cli =
             Cli::try_parse_from(["cc-audit", "--min-confidence", "certain", "./skill/"]).unwrap();
-        assert!(matches!(cli.min_confidence, Confidence::Certain));
+        assert!(matches!(cli.min_confidence, Some(Confidence::Certain)));
     }
 
     #[test]
@@ -705,15 +722,31 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_init() {
-        let cli = Cli::try_parse_from(["cc-audit", "--init", "./"]).unwrap();
-        assert!(cli.init);
+    fn test_parse_init_subcommand() {
+        let cli = Cli::try_parse_from(["cc-audit", "init"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Init { .. })));
     }
 
     #[test]
-    fn test_default_init_false() {
-        let cli = Cli::try_parse_from(["cc-audit", "./skill/"]).unwrap();
-        assert!(!cli.init);
+    fn test_parse_init_subcommand_with_path() {
+        let cli = Cli::try_parse_from(["cc-audit", "init", "custom-config.yaml"]).unwrap();
+        if let Some(Commands::Init { path }) = cli.command {
+            assert_eq!(path.to_str().unwrap(), "custom-config.yaml");
+        } else {
+            panic!("Expected Init command");
+        }
+    }
+
+    #[test]
+    fn test_parse_config_option() {
+        let cli = Cli::try_parse_from(["cc-audit", "-c", "custom.yaml", "./skill/"]).unwrap();
+        assert_eq!(cli.config.unwrap().to_str().unwrap(), "custom.yaml");
+    }
+
+    #[test]
+    fn test_parse_config_option_long() {
+        let cli = Cli::try_parse_from(["cc-audit", "--config", "custom.yaml", "./skill/"]).unwrap();
+        assert_eq!(cli.config.unwrap().to_str().unwrap(), "custom.yaml");
     }
 
     #[test]

@@ -207,13 +207,32 @@ impl RuleEngine {
                 rule.patterns
                     .iter()
                     .filter(|pattern| pattern.is_match(frontmatter))
-                    .map(|_| {
+                    .map(|pattern| {
+                        // Find the line number of the match within frontmatter
+                        // Frontmatter is extracted after the opening "---" and includes
+                        // a leading newline. File structure:
+                        //   Line 1: ---
+                        //   Line 2: first actual content line
+                        //   ...
+                        // Trim the leading newline and iterate from line 2
+                        let trimmed = frontmatter.trim_start_matches('\n');
+                        let mut matched_line = "allowed-tools: *".to_string();
+                        let mut line_num = 2; // Start at line 2 (first content line)
+
+                        for (idx, line) in trimmed.lines().enumerate() {
+                            if pattern.is_match(line) {
+                                matched_line = line.trim().to_string();
+                                line_num = 2 + idx;
+                                break;
+                            }
+                        }
+
                         let location = Location {
                             file: file_path.to_string(),
-                            line: 0,
+                            line: line_num,
                             column: None,
                         };
-                        Finding::new(rule, location, "allowed-tools: *".to_string())
+                        Finding::new(rule, location, matched_line)
                     })
             })
             .collect()

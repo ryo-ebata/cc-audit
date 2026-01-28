@@ -1,5 +1,5 @@
 use cc_audit::{
-    Cli,
+    Cli, Commands,
     handlers::{
         handle_baseline, handle_check_drift, handle_compare, handle_fix, handle_hook_mode,
         handle_init_config, handle_init_hook, handle_mcp_server, handle_pin, handle_pin_verify,
@@ -29,9 +29,13 @@ fn main() -> ExitCode {
 
     init_tracing(cli.verbose);
 
-    // Handle config initialization
-    if cli.init {
-        return handle_init_config(&cli);
+    // Handle subcommands
+    if let Some(command) = &cli.command {
+        match command {
+            Commands::Init { path } => {
+                return handle_init_config(path);
+            }
+        }
     }
 
     // Handle hook installation/removal

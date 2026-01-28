@@ -74,15 +74,25 @@ impl EffectiveConfig {
     /// - Enum options: config provides defaults, CLI always takes precedence
     /// - Path options: CLI takes precedence, fallback to config
     pub fn from_cli_and_config(cli: &Cli, config: &Config) -> Self {
-        // Parse format from config if available
-        let format = parse_output_format(config.scan.format.as_deref()).unwrap_or(cli.format);
+        // For enum options: CLI takes precedence when explicitly set (non-default)
+        // Config provides defaults when CLI uses default value
+        let format = if cli.format != OutputFormat::default() {
+            cli.format
+        } else {
+            parse_output_format(config.scan.format.as_deref()).unwrap_or(cli.format)
+        };
 
-        // Parse scan_type from config if available
-        let scan_type = parse_scan_type(config.scan.scan_type.as_deref()).unwrap_or(cli.scan_type);
+        let scan_type = if cli.scan_type != ScanType::default() {
+            cli.scan_type
+        } else {
+            parse_scan_type(config.scan.scan_type.as_deref()).unwrap_or(cli.scan_type)
+        };
 
-        // Parse min_confidence from config if available
-        let min_confidence =
-            parse_confidence(config.scan.min_confidence.as_deref()).unwrap_or(cli.min_confidence);
+        // min_confidence: CLI takes precedence if explicitly set, else config, else default
+        let min_confidence = cli
+            .min_confidence
+            .or_else(|| parse_confidence(config.scan.min_confidence.as_deref()))
+            .unwrap_or(Confidence::Tentative);
 
         // Path options: CLI takes precedence, fallback to config
         let malware_db = cli
@@ -179,8 +189,8 @@ impl EffectiveConfig {
             min_severity,
             min_rule_severity,
             scan_type,
-            // Default to true (scan subdirectories by default)
-            recursive: true,
+            // CLI --recursive flag OR config scan.recursive (default: true)
+            recursive: cli.recursive || config.scan.recursive,
             ci: cli.ci || config.scan.ci,
             verbose: cli.verbose || config.scan.verbose,
             min_confidence,

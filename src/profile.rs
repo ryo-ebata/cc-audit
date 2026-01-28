@@ -259,7 +259,10 @@ pub fn profile_from_cli(name: &str, cli: &crate::Cli) -> Profile {
         fix_hint: cli.fix_hint,
         no_malware_scan: cli.no_malware_scan,
         deep_scan: cli.deep_scan,
-        min_confidence: format!("{:?}", cli.min_confidence).to_lowercase(),
+        min_confidence: cli
+            .min_confidence
+            .map(|c| format!("{:?}", c).to_lowercase())
+            .unwrap_or_else(|| "tentative".to_string()),
         format: Some(format!("{:?}", cli.format).to_lowercase()),
         scan_type: Some(format!("{:?}", cli.scan_type).to_lowercase()),
         disabled_rules: vec![],

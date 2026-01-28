@@ -32,7 +32,9 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
     // Use effective config values to ensure config file settings are respected
     let create_scan_cli = |path: PathBuf| -> Cli {
         Cli {
+            command: None,
             paths: vec![path],
+            config: cli.config.clone(),
             remote: None,
             git_ref: effective.git_ref.clone(),
             remote_auth: effective.remote_auth.clone(),
@@ -51,7 +53,7 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             recursive: effective.recursive,
             ci: effective.ci,
             verbose: effective.verbose,
-            min_confidence: effective.min_confidence,
+            min_confidence: Some(effective.min_confidence),
             watch: false,
             init_hook: false,
             remove_hook: false,
@@ -66,7 +68,6 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
             baseline: false,
             check_drift: false,
-            init: false,
             output: None,
             save_baseline: None,
             baseline_file: None,

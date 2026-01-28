@@ -1,6 +1,7 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 fn fixtures_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -8,6 +9,13 @@ fn fixtures_path() -> PathBuf {
 
 fn cmd() -> assert_cmd::Command {
     cargo_bin_cmd!("cc-audit")
+}
+
+/// Create a minimal config file in the given directory for tests.
+/// This is required because cc-audit now requires a configuration file to run.
+fn create_test_config(dir: &Path) {
+    let config_content = "# Minimal test config\n";
+    fs::write(dir.join(".cc-audit.yaml"), config_content).unwrap();
 }
 
 mod malicious_skills {
@@ -284,12 +292,12 @@ mod hooks {
 
 mod edge_cases {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_empty_skill_directory() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         cmd()
             .arg(dir.path())
@@ -301,6 +309,7 @@ mod edge_cases {
     #[test]
     fn test_skill_with_only_skill_md() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(
             &skill_md,
@@ -442,12 +451,12 @@ mod hook_management {
 
 mod scan_types {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_scan_docker_type() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let dockerfile = dir.path().join("Dockerfile");
         // Use pinned version to avoid DK-005 (latest tag) finding
         fs::write(&dockerfile, "FROM alpine:3.19.0\nRUN echo hello").unwrap();
@@ -463,6 +472,7 @@ mod scan_types {
     #[test]
     fn test_scan_command_type() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let commands_dir = dir.path().join(".claude").join("commands");
         fs::create_dir_all(&commands_dir).unwrap();
         let cmd_file = commands_dir.join("test.md");
@@ -479,6 +489,7 @@ mod scan_types {
     #[test]
     fn test_scan_rules_type() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let rules_dir = dir.path().join(".cursor").join("rules");
         fs::create_dir_all(&rules_dir).unwrap();
         let rule_file = rules_dir.join("test.md");
@@ -495,6 +506,7 @@ mod scan_types {
     #[test]
     fn test_scan_mcp_type() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let mcp_file = dir.path().join(".mcp.json");
         fs::write(
             &mcp_file,
@@ -513,6 +525,7 @@ mod scan_types {
     #[test]
     fn test_scan_dependency_type() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let package_json = dir.path().join("package.json");
         fs::write(
             &package_json,
@@ -531,6 +544,7 @@ mod scan_types {
     #[test]
     fn test_scan_dependency_detects_wildcard() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let package_json = dir.path().join("package.json");
         fs::write(
             &package_json,
@@ -554,6 +568,7 @@ mod scan_types {
     #[test]
     fn test_scan_dependency_detects_git_url() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let package_json = dir.path().join("package.json");
         fs::write(
             &package_json,
@@ -576,12 +591,12 @@ mod scan_types {
 
 mod malware_scan {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_no_malware_scan_flag() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -595,6 +610,7 @@ mod malware_scan {
     #[test]
     fn test_custom_malware_db_invalid() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -614,6 +630,7 @@ mod malware_scan {
     #[test]
     fn test_custom_malware_db_valid() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -635,12 +652,12 @@ mod malware_scan {
 
 mod confidence_filtering {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_min_confidence_tentative() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -655,6 +672,7 @@ mod confidence_filtering {
     #[test]
     fn test_min_confidence_firm() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -669,6 +687,7 @@ mod confidence_filtering {
     #[test]
     fn test_min_confidence_certain() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -683,12 +702,12 @@ mod confidence_filtering {
 
 mod skip_comments {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_skip_comments_flag() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         // This comment contains a pattern that would normally be detected
         fs::write(&skill_md, "# sudo rm -rf /\necho hello").unwrap();
@@ -832,15 +851,20 @@ rules:
     }
 
     #[test]
-    fn test_config_file_not_present_uses_defaults() {
+    fn test_config_file_not_present_shows_error() {
         let dir = TempDir::new().unwrap();
 
         // Create a simple test file without config
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\necho hello\n").unwrap();
 
-        // Should still work with built-in rules
-        cmd().arg(dir.path()).assert().success();
+        // Should fail with error about missing config file
+        cmd()
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(2)
+            .stderr(predicate::str::contains("Configuration file not found"));
     }
 
     #[test]
@@ -1203,12 +1227,12 @@ malware_signatures:
 
 mod custom_rules_cli {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_custom_rules_option_loads_yaml() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         // Create custom rules file
         let rules_content = r#"
@@ -1244,6 +1268,7 @@ rules:
     #[test]
     fn test_custom_rules_nonexistent_file() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Test\n").unwrap();
 
@@ -1259,6 +1284,7 @@ rules:
     #[test]
     fn test_custom_rules_invalid_yaml() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         let rules_file = dir.path().join("invalid-rules.yaml");
         fs::write(&rules_file, "not: valid: yaml: [[[").unwrap();
@@ -1278,6 +1304,7 @@ rules:
     #[test]
     fn test_custom_rules_file_with_multiple_rules() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         // Create rules file with multiple rules
         let rules_content = r#"
@@ -1451,12 +1478,12 @@ mod sarif_output_detailed {
 
 mod suppression {
     use super::*;
-    use std::fs;
     use tempfile::TempDir;
 
     #[test]
     fn test_inline_suppression_cc_audit_ignore() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         let skill_md = dir.path().join("SKILL.md");
         // This would normally trigger EX-001, but is suppressed
@@ -1477,6 +1504,7 @@ mod suppression {
     #[test]
     fn test_inline_suppression_with_rule_id() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         let skill_md = dir.path().join("SKILL.md");
         // Suppress specific rule
@@ -1508,6 +1536,7 @@ mod suppression {
     #[test]
     fn test_suppression_file_ignores_rules() {
         let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
 
         // Create suppression file
         fs::write(dir.path().join(".cc-audit-ignore"), "EX-001\nPE-001\n").unwrap();

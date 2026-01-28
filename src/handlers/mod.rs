@@ -58,12 +58,19 @@ mod tests {
     use crate::Cli;
     use clap::Parser;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     fn create_test_cli(args: &[&str]) -> Cli {
         let mut full_args = vec!["cc-audit"];
         full_args.extend(args);
         Cli::parse_from(full_args)
+    }
+
+    /// Create a minimal config file in the given directory for tests
+    fn create_test_config(dir: &Path) {
+        let config_content = "# Minimal test config\n";
+        fs::write(dir.join(".cc-audit.yaml"), config_content).unwrap();
     }
 
     #[test]
@@ -83,9 +90,19 @@ mod tests {
     #[test]
     fn test_handle_init_config_creates_file() {
         let temp_dir = TempDir::new().unwrap();
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
+        let config_path = temp_dir.path().join(".cc-audit.yaml");
 
-        let result = handle_init_config(&cli);
+        let result = handle_init_config(&config_path);
+        assert_eq!(result, ExitCode::SUCCESS);
+
+        assert!(config_path.exists());
+    }
+
+    #[test]
+    fn test_handle_init_config_creates_file_in_dir() {
+        let temp_dir = TempDir::new().unwrap();
+
+        let result = handle_init_config(temp_dir.path());
         assert_eq!(result, ExitCode::SUCCESS);
 
         let config_path = temp_dir.path().join(".cc-audit.yaml");
@@ -98,8 +115,7 @@ mod tests {
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, "existing content").unwrap();
 
-        let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
-        let result = handle_init_config(&cli);
+        let result = handle_init_config(&config_path);
         assert_eq!(result, ExitCode::from(2));
     }
 
@@ -264,6 +280,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_empty_dir() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let cli = create_test_cli(&[temp_dir.path().to_str().unwrap()]);
 
         let result = run_normal_mode(&cli);
@@ -273,6 +290,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_warn_only() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         fs::write(temp_dir.path().join("test.md"), "sudo rm -rf /").unwrap();
 
         let cli = create_test_cli(&["--warn-only", temp_dir.path().to_str().unwrap()]);
@@ -344,8 +362,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("custom-config.yaml");
 
-        let cli = create_test_cli(&[config_path.to_str().unwrap()]);
-        let result = handle_init_config(&cli);
+        let result = handle_init_config(&config_path);
         assert_eq!(result, ExitCode::SUCCESS);
 
         assert!(config_path.exists());
@@ -354,6 +371,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_strict() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let cli = create_test_cli(&["--strict", temp_dir.path().to_str().unwrap()]);
 
         let result = run_normal_mode(&cli);
@@ -363,6 +381,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_output_file() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let output_file = temp_dir.path().join("output.txt");
 
         let cli = Cli::parse_from([
@@ -429,6 +448,7 @@ mod tests {
 
         let temp_dir = TempDir::new().unwrap();
         let baseline_path = temp_dir.path().join("baseline.json");
+        create_test_config(temp_dir.path());
 
         // Create baseline file
         let baseline_result = create_test_result(vec![]);
@@ -516,18 +536,13 @@ mod tests {
 
     #[test]
     fn test_handle_init_config_default_path() {
-        // Test with empty paths to trigger unwrap_or_else
-        let cli = Cli {
-            paths: vec![],
-            init: true,
-            ..Default::default()
-        };
+        // Test with default path ".cc-audit.yaml"
+        let temp_dir = TempDir::new().unwrap();
+        let default_path = temp_dir.path().join(".cc-audit.yaml");
 
-        // This will try to create .cc-audit.yaml in cwd
-        // It may succeed or fail depending on existing file
-        // but this tests the unwrap_or_else path
-        let result = handle_init_config(&cli);
-        let _ = result;
+        let result = handle_init_config(&default_path);
+        assert_eq!(result, ExitCode::SUCCESS);
+        assert!(default_path.exists());
     }
 
     #[test]
@@ -567,6 +582,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_strict_with_warnings() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         // Create a file that will trigger a warning
         fs::write(
             temp_dir.path().join("test.md"),
@@ -583,6 +599,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_errors() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         // Create a file with suspicious content
         fs::write(temp_dir.path().join("test.md"), "sudo rm -rf /").unwrap();
 
@@ -595,6 +612,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_output_write_error() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let cli = Cli::parse_from([
             "cc-audit",
             "--output",
@@ -780,6 +798,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_passed_false() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         // Create a file with critical finding that will set passed=false
         fs::write(temp_dir.path().join("test.md"), "allowed_tools:\n  - \"*\"").unwrap();
 

@@ -1,0 +1,6 @@
+# Hooks fixtures configuration
+scan:
+  recursive: true
+
+severity:
+  default: error

@@ -2,7 +2,8 @@
 
 use crate::run::EffectiveConfig;
 use crate::{
-    Cli, Config, WatchModeResult, format_result, run_scan, setup_watch_mode, watch_iteration,
+    Cli, Config, WatchModeResult, format_result, run_scan_with_config, setup_watch_mode,
+    watch_iteration,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -116,7 +117,7 @@ pub fn run_watch_mode(cli: &Cli) -> ExitCode {
 pub fn run_normal_mode(cli: &Cli) -> ExitCode {
     info!(paths = ?cli.paths, "Starting scan");
 
-    // Load config to get effective settings
+    // Determine config source and load configuration
     let project_root = cli.paths.first().and_then(|p| {
         if p.is_dir() {
             Some(p.as_path())
@@ -124,7 +125,41 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
             p.parent()
         }
     });
-    let config = Config::load(project_root);
+
+    // Load config: prefer --config option, then search for config file
+    let config = if let Some(ref config_path) = cli.config {
+        // Load from explicit path
+        match Config::from_file(config_path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!(
+                    "Error: Failed to load configuration from {}: {}",
+                    config_path.display(),
+                    e
+                );
+                return ExitCode::from(2);
+            }
+        }
+    } else {
+        // Search for config file and require it to exist
+        let load_result = Config::try_load(project_root);
+        if load_result.path.is_none() {
+            eprintln!("Error: Configuration file not found.");
+            eprintln!();
+            eprintln!("cc-audit requires a configuration file (.cc-audit.yaml) to run.");
+            eprintln!("You can create one using:");
+            eprintln!();
+            eprintln!("  cc-audit init");
+            eprintln!();
+            eprintln!("Or specify a custom configuration file using:");
+            eprintln!();
+            eprintln!("  cc-audit --config <path> <paths...>");
+            eprintln!();
+            return ExitCode::from(2);
+        }
+        load_result.config
+    };
+
     let effective = EffectiveConfig::from_cli_and_config(cli, &config);
 
     // Get the effective output path (CLI or config file)
@@ -146,7 +181,7 @@ pub fn run_normal_mode(cli: &Cli) -> ExitCode {
         return ExitCode::from(2);
     }
 
-    match run_scan(cli) {
+    match run_scan_with_config(cli, config) {
         Some(mut result) => {
             // Filter against baseline if --baseline-file is specified
             if let Some(ref baseline_path) = cli.baseline_file {
@@ -222,9 +257,16 @@ mod tests {
         }
     }
 
+    /// Create a minimal config file in the given directory for tests
+    fn create_test_config(dir: &Path) {
+        let config_content = "# Minimal test config\n";
+        fs::write(dir.join(".cc-audit.yaml"), config_content).unwrap();
+    }
+
     #[test]
     fn test_run_normal_mode_valid_path() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
 
         let mut file = fs::File::create(&file_path).unwrap();
@@ -243,6 +285,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_warn_only() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
 
         let mut file = fs::File::create(&file_path).unwrap();
@@ -262,6 +305,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_output_file() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
         let output_path = temp_dir.path().join("output.json");
 
@@ -282,6 +326,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_strict() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
 
         let mut file = fs::File::create(&file_path).unwrap();
@@ -301,6 +346,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_with_baseline() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
         let baseline_path = temp_dir.path().join("baseline.json");
 
@@ -324,6 +370,7 @@ mod tests {
     #[test]
     fn test_run_normal_mode_output_write_fail() {
         let temp_dir = TempDir::new().unwrap();
+        create_test_config(temp_dir.path());
         let file_path = temp_dir.path().join("SKILL.md");
 
         let mut file = fs::File::create(&file_path).unwrap();

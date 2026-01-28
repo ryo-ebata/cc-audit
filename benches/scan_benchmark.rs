@@ -10,7 +10,9 @@ use cc_audit::{
 
 fn create_test_cli(path: std::path::PathBuf) -> Cli {
     Cli {
+        command: None,
         paths: vec![path],
+        config: None,
         scan_type: ScanType::Skill,
         format: OutputFormat::Terminal,
         strict: false,
@@ -20,7 +22,7 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         verbose: false,
         recursive: true,
         ci: false,
-        min_confidence: Confidence::Tentative,
+        min_confidence: Some(Confidence::Tentative),
         watch: false,
         init_hook: false,
         remove_hook: false,
@@ -35,7 +37,6 @@ fn create_test_cli(path: std::path::PathBuf) -> Cli {
         custom_rules: None,
         baseline: false,
         check_drift: false,
-        init: false,
         output: None,
         save_baseline: None,
         baseline_file: None,

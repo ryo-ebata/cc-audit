@@ -17,6 +17,7 @@ mod types;
 
 // Re-export all public types
 pub use error::ConfigError;
+pub use loading::ConfigLoadResult;
 pub use severity::SeverityConfig;
 pub use types::{BaselineConfig, Config, IgnoreConfig, ScanConfig, TextFilesConfig, WatchConfig};
 

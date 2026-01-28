@@ -86,12 +86,13 @@ impl Scanner for SkillScanner {
         }
 
         // Determine max_depth based on recursive setting
-        // Default max_depth for skill scanning: 3 for recursive, 1 for non-recursive
+        // recursive = true: None (unlimited depth)
+        // recursive = false: Some(3) (limited depth)
         let max_depth = self.config.max_depth();
         let walk_config = if let Some(depth) = max_depth {
             WalkConfig::default().with_max_depth(depth)
         } else {
-            WalkConfig::default().with_max_depth(3) // Default recursive limit for skills
+            WalkConfig::default() // No limit when recursive
         };
 
         // Scan scripts directory using DirectoryWalker

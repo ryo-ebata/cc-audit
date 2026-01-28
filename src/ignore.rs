@@ -49,12 +49,16 @@ impl IgnoreFilter {
     }
 
     /// Check if a path should be ignored.
+    ///
+    /// Path separators are normalized to forward slashes for cross-platform
+    /// compatibility.
     pub fn is_ignored(&self, path: &Path) -> bool {
         if self.patterns.is_empty() {
             return false;
         }
 
-        let path_str = path.to_string_lossy();
+        // Normalize path separators to forward slashes for cross-platform matching
+        let path_str = path.to_string_lossy().replace('\\', "/");
         self.patterns.iter().any(|p| p.is_match(&path_str))
     }
 }

@@ -2097,8 +2097,10 @@ scan:
     fn test_include_tests_applied() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create config file with include_tests: true
+        // Create config file with include_tests: true and recursive: true to scan subdirectories
         let config_content = r#"
+scan:
+  recursive: true
 ignore:
   include_tests: true
 "#;
@@ -2121,8 +2123,10 @@ ignore:
     fn test_exclude_tests_by_default() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create config file with include_tests: false (default)
+        // Create config file with include_tests: false (default) and recursive: true to scan subdirectories
         let config_content = r#"
+scan:
+  recursive: true
 ignore:
   include_tests: false
 "#;
@@ -2286,8 +2290,10 @@ scan:
     fn test_include_node_modules_applied() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create config file with include_node_modules: true
+        // Create config file with include_node_modules: true and recursive: true to scan subdirectories
         let config_content = r#"
+scan:
+  recursive: true
 ignore:
   include_node_modules: true
 "#;
@@ -2310,8 +2316,10 @@ ignore:
     fn test_include_vendor_applied() {
         let temp_dir = TempDir::new().unwrap();
 
-        // Create config file with include_vendor: true
+        // Create config file with include_vendor: true and recursive: true to scan subdirectories
         let config_content = r#"
+scan:
+  recursive: true
 ignore:
   include_vendor: true
 "#;

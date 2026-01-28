@@ -127,6 +127,7 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
             &create_ignore_filter,
             effective.skip_comments,
             effective.strict_secrets,
+            effective.recursive,
             &custom_rules,
         );
 
@@ -185,6 +186,7 @@ fn run_scanner_for_type<F>(
     create_ignore_filter: &F,
     skip_comments: bool,
     strict_secrets: bool,
+    recursive: bool,
     custom_rules: &[DynamicRule],
 ) -> crate::error::Result<Vec<Finding>>
 where
@@ -197,6 +199,7 @@ where
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -204,6 +207,7 @@ where
             let scanner = HookScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -211,6 +215,7 @@ where
             let scanner = McpScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -218,6 +223,7 @@ where
             let scanner = CommandScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -225,6 +231,7 @@ where
             let scanner = RulesDirScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -234,6 +241,7 @@ where
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -241,6 +249,7 @@ where
             let scanner = DependencyScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -248,6 +257,7 @@ where
             let scanner = SubagentScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -255,6 +265,7 @@ where
             let scanner = PluginScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec());
             scanner.scan_path(path)
         }
@@ -368,6 +379,13 @@ fn filter_and_process_findings(
         if is_client_scan && finding.client.is_none() {
             finding.client = detect_client_for_path(&finding.location.file);
         }
+    }
+
+    // Filter by min_rule_severity if specified
+    // This filters out findings with rule_severity below the threshold
+    // (e.g., --min-rule-severity=error will exclude warnings)
+    if let Some(min_rule_sev) = effective.min_rule_severity {
+        filtered_findings.retain(|f| f.rule_severity.map(|rs| rs >= min_rule_sev).unwrap_or(true));
     }
 
     filtered_findings
@@ -508,8 +526,15 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Hook, &file_path, &ignore_fn, false, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Hook,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -528,8 +553,15 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Mcp, &file_path, &ignore_fn, false, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Mcp,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -548,6 +580,7 @@ mod tests {
             &ignore_fn,
             false,
             false,
+            false,
             &[],
         );
         assert!(result.is_ok());
@@ -562,8 +595,15 @@ mod tests {
         writeln!(file, "FROM ubuntu:latest").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Docker, &file_path, &ignore_fn, false, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Docker,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -588,6 +628,7 @@ mod tests {
             &ignore_fn,
             false,
             false,
+            false,
             &[],
         );
         assert!(result.is_ok());
@@ -606,6 +647,7 @@ mod tests {
             &ScanType::Subagent,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             &[],
@@ -628,8 +670,15 @@ mod tests {
         .unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Plugin, &file_path, &ignore_fn, false, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Plugin,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -642,8 +691,15 @@ mod tests {
         writeln!(file, "rules: []").unwrap();
 
         let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
-        let result =
-            run_scanner_for_type(&ScanType::Rules, &file_path, &ignore_fn, false, false, &[]);
+        let result = run_scanner_for_type(
+            &ScanType::Rules,
+            &file_path,
+            &ignore_fn,
+            false,
+            false,
+            false,
+            &[],
+        );
         assert!(result.is_ok());
     }
 
@@ -725,5 +781,66 @@ mod tests {
 
         // Should be empty because node_modules is ignored
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_filter_and_process_findings_min_rule_severity() {
+        use crate::rules::{Category, Confidence, Location, Severity};
+
+        let cli = Cli {
+            min_rule_severity: Some(RuleSeverity::Error),
+            ..Default::default()
+        };
+        let mut config = Config::default();
+        // Set EX-001 to warn level
+        config.severity.warn.insert("EX-001".to_string());
+
+        let effective = EffectiveConfig::from_cli_and_config(&cli, &config);
+
+        // Create a finding that will be assigned Warn severity
+        let finding = Finding {
+            id: "EX-001".to_string(),
+            severity: Severity::Critical,
+            category: Category::Exfiltration,
+            confidence: Confidence::Firm,
+            name: "Test".to_string(),
+            location: Location {
+                file: "test.sh".to_string(),
+                line: 1,
+                column: None,
+            },
+            code: "curl $SECRET".to_string(),
+            message: "Test".to_string(),
+            recommendation: "Test".to_string(),
+            fix_hint: None,
+            cwe_ids: vec![],
+            rule_severity: None,
+            client: None,
+            context: None,
+        };
+
+        let filtered =
+            filter_and_process_findings(vec![finding.clone()], &cli, &config, &effective);
+
+        // With min_rule_severity=Error, warnings should be filtered out
+        assert!(
+            filtered.is_empty(),
+            "Findings with Warn rule_severity should be filtered when min_rule_severity=Error"
+        );
+
+        // Without min_rule_severity filter, warning should be included
+        let cli_no_filter = Cli::default();
+        let effective_no_filter = EffectiveConfig::from_cli_and_config(&cli_no_filter, &config);
+        let filtered_no_filter = filter_and_process_findings(
+            vec![finding],
+            &cli_no_filter,
+            &config,
+            &effective_no_filter,
+        );
+        assert_eq!(
+            filtered_no_filter.len(),
+            1,
+            "Without min_rule_severity filter, warning should be included"
+        );
     }
 }

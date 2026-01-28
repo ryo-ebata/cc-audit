@@ -327,7 +327,14 @@ impl Reporter for TerminalReporter {
             ));
         }
 
-        let result_text = if result.summary.passed {
+        // In strict mode, any finding (error or warning) is a failure
+        let passed = if self.strict {
+            result.summary.passed && result.summary.warnings == 0
+        } else {
+            result.summary.passed
+        };
+
+        let result_text = if passed {
             "PASS".green().bold()
         } else {
             "FAIL".red().bold()
@@ -335,7 +342,7 @@ impl Reporter for TerminalReporter {
         output.push_str(&format!(
             "Result: {} (exit code {})\n",
             result_text,
-            if result.summary.passed { 0 } else { 1 }
+            if passed { 0 } else { 1 }
         ));
 
         output
@@ -876,5 +883,59 @@ mod tests {
         assert!(!output.contains("Why:"));
         assert!(output.contains("Location:"));
         assert!(output.contains("Code:"));
+    }
+
+    #[test]
+    fn test_strict_mode_fails_on_warnings_only() {
+        // In strict mode, warnings should cause FAIL
+        let reporter = TerminalReporter::new(true, false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        finding.rule_severity = Some(RuleSeverity::Warn);
+
+        let mut result = create_test_result(vec![finding]);
+        // Simulate warnings-only scenario: passed is true but warnings > 0
+        result.summary.passed = true;
+        result.summary.errors = 0;
+        result.summary.warnings = 1;
+
+        let output = reporter.report(&result);
+
+        // Strict mode should show FAIL even with only warnings
+        assert!(output.contains("FAIL"));
+        assert!(output.contains("exit code 1"));
+    }
+
+    #[test]
+    fn test_non_strict_mode_passes_on_warnings_only() {
+        // In non-strict mode, warnings should not cause FAIL
+        let reporter = TerminalReporter::new(false, false);
+        let mut finding = create_finding(
+            "EX-001",
+            Severity::Critical,
+            Category::Exfiltration,
+            "Test",
+            "test.sh",
+            1,
+        );
+        finding.rule_severity = Some(RuleSeverity::Warn);
+
+        let mut result = create_test_result(vec![finding]);
+        // Simulate warnings-only scenario: passed is true but warnings > 0
+        result.summary.passed = true;
+        result.summary.errors = 0;
+        result.summary.warnings = 1;
+
+        let output = reporter.report(&result);
+
+        // Non-strict mode should show PASS with only warnings
+        assert!(output.contains("PASS"));
+        assert!(output.contains("exit code 0"));
     }
 }

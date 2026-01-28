@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0](https://github.com/ryo-ebata/cc-audit/compare/v3.1.7...v3.2.0) (2026-01-28)
+
+
+### Features
+
+* refactor CLI to subcommand-based structure ([#53](https://github.com/ryo-ebata/cc-audit/issues/53)) ([b3d3d80](https://github.com/ryo-ebata/cc-audit/commit/b3d3d80a767d50a8996f7506805195d72f34a524))
+
 ## [3.1.7](https://github.com/ryo-ebata/cc-audit/compare/v3.1.6...v3.1.7) (2026-01-28)
 
 

@@ -1,14 +1,14 @@
 //! Auto-fix handler.
 
 use crate::run::EffectiveConfig;
-use crate::{AutoFixer, Cli, Config, run_scan};
+use crate::{AutoFixer, CheckArgs, Config, run_scan_with_check_args};
 use colored::Colorize;
 use std::process::ExitCode;
 
 /// Handle --fix or --fix-dry-run command.
-pub fn handle_fix(cli: &Cli) -> ExitCode {
+pub fn handle_fix(args: &CheckArgs) -> ExitCode {
     // Load config to get effective settings
-    let project_root = cli.paths.first().and_then(|p| {
+    let project_root = args.paths.first().and_then(|p| {
         if p.is_dir() {
             Some(p.as_path())
         } else {
@@ -16,12 +16,12 @@ pub fn handle_fix(cli: &Cli) -> ExitCode {
         }
     });
     let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     let dry_run = effective.fix_dry_run;
 
     // First, run a scan to get findings
-    let result = match run_scan(cli) {
+    let result = match run_scan_with_check_args(args) {
         Some(r) => r,
         None => {
             eprintln!("Failed to scan");

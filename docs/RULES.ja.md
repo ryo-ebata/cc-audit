@@ -151,5 +151,5 @@ curl $SECRET_URL  # この行は無視される
 
 ```bash
 # 高信頼度の検出のみ表示
-cc-audit --min-confidence certain ./skill/
+cc-audit check --min-confidence certain ./skill/
 ```

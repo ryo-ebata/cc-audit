@@ -246,22 +246,25 @@ impl Default for Profile {
     }
 }
 
-/// Create a profile from current CLI settings
-pub fn profile_from_cli(name: &str, cli: &crate::Cli) -> Profile {
+/// Create a profile from CheckArgs settings
+pub fn profile_from_check_args(name: &str, args: &crate::CheckArgs, verbose: bool) -> Profile {
     Profile {
         name: name.to_string(),
         description: "Custom profile saved from CLI settings".to_string(),
-        strict: cli.strict,
-        recursive: cli.recursive,
-        ci: cli.ci,
-        verbose: cli.verbose,
-        skip_comments: cli.skip_comments,
-        fix_hint: cli.fix_hint,
-        no_malware_scan: cli.no_malware_scan,
-        deep_scan: cli.deep_scan,
-        min_confidence: format!("{:?}", cli.min_confidence).to_lowercase(),
-        format: Some(format!("{:?}", cli.format).to_lowercase()),
-        scan_type: Some(format!("{:?}", cli.scan_type).to_lowercase()),
+        strict: args.strict,
+        recursive: !args.no_recursive,
+        ci: args.ci,
+        verbose,
+        skip_comments: args.skip_comments,
+        fix_hint: args.fix_hint,
+        no_malware_scan: args.no_malware_scan,
+        deep_scan: args.deep_scan,
+        min_confidence: args
+            .min_confidence
+            .map(|c| format!("{:?}", c).to_lowercase())
+            .unwrap_or_else(|| "tentative".to_string()),
+        format: Some(format!("{:?}", args.format).to_lowercase()),
+        scan_type: Some(format!("{:?}", args.scan_type).to_lowercase()),
         disabled_rules: vec![],
     }
 }
@@ -468,12 +471,14 @@ mod tests {
     }
 
     #[test]
-    fn test_profile_from_cli() {
-        use crate::Cli;
-        use clap::Parser;
+    fn test_profile_from_check_args() {
+        use crate::CheckArgs;
 
-        let cli = Cli::parse_from(["cc-audit", "--strict", "--verbose", "."]);
-        let profile = profile_from_cli("test_profile", &cli);
+        let args = CheckArgs {
+            strict: true,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("test_profile", &args, true);
 
         assert_eq!(profile.name, "test_profile");
         assert!(profile.strict);
@@ -482,19 +487,17 @@ mod tests {
     }
 
     #[test]
-    fn test_profile_from_cli_with_options() {
-        use crate::Cli;
-        use clap::Parser;
+    fn test_profile_from_check_args_with_options() {
+        use crate::CheckArgs;
 
-        let cli = Cli::parse_from([
-            "cc-audit",
-            "--skip-comments",
-            "--fix-hint",
-            "--no-malware-scan",
-            "--deep-scan",
-            ".",
-        ]);
-        let profile = profile_from_cli("custom", &cli);
+        let args = CheckArgs {
+            skip_comments: true,
+            fix_hint: true,
+            no_malware_scan: true,
+            deep_scan: true,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("custom", &args, false);
 
         assert!(profile.skip_comments);
         assert!(profile.fix_hint);
@@ -503,12 +506,15 @@ mod tests {
     }
 
     #[test]
-    fn test_profile_from_cli_format_and_type() {
-        use crate::Cli;
-        use clap::Parser;
+    fn test_profile_from_check_args_format_and_type() {
+        use crate::{CheckArgs, OutputFormat, ScanType};
 
-        let cli = Cli::parse_from(["cc-audit", "--format", "json", "--type", "hook", "."]);
-        let profile = profile_from_cli("json_profile", &cli);
+        let args = CheckArgs {
+            format: OutputFormat::Json,
+            scan_type: ScanType::Hook,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("json_profile", &args, false);
 
         assert!(profile.format.is_some());
         assert!(profile.scan_type.is_some());
@@ -612,26 +618,43 @@ mod tests {
     }
 
     #[test]
-    fn test_profile_from_cli_ci_mode() {
-        use crate::Cli;
-        use clap::Parser;
+    fn test_profile_from_check_args_ci_mode() {
+        use crate::CheckArgs;
 
-        let cli = Cli::parse_from(["cc-audit", "--ci", "."]);
-        let profile = profile_from_cli("ci_profile", &cli);
+        let args = CheckArgs {
+            ci: true,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("ci_profile", &args, false);
 
         assert!(profile.ci);
-        assert!(!profile.recursive); // default
+        assert!(profile.recursive); // default is recursive (no_recursive=false)
     }
 
     #[test]
-    fn test_profile_from_cli_recursive() {
-        use crate::Cli;
-        use clap::Parser;
+    fn test_profile_from_check_args_recursive() {
+        use crate::CheckArgs;
 
-        let cli = Cli::parse_from(["cc-audit", "--recursive", "."]);
-        let profile = profile_from_cli("recursive_profile", &cli);
+        let args = CheckArgs {
+            no_recursive: false, // recursive enabled
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("recursive_profile", &args, false);
 
         assert!(profile.recursive);
+    }
+
+    #[test]
+    fn test_profile_from_check_args_no_recursive() {
+        use crate::CheckArgs;
+
+        let args = CheckArgs {
+            no_recursive: true, // recursive disabled
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("non_recursive_profile", &args, false);
+
+        assert!(!profile.recursive);
     }
 
     #[test]

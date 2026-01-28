@@ -1,0 +1,8 @@
+# Test fixtures configuration
+# This config is used for integration tests
+
+scan:
+  recursive: true
+
+severity:
+  default: error

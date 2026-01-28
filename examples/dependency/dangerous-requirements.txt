@@ -1,0 +1,16 @@
+# Dangerous requirements.txt examples
+
+# Git dependency without pinning (DEP-002)
+git+https://github.com/user/private-lib.git
+git+ssh://git@github.com/org/internal-tool.git
+
+# HTTP URL (DEP-004) - MITM vulnerable
+http://pypi.example.com/packages/unsafe-pkg-1.0.tar.gz
+
+# Direct URL dependency (DEP-005)
+https://files.example.com/packages/custom-lib-2.0.0.tar.gz
+
+# Safe dependencies for comparison
+requests==2.31.0
+flask>=2.0.0,<3.0.0
+numpy~=1.24.0

@@ -1,6 +1,6 @@
 //! Input source resolution.
 
-use crate::cli::{Cli, ScanType};
+use crate::cli::{CheckArgs, ScanType};
 use crate::client::{ClientType, DetectedClient, detect_client, detect_installed_clients};
 use std::path::PathBuf;
 
@@ -30,37 +30,37 @@ pub enum InputSource {
 }
 
 impl InputSource {
-    /// Determine the input source from CLI arguments.
-    pub fn from_cli(cli: &Cli) -> Self {
-        if cli.all_clients {
+    /// Determine the input source from CheckArgs.
+    pub fn from_check_args(args: &CheckArgs) -> Self {
+        if args.all_clients {
             return Self::AllClients;
         }
 
-        if let Some(client) = cli.client {
+        if let Some(client) = args.client {
             return Self::SpecificClient(client);
         }
 
-        if let Some(ref url) = cli.remote {
+        if let Some(ref url) = args.remote {
             return Self::RemoteUrl {
                 url: url.clone(),
-                git_ref: cli.git_ref.clone(),
-                auth_token: cli.remote_auth.clone(),
+                git_ref: args.git_ref.clone(),
+                auth_token: args.remote_auth.clone(),
             };
         }
 
-        if let Some(ref file) = cli.remote_list {
+        if let Some(ref file) = args.remote_list {
             return Self::RemoteList {
                 file: file.clone(),
-                git_ref: cli.git_ref.clone(),
-                auth_token: cli.remote_auth.clone(),
+                git_ref: args.git_ref.clone(),
+                auth_token: args.remote_auth.clone(),
             };
         }
 
-        if cli.awesome_claude_code {
+        if args.awesome_claude_code {
             return Self::AwesomeClaudeCode;
         }
 
-        Self::LocalPaths(cli.paths.clone())
+        Self::LocalPaths(args.paths.clone())
     }
 
     /// Check if this is a local source.
@@ -85,8 +85,8 @@ pub struct SourceResolver;
 
 impl SourceResolver {
     /// Resolve the input source to a list of paths to scan.
-    pub fn resolve(cli: &Cli) -> ResolvedInput {
-        let source = InputSource::from_cli(cli);
+    pub fn resolve(args: &CheckArgs) -> ResolvedInput {
+        let source = InputSource::from_check_args(args);
 
         match source {
             InputSource::LocalPaths(paths) => ResolvedInput {
@@ -151,9 +151,9 @@ impl SourceResolver {
         }
     }
 
-    /// Get the scan type from CLI or infer from input.
-    pub fn scan_type(cli: &Cli) -> ScanType {
-        cli.scan_type
+    /// Get the scan type from CheckArgs.
+    pub fn scan_type(args: &CheckArgs) -> ScanType {
+        args.scan_type
     }
 }
 
@@ -206,11 +206,11 @@ mod tests {
 
     #[test]
     fn test_input_source_from_local_paths() {
-        let cli = Cli {
+        let args = CheckArgs {
             paths: vec![PathBuf::from("./test")],
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         assert!(matches!(source, InputSource::LocalPaths(_)));
         assert!(source.is_local());
         assert!(!source.is_remote());
@@ -218,22 +218,22 @@ mod tests {
 
     #[test]
     fn test_input_source_all_clients() {
-        let cli = Cli {
+        let args = CheckArgs {
             all_clients: true,
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         assert!(matches!(source, InputSource::AllClients));
         assert!(source.is_local());
     }
 
     #[test]
     fn test_input_source_specific_client() {
-        let cli = Cli {
+        let args = CheckArgs {
             client: Some(ClientType::Claude),
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         assert!(matches!(
             source,
             InputSource::SpecificClient(ClientType::Claude)
@@ -243,12 +243,12 @@ mod tests {
 
     #[test]
     fn test_input_source_remote_url() {
-        let cli = Cli {
+        let args = CheckArgs {
             remote: Some("https://github.com/user/repo".to_string()),
             git_ref: "main".to_string(),
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         assert!(matches!(source, InputSource::RemoteUrl { .. }));
         assert!(source.is_remote());
         assert!(!source.is_local());
@@ -256,11 +256,11 @@ mod tests {
 
     #[test]
     fn test_input_source_awesome_claude_code() {
-        let cli = Cli {
+        let args = CheckArgs {
             awesome_claude_code: true,
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         assert!(matches!(source, InputSource::AwesomeClaudeCode));
         assert!(source.is_remote());
     }
@@ -306,13 +306,13 @@ mod tests {
 
     #[test]
     fn test_input_source_remote_list() {
-        let cli = Cli {
+        let args = CheckArgs {
             remote_list: Some(PathBuf::from("repos.txt")),
             git_ref: "main".to_string(),
             remote_auth: Some("token123".to_string()),
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         match &source {
             InputSource::RemoteList {
                 file,
@@ -330,13 +330,13 @@ mod tests {
 
     #[test]
     fn test_input_source_remote_url_with_auth() {
-        let cli = Cli {
+        let args = CheckArgs {
             remote: Some("https://github.com/user/repo".to_string()),
             git_ref: "develop".to_string(),
             remote_auth: Some("my_token".to_string()),
             ..Default::default()
         };
-        let source = InputSource::from_cli(&cli);
+        let source = InputSource::from_check_args(&args);
         match &source {
             InputSource::RemoteUrl {
                 url,
@@ -353,11 +353,11 @@ mod tests {
 
     #[test]
     fn test_source_resolver_resolve_local() {
-        let cli = Cli {
+        let args = CheckArgs {
             paths: vec![PathBuf::from("./src")],
             ..Default::default()
         };
-        let resolved = SourceResolver::resolve(&cli);
+        let resolved = SourceResolver::resolve(&args);
         assert!(matches!(resolved.source, ResolvedSource::Local));
         assert_eq!(resolved.paths, vec![PathBuf::from("./src")]);
         assert!(!resolved.requires_clone());
@@ -365,45 +365,45 @@ mod tests {
 
     #[test]
     fn test_source_resolver_resolve_remote() {
-        let cli = Cli {
+        let args = CheckArgs {
             remote: Some("https://github.com/user/repo".to_string()),
             git_ref: "main".to_string(),
             ..Default::default()
         };
-        let resolved = SourceResolver::resolve(&cli);
+        let resolved = SourceResolver::resolve(&args);
         assert!(matches!(resolved.source, ResolvedSource::Remote { .. }));
         assert!(resolved.requires_clone());
     }
 
     #[test]
     fn test_source_resolver_resolve_remote_list() {
-        let cli = Cli {
+        let args = CheckArgs {
             remote_list: Some(PathBuf::from("repos.txt")),
             git_ref: "main".to_string(),
             ..Default::default()
         };
-        let resolved = SourceResolver::resolve(&cli);
+        let resolved = SourceResolver::resolve(&args);
         assert!(matches!(resolved.source, ResolvedSource::Remote { .. }));
     }
 
     #[test]
     fn test_source_resolver_resolve_awesome() {
-        let cli = Cli {
+        let args = CheckArgs {
             awesome_claude_code: true,
             ..Default::default()
         };
-        let resolved = SourceResolver::resolve(&cli);
+        let resolved = SourceResolver::resolve(&args);
         assert!(matches!(resolved.source, ResolvedSource::AwesomeClaudeCode));
         assert!(resolved.requires_clone());
     }
 
     #[test]
     fn test_source_resolver_scan_type() {
-        let cli = Cli {
+        let args = CheckArgs {
             scan_type: ScanType::Mcp,
             ..Default::default()
         };
-        assert_eq!(SourceResolver::scan_type(&cli), ScanType::Mcp);
+        assert_eq!(SourceResolver::scan_type(&args), ScanType::Mcp);
     }
 
     #[test]

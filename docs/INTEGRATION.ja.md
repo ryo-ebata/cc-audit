@@ -32,15 +32,15 @@ jobs:
         run: cargo install cc-audit
 
       - name: Skillsをスキャン
-        run: cc-audit --type skill --ci --format sarif .claude/skills/ > skills.sarif
+        run: cc-audit check --type skill --ci --format sarif .claude/skills/ > skills.sarif
         continue-on-error: true
 
       - name: MCP設定をスキャン
-        run: cc-audit --type mcp --ci mcp.json
+        run: cc-audit check --type mcp --ci mcp.json
         continue-on-error: true
 
       - name: 依存関係をスキャン
-        run: cc-audit --type dependency --ci ./
+        run: cc-audit check --type dependency --ci ./
 
       - name: SARIFをGitHub Securityにアップロード
         uses: github/codeql-action/upload-sarif@v3
@@ -58,9 +58,9 @@ cc-audit:
   before_script:
     - cargo install cc-audit
   script:
-    - cc-audit --type skill --ci .claude/
-    - cc-audit --type mcp --ci mcp.json
-    - cc-audit --type dependency --ci ./
+    - cc-audit check --type skill --ci .claude/
+    - cc-audit check --type mcp --ci mcp.json
+    - cc-audit check --type dependency --ci ./
   allow_failure: false
 ```
 
@@ -68,10 +68,10 @@ cc-audit:
 
 ```bash
 # プロジェクトにフックをインストール
-cc-audit --init-hook .
+cc-audit hook init
 
 # フックを削除
-cc-audit --remove-hook .
+cc-audit hook remove
 ```
 
 pre-commitフックはコミット前にステージされたファイルを自動的にスキャンします。
@@ -88,8 +88,9 @@ pre-commitフックはコミット前にステージされたファイルを自�
 # パスが存在し、スキャン可能なファイルが含まれているか確認
 ls -la ./my-skill/
 
-# ネストされたディレクトリには再帰モードを使用
-cc-audit --recursive ./my-skill/
+# 再帰スキャンはデフォルトで有効です。無効にするには --no-recursive を使用
+cc-audit check ./my-skill/
+cc-audit check --no-recursive ./my-skill/
 ```
 
 ### 「権限が拒否されました」
@@ -103,23 +104,26 @@ chmod -R +r ./my-skill/
 
 ```bash
 # 最小信頼度レベルを上げる
-cc-audit --min-confidence firm ./my-skill/
+cc-audit check --min-confidence firm ./my-skill/
 
 # 最高精度にはcertainを使用
-cc-audit --min-confidence certain ./my-skill/
+cc-audit check --min-confidence certain ./my-skill/
 
 # コメント行をスキップ
-cc-audit --skip-comments ./my-skill/
+cc-audit check --skip-comments ./my-skill/
 ```
 
 ### スキャンが遅い
 
 ```bash
-# テストはデフォルトで除外
-cc-audit ./my-skill/
+# 一般的なディレクトリ（node_modules, .gitなど）はデフォルトパターンで除外
+# .cc-audit.yamlで無視パターンを設定
 
-# 必要な場合は明示的に含める
-cc-audit --include-tests ./my-skill/
+# 例: カスタム無視パターンを追加
+# ignore:
+#   patterns:
+#     - "/large_directory/"
+#     - "\\.generated\\."
 ```
 
 ### カスタムルールが読み込まれない

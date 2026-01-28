@@ -1,6 +1,6 @@
 //! Client detection and scan mode handling.
 
-use crate::{Cli, ClientType, detect_client, detect_installed_clients};
+use crate::{CheckArgs, ClientType, detect_client, detect_installed_clients};
 use std::path::PathBuf;
 
 /// Scan mode based on CLI options.
@@ -15,22 +15,26 @@ pub enum ScanMode {
 }
 
 impl ScanMode {
-    /// Determine scan mode from CLI options.
-    pub fn from_cli(cli: &Cli) -> Self {
-        if cli.all_clients {
+    /// Determine scan mode from CheckArgs.
+    pub fn from_check_args(args: &CheckArgs) -> Self {
+        if args.all_clients {
             ScanMode::AllClients
-        } else if let Some(client) = cli.client {
+        } else if let Some(client) = args.client {
             ScanMode::SingleClient(client)
         } else {
-            ScanMode::Paths(cli.paths.clone())
+            ScanMode::Paths(args.paths.clone())
         }
     }
 }
 
-/// Resolve paths to scan based on CLI options.
-pub fn resolve_scan_paths(cli: &Cli) -> Vec<PathBuf> {
-    let mode = ScanMode::from_cli(cli);
+/// Resolve paths to scan based on CheckArgs.
+pub fn resolve_scan_paths_from_check_args(args: &CheckArgs) -> Vec<PathBuf> {
+    let mode = ScanMode::from_check_args(args);
+    resolve_scan_paths_for_mode(mode)
+}
 
+/// Internal function to resolve paths from scan mode.
+fn resolve_scan_paths_for_mode(mode: ScanMode) -> Vec<PathBuf> {
     match mode {
         ScanMode::Paths(paths) => {
             if paths.is_empty() {
@@ -95,40 +99,50 @@ pub fn detect_client_for_path(path: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn create_test_check_args(paths: Vec<PathBuf>) -> CheckArgs {
+        CheckArgs {
+            paths,
+            ..Default::default()
+        }
+    }
+
     #[test]
-    fn test_scan_mode_from_cli_paths() {
-        let cli = crate::Cli {
+    fn test_scan_mode_from_check_args_paths() {
+        let args = CheckArgs {
             paths: vec![PathBuf::from("/test/path")],
             all_clients: false,
             client: None,
             ..Default::default()
         };
-        match ScanMode::from_cli(&cli) {
+        match ScanMode::from_check_args(&args) {
             ScanMode::Paths(paths) => assert_eq!(paths, vec![PathBuf::from("/test/path")]),
             _ => panic!("Expected ScanMode::Paths"),
         }
     }
 
     #[test]
-    fn test_scan_mode_from_cli_all_clients() {
-        let cli = crate::Cli {
+    fn test_scan_mode_from_check_args_all_clients() {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: true,
             client: None,
             ..Default::default()
         };
-        assert!(matches!(ScanMode::from_cli(&cli), ScanMode::AllClients));
+        assert!(matches!(
+            ScanMode::from_check_args(&args),
+            ScanMode::AllClients
+        ));
     }
 
     #[test]
-    fn test_scan_mode_from_cli_single_client() {
-        let cli = crate::Cli {
+    fn test_scan_mode_from_check_args_single_client() {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: Some(ClientType::Claude),
             ..Default::default()
         };
-        match ScanMode::from_cli(&cli) {
+        match ScanMode::from_check_args(&args) {
             ScanMode::SingleClient(client) => assert_eq!(client, ClientType::Claude),
             _ => panic!("Expected ScanMode::SingleClient"),
         }
@@ -151,25 +165,18 @@ mod tests {
 
     #[test]
     fn test_resolve_scan_paths_empty() {
-        let cli = crate::Cli {
-            paths: vec![],
-            all_clients: false,
-            client: None,
-            ..Default::default()
-        };
-        let paths = resolve_scan_paths(&cli);
+        let args = create_test_check_args(vec![]);
+        let paths = resolve_scan_paths_from_check_args(&args);
         assert_eq!(paths, vec![PathBuf::from(".")]);
     }
 
     #[test]
     fn test_resolve_scan_paths_with_paths() {
-        let cli = crate::Cli {
-            paths: vec![PathBuf::from("/test/path1"), PathBuf::from("/test/path2")],
-            all_clients: false,
-            client: None,
-            ..Default::default()
-        };
-        let paths = resolve_scan_paths(&cli);
+        let args = create_test_check_args(vec![
+            PathBuf::from("/test/path1"),
+            PathBuf::from("/test/path2"),
+        ]);
+        let paths = resolve_scan_paths_from_check_args(&args);
         assert_eq!(
             paths,
             vec![PathBuf::from("/test/path1"), PathBuf::from("/test/path2")]
@@ -193,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_resolve_scan_paths_all_clients() {
-        let cli = crate::Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: true,
             client: None,
@@ -201,12 +208,12 @@ mod tests {
         };
         // This tests the AllClients code path
         // Result depends on what clients are installed
-        let _paths = resolve_scan_paths(&cli);
+        let _paths = resolve_scan_paths_from_check_args(&args);
     }
 
     #[test]
     fn test_resolve_scan_paths_single_client_claude() {
-        let cli = crate::Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: Some(ClientType::Claude),
@@ -214,40 +221,40 @@ mod tests {
         };
         // This tests the SingleClient code path
         // Result depends on whether Claude is installed
-        let _paths = resolve_scan_paths(&cli);
+        let _paths = resolve_scan_paths_from_check_args(&args);
     }
 
     #[test]
     fn test_resolve_scan_paths_single_client_cursor() {
-        let cli = crate::Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: Some(ClientType::Cursor),
             ..Default::default()
         };
-        let _paths = resolve_scan_paths(&cli);
+        let _paths = resolve_scan_paths_from_check_args(&args);
     }
 
     #[test]
     fn test_resolve_scan_paths_single_client_windsurf() {
-        let cli = crate::Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: Some(ClientType::Windsurf),
             ..Default::default()
         };
-        let _paths = resolve_scan_paths(&cli);
+        let _paths = resolve_scan_paths_from_check_args(&args);
     }
 
     #[test]
     fn test_resolve_scan_paths_single_client_vscode() {
-        let cli = crate::Cli {
+        let args = CheckArgs {
             paths: vec![],
             all_clients: false,
             client: Some(ClientType::Vscode),
             ..Default::default()
         };
-        let _paths = resolve_scan_paths(&cli);
+        let _paths = resolve_scan_paths_from_check_args(&args);
     }
 
     #[test]

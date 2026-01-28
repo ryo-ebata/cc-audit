@@ -338,59 +338,12 @@ impl TextFilesConfig {
 }
 
 /// Ignore configuration for scanning.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Uses regex patterns to determine which paths to ignore during scanning.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IgnoreConfig {
-    /// Directories to ignore (e.g., ["node_modules", "target", ".git"]).
-    pub directories: HashSet<String>,
-    /// Glob patterns to ignore (e.g., ["*.log", "build/**"]).
+    /// Regex patterns to ignore (e.g., ["node_modules", "target/", "\\.git"]).
+    /// Each pattern is matched against the full path of the file.
     pub patterns: Vec<String>,
-    /// Whether to include test directories in scan.
-    pub include_tests: bool,
-    /// Whether to include node_modules in scan.
-    pub include_node_modules: bool,
-    /// Whether to include vendor directories in scan.
-    pub include_vendor: bool,
-}
-
-impl Default for IgnoreConfig {
-    fn default() -> Self {
-        let directories: HashSet<String> = [
-            // Common build output directories
-            "target",
-            "dist",
-            "build",
-            "out",
-            // Package manager directories
-            "node_modules",
-            ".pnpm",
-            ".yarn",
-            // Version control
-            ".git",
-            ".svn",
-            ".hg",
-            // IDE directories
-            ".idea",
-            ".vscode",
-            // Cache directories
-            ".cache",
-            "__pycache__",
-            ".pytest_cache",
-            ".mypy_cache",
-            // Coverage directories
-            "coverage",
-            ".nyc_output",
-        ]
-        .into_iter()
-        .map(String::from)
-        .collect();
-
-        Self {
-            directories,
-            patterns: Vec::new(),
-            include_tests: false,
-            include_node_modules: false,
-            include_vendor: false,
-        }
-    }
 }

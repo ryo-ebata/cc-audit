@@ -1,23 +1,17 @@
 //! Configuration and profile management handlers.
 
-use crate::{Cli, Config, Profile, profile_from_cli};
+use crate::{CheckArgs, Config, Profile, profile_from_check_args};
 use std::fs;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::ExitCode;
 
-/// Handle --init command.
-pub fn handle_init_config(cli: &Cli) -> ExitCode {
-    let output_path = cli
-        .paths
-        .first()
-        .map(|p| {
-            if p.is_dir() {
-                p.join(".cc-audit.yaml")
-            } else {
-                p.clone()
-            }
-        })
-        .unwrap_or_else(|| PathBuf::from(".cc-audit.yaml"));
+/// Handle `init` subcommand.
+pub fn handle_init_config(path: &Path) -> ExitCode {
+    let output_path = if path.is_dir() {
+        path.join(".cc-audit.yaml")
+    } else {
+        path.to_path_buf()
+    };
 
     // Check if file already exists
     if output_path.exists() {
@@ -52,9 +46,9 @@ pub fn handle_init_config(cli: &Cli) -> ExitCode {
 }
 
 /// Handle --save-profile command.
-pub fn handle_save_profile(cli: &Cli, profile_name: &str) -> ExitCode {
-    // Create profile from current CLI settings
-    let profile = profile_from_cli(profile_name, cli);
+pub fn handle_save_profile(args: &CheckArgs, profile_name: &str, verbose: bool) -> ExitCode {
+    // Create profile from current check args
+    let profile = profile_from_check_args(profile_name, args, verbose);
 
     match profile.save() {
         Ok(path) => {

@@ -1,17 +1,49 @@
 //! Result formatting and output generation.
 
 use crate::{
-    Config, JsonReporter, OutputFormat, Reporter, SarifReporter, ScanResult, TerminalReporter,
+    BadgeFormat, CheckArgs, Config, JsonReporter, OutputFormat, Reporter, SarifReporter,
+    ScanResult, TerminalReporter,
 };
 
-use super::client::resolve_scan_paths;
+use super::client::resolve_scan_paths_from_check_args;
 use super::config::EffectiveConfig;
-use crate::Cli;
 
-/// Format scan result using CLI settings.
-pub fn format_result(cli: &Cli, result: &ScanResult) -> String {
+/// Generate a badge URL based on scan result.
+fn generate_badge_url(result: &ScanResult) -> String {
+    let (status, color) = if result.summary.critical == 0 && result.summary.high == 0 {
+        if result.summary.medium == 0 && result.summary.low == 0 {
+            ("verified", "brightgreen")
+        } else {
+            ("warning", "yellow")
+        }
+    } else {
+        ("failed", "red")
+    };
+
+    format!(
+        "https://img.shields.io/badge/cc--audit-{}-{}",
+        status, color
+    )
+}
+
+/// Generate badge output based on badge format.
+fn generate_badge_output(result: &ScanResult, format: &BadgeFormat) -> String {
+    let badge_url = generate_badge_url(result);
+
+    match format {
+        BadgeFormat::Url => badge_url,
+        BadgeFormat::Html => format!(r#"<img src="{}" alt="cc-audit status">"#, badge_url),
+        BadgeFormat::Markdown => format!(
+            "[![cc-audit]({})](https://github.com/ryo-ebata/cc-audit)",
+            badge_url
+        ),
+    }
+}
+
+/// Format scan result using CheckArgs settings.
+pub fn format_result_check_args(args: &CheckArgs, result: &ScanResult) -> String {
     // Resolve paths and determine project root for config loading
-    let scan_paths = resolve_scan_paths(cli);
+    let scan_paths = resolve_scan_paths_from_check_args(args);
     let project_root = scan_paths.first().and_then(|p| {
         if p.is_dir() {
             Some(p.as_path())
@@ -20,16 +52,16 @@ pub fn format_result(cli: &Cli, result: &ScanResult) -> String {
         }
     });
 
-    // Load config and merge with CLI
+    // Load config and merge with CheckArgs
     let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     format_result_with_config(&effective, result)
 }
 
 /// Format result using effective config (avoids reloading config).
 pub fn format_result_with_config(effective: &EffectiveConfig, result: &ScanResult) -> String {
-    match effective.format {
+    let mut output = match effective.format {
         OutputFormat::Terminal => {
             let reporter = TerminalReporter::new(effective.strict, effective.verbose)
                 .with_fix_hints(effective.fix_hint)
@@ -49,10 +81,27 @@ pub fn format_result_with_config(effective: &EffectiveConfig, result: &ScanResul
             reporter.report(result)
         }
         OutputFormat::Markdown => {
-            let reporter = crate::reporter::markdown::MarkdownReporter::new();
+            let mut reporter = crate::reporter::markdown::MarkdownReporter::new();
+            // For markdown format with markdown badge_format, let the reporter handle it
+            if effective.badge && matches!(effective.badge_format, BadgeFormat::Markdown) {
+                reporter = reporter.with_badge();
+            }
             reporter.report(result)
         }
+    };
+
+    // Add badge output for non-markdown badge formats, or for non-markdown output formats
+    if effective.badge
+        && (effective.format != OutputFormat::Markdown
+            || !matches!(effective.badge_format, BadgeFormat::Markdown))
+    {
+        let badge = generate_badge_output(result, &effective.badge_format);
+        output.push('\n');
+        output.push_str(&badge);
+        output.push('\n');
     }
+
+    output
 }
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 //! Effective configuration after merging CLI and config file.
 
 use crate::{
-    BadgeFormat, Cli, ClientType, Confidence, Config, CustomRuleLoader, DynamicRule, OutputFormat,
-    RuleSeverity, ScanType, Severity,
+    BadgeFormat, CheckArgs, ClientType, Confidence, Config, CustomRuleLoader, DynamicRule,
+    OutputFormat, RuleSeverity, ScanType, Severity,
 };
 use std::path::Path;
 
@@ -68,45 +68,56 @@ pub struct EffectiveConfig {
 }
 
 impl EffectiveConfig {
-    /// Merge CLI options with config file settings.
+    /// Merge CheckArgs options with config file settings.
     ///
     /// - Boolean flags: CLI OR config (either can enable)
     /// - Enum options: config provides defaults, CLI always takes precedence
     /// - Path options: CLI takes precedence, fallback to config
-    pub fn from_cli_and_config(cli: &Cli, config: &Config) -> Self {
-        // Parse format from config if available
-        let format = parse_output_format(config.scan.format.as_deref()).unwrap_or(cli.format);
+    ///
+    /// Note: CheckArgs uses `no_recursive` (default false = recursive enabled).
+    pub fn from_check_args_and_config(args: &CheckArgs, config: &Config) -> Self {
+        // For enum options: CLI takes precedence when explicitly set (non-default)
+        let format = if args.format != OutputFormat::default() {
+            args.format
+        } else {
+            parse_output_format(config.scan.format.as_deref()).unwrap_or(args.format)
+        };
 
-        // Parse scan_type from config if available
-        let scan_type = parse_scan_type(config.scan.scan_type.as_deref()).unwrap_or(cli.scan_type);
+        let scan_type = if args.scan_type != ScanType::default() {
+            args.scan_type
+        } else {
+            parse_scan_type(config.scan.scan_type.as_deref()).unwrap_or(args.scan_type)
+        };
 
-        // Parse min_confidence from config if available
-        let min_confidence =
-            parse_confidence(config.scan.min_confidence.as_deref()).unwrap_or(cli.min_confidence);
+        // min_confidence: CLI takes precedence if explicitly set, else config, else default
+        let min_confidence = args
+            .min_confidence
+            .or_else(|| parse_confidence(config.scan.min_confidence.as_deref()))
+            .unwrap_or(Confidence::Tentative);
 
         // Path options: CLI takes precedence, fallback to config
-        let malware_db = cli
+        let malware_db = args
             .malware_db
             .as_ref()
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.malware_db.clone());
 
-        let custom_rules = cli
+        let custom_rules = args
             .custom_rules
             .as_ref()
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.custom_rules.clone());
 
-        let output = cli
+        let output = args
             .output
             .as_ref()
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.output.clone());
 
-        // v1.1.0: Remote scan options
-        let remote = cli.remote.clone().or_else(|| config.scan.remote.clone());
-        let git_ref = if cli.git_ref != "HEAD" {
-            cli.git_ref.clone()
+        // Remote scan options
+        let remote = args.remote.clone().or_else(|| config.scan.remote.clone());
+        let git_ref = if args.git_ref != "HEAD" {
+            args.git_ref.clone()
         } else {
             config
                 .scan
@@ -114,88 +125,92 @@ impl EffectiveConfig {
                 .clone()
                 .unwrap_or_else(|| "HEAD".to_string())
         };
-        let remote_auth = cli
+        let remote_auth = args
             .remote_auth
             .clone()
             .or_else(|| config.scan.remote_auth.clone())
             .or_else(|| std::env::var("GITHUB_TOKEN").ok());
-        let parallel_clones = config.scan.parallel_clones.unwrap_or(cli.parallel_clones);
+        let parallel_clones = config.scan.parallel_clones.unwrap_or(args.parallel_clones);
 
-        // v1.1.0: Badge options
-        let badge = cli.badge || config.scan.badge;
+        // Badge options
+        let badge = args.badge || config.scan.badge;
         let badge_format =
-            parse_badge_format(config.scan.badge_format.as_deref()).unwrap_or(cli.badge_format);
-        let summary = cli.summary || config.scan.summary;
+            parse_badge_format(config.scan.badge_format.as_deref()).unwrap_or(args.badge_format);
+        let summary = args.summary || config.scan.summary;
 
-        // v1.1.0: Client scan options
-        let all_clients = cli.all_clients || config.scan.all_clients;
-        let client = cli
+        // Client scan options
+        let all_clients = args.all_clients || config.scan.all_clients;
+        let client = args
             .client
             .or_else(|| parse_client_type(config.scan.client.as_deref()));
 
-        // v1.1.0: CVE scan options
-        let no_cve_scan = cli.no_cve_scan || config.scan.no_cve_scan;
-        let cve_db = cli
+        // CVE scan options
+        let no_cve_scan = args.no_cve_scan || config.scan.no_cve_scan;
+        let cve_db = args
             .cve_db
             .as_ref()
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.cve_db.clone());
 
-        // v1.1.0: Additional remote options
-        let remote_list = cli
+        // Additional remote options
+        let remote_list = args
             .remote_list
             .as_ref()
             .map(|p| p.display().to_string())
             .or_else(|| config.scan.remote_list.clone());
-        let awesome_claude_code = cli.awesome_claude_code || config.scan.awesome_claude_code;
+        let awesome_claude_code = args.awesome_claude_code || config.scan.awesome_claude_code;
 
-        // v1.2.0: SBOM options
-        let sbom = cli.sbom || config.scan.sbom;
-        let sbom_format = cli
+        // SBOM options
+        let sbom = args.sbom || config.scan.sbom;
+        let sbom_format = args
             .sbom_format
             .clone()
             .or_else(|| config.scan.sbom_format.clone());
-        let sbom_npm = cli.sbom_npm || config.scan.sbom_npm;
-        let sbom_cargo = cli.sbom_cargo || config.scan.sbom_cargo;
+        let sbom_npm = args.sbom_npm || config.scan.sbom_npm;
+        let sbom_cargo = args.sbom_cargo || config.scan.sbom_cargo;
 
         // strict_secrets: CLI OR config
-        let strict_secrets = cli.strict_secrets || config.scan.strict_secrets;
+        let strict_secrets = args.strict_secrets || config.scan.strict_secrets;
 
         // Parse min_severity from config if CLI doesn't provide it
-        let min_severity = cli
+        let min_severity = args
             .min_severity
             .or_else(|| parse_severity(config.scan.min_severity.as_deref()));
 
         // Parse min_rule_severity from config if CLI doesn't provide it
-        let min_rule_severity = cli
+        let min_rule_severity = args
             .min_rule_severity
             .or_else(|| parse_rule_severity(config.scan.min_rule_severity.as_deref()));
 
+        // Note: args.no_recursive means NOT recursive (default false = recursive)
+        // If CLI says --no-recursive, disable recursion regardless of config
+        // Otherwise, use config value
+        let recursive = !args.no_recursive && config.scan.recursive;
+
         Self {
             format,
-            // Boolean flags: OR operation (config can enable, CLI can enable)
-            strict: cli.strict || config.scan.strict,
-            warn_only: cli.warn_only || config.scan.warn_only,
+            strict: args.strict || config.scan.strict,
+            warn_only: args.warn_only || config.scan.warn_only,
             min_severity,
             min_rule_severity,
             scan_type,
-            recursive: cli.recursive || config.scan.recursive,
-            ci: cli.ci || config.scan.ci,
-            verbose: cli.verbose || config.scan.verbose,
+            recursive,
+            ci: args.ci || config.scan.ci,
+            verbose: config.scan.verbose, // Note: verbose is in Cli, not CheckArgs
             min_confidence,
-            skip_comments: cli.skip_comments || config.scan.skip_comments,
-            fix_hint: cli.fix_hint || config.scan.fix_hint,
-            compact: cli.compact || config.scan.compact,
-            no_malware_scan: cli.no_malware_scan || config.scan.no_malware_scan,
-            deep_scan: cli.deep_scan || config.scan.deep_scan,
-            watch: cli.watch || config.scan.watch,
-            fix: cli.fix || config.scan.fix,
-            fix_dry_run: cli.fix_dry_run || config.scan.fix_dry_run,
+            skip_comments: args.skip_comments || config.scan.skip_comments,
+            fix_hint: args.fix_hint || config.scan.fix_hint,
+            compact: args.compact || config.scan.compact,
+            no_malware_scan: args.no_malware_scan || config.scan.no_malware_scan,
+            deep_scan: args.deep_scan || config.scan.deep_scan,
+            watch: args.watch || config.scan.watch,
+            fix: args.fix || config.scan.fix,
+            fix_dry_run: args.fix_dry_run || config.scan.fix_dry_run,
             output,
             malware_db,
             custom_rules,
             strict_secrets,
-            // v1.1.0 options
+            // Remote options
             remote,
             git_ref,
             remote_auth,
@@ -209,7 +224,7 @@ impl EffectiveConfig {
             client,
             no_cve_scan,
             cve_db,
-            // v1.2.0 options
+            // SBOM options
             sbom,
             sbom_format,
             sbom_npm,

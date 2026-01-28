@@ -1,6 +1,6 @@
 //! False positive report handler.
 
-use crate::Cli;
+use crate::CheckArgs;
 use crate::feedback::{FalsePositiveReport, ReportSubmitter, SubmitTarget};
 use colored::Colorize;
 use std::io::{self, BufRead, Write};
@@ -23,13 +23,13 @@ fn read_line_limited(stdin: &io::Stdin, max_len: usize) -> io::Result<String> {
 }
 
 /// Handle the --report-fp command.
-pub fn handle_report_fp(cli: &Cli) -> ExitCode {
+pub fn handle_report_fp(args: &CheckArgs) -> ExitCode {
     println!("{}", "False Positive Report".bold());
     println!("{}", "═".repeat(40));
     println!();
 
     // Check if telemetry is disabled
-    if cli.no_telemetry {
+    if args.no_telemetry {
         eprintln!(
             "{}",
             "Telemetry is disabled. Report will not be submitted.".yellow()
@@ -118,9 +118,9 @@ pub fn handle_report_fp(cli: &Cli) -> ExitCode {
     }
 
     // Determine target
-    let target = if cli.report_fp_dry_run {
+    let target = if args.report_fp_dry_run {
         SubmitTarget::DryRun
-    } else if let Some(ref endpoint) = cli.report_fp_endpoint {
+    } else if let Some(endpoint) = &args.report_fp_endpoint {
         SubmitTarget::Endpoint(endpoint.clone())
     } else {
         SubmitTarget::default()

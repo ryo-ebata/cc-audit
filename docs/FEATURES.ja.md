@@ -9,13 +9,13 @@
 ### ベースラインの作成
 
 ```bash
-cc-audit --save-baseline baseline.json ./my-skill/
+cc-audit check --save-baseline baseline.json ./my-skill/
 ```
 
 ### ドリフトのチェック
 
 ```bash
-cc-audit --baseline-file baseline.json ./my-skill/
+cc-audit check --baseline-file baseline.json ./my-skill/
 ```
 
 出力には以下が表示されます：
@@ -26,7 +26,7 @@ cc-audit --baseline-file baseline.json ./my-skill/
 ### 2つのバージョンを比較
 
 ```bash
-cc-audit --compare ./skill-v1.0/ ./skill-v1.1/
+cc-audit check --compare ./skill-v1.0/ ./skill-v1.1/
 ```
 
 ---
@@ -37,10 +37,10 @@ cc-audit --compare ./skill-v1.0/ ./skill-v1.1/
 
 ```bash
 # 修正のプレビュー（適用なし）
-cc-audit --fix-dry-run ./my-skill/
+cc-audit check --fix-dry-run ./my-skill/
 
 # 自動修正を適用
-cc-audit --fix ./my-skill/
+cc-audit check --fix ./my-skill/
 ```
 
 **修正可能な問題:**
@@ -54,7 +54,7 @@ cc-audit --fix ./my-skill/
 エンコードまたは難読化された悪意のあるパターンを検出：
 
 ```bash
-cc-audit --deep-scan ./my-skill/
+cc-audit check --deep-scan ./my-skill/
 ```
 
 **検出可能なエンコーディング:**
@@ -70,7 +70,7 @@ cc-audit --deep-scan ./my-skill/
 cc-auditをMCPサーバーとして実行し、Claude Codeと統合：
 
 ```bash
-cc-audit --mcp-server ./
+cc-audit serve
 ```
 
 これにより、スキャン機能がClaude Codeが呼び出せるMCPツールとして公開されます。
@@ -83,10 +83,10 @@ cc-audit --mcp-server ./
 
 ```bash
 # 現在の設定をプロファイルとして保存
-cc-audit --save-profile strict-ci --strict --ci --format sarif ./
+cc-audit check --save-profile strict-ci --strict --ci --format sarif ./
 
 # プロファイルから設定を読み込む
-cc-audit --profile strict-ci ./my-skill/
+cc-audit check --profile strict-ci ./my-skill/
 ```
 
 プロファイルは`~/.config/cc-audit/profiles/`に保存されます。
@@ -98,7 +98,7 @@ cc-audit --profile strict-ci ./my-skill/
 ファイルを継続的に監視し、変更時に再スキャン：
 
 ```bash
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 ```
 
 スキル開発時に問題を即座に検出するのに便利です。
@@ -116,7 +116,7 @@ cc-audit --watch ./my-skill/
 プログラム的な処理のための機械可読フォーマット：
 
 ```bash
-cc-audit ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format json --output results.json
 ```
 
 ### SARIF
@@ -124,7 +124,7 @@ cc-audit ./skill/ --format json --output results.json
 CI/CD統合用の静的解析結果交換フォーマット：
 
 ```bash
-cc-audit ./skill/ --format sarif --output results.sarif
+cc-audit check ./skill/ --format sarif --output results.sarif
 ```
 
 ### HTML
@@ -132,7 +132,7 @@ cc-audit ./skill/ --format sarif --output results.sarif
 セキュリティレビュー用のインタラクティブなHTMLレポート：
 
 ```bash
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format html --output report.html
 ```
 
 含まれる内容：
@@ -147,7 +147,7 @@ cc-audit ./skill/ --format html --output report.html
 ドキュメントやレポート用のプレーンMarkdown形式：
 
 ```bash
-cc-audit ./skill/ --format markdown --output report.md
+cc-audit check ./skill/ --format markdown --output report.md
 ```
 
 ---
@@ -158,13 +158,13 @@ cc-audit ./skill/ --format markdown --output report.md
 
 ```bash
 # 全クライアントをスキャン
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # 特定のクライアントをスキャン
-cc-audit --client claude
-cc-audit --client cursor
-cc-audit --client windsurf
-cc-audit --client vscode
+cc-audit check --client claude
+cc-audit check --client cursor
+cc-audit check --client windsurf
+cc-audit check --client vscode
 ```
 
 検出・スキャン対象：
@@ -181,19 +181,19 @@ cc-audit --client vscode
 
 ```bash
 # 単一リポジトリをスキャン
-cc-audit --remote https://github.com/user/awesome-skill
+cc-audit check --remote https://github.com/user/awesome-skill
 
 # 特定のブランチ/タグ/コミットでスキャン
-cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+cc-audit check --remote https://github.com/user/repo --git-ref v1.0.0
 
 # 認証付きスキャン（プライベートリポジトリ用）
-cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+cc-audit check --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
 
 # ファイルから複数リポジトリをスキャン
-cc-audit --remote-list repos.txt --parallel-clones 8
+cc-audit check --remote-list repos.txt --parallel-clones 8
 
 # awesome-claude-codeの全リポジトリをスキャン
-cc-audit --awesome-claude-code --summary
+cc-audit check --awesome-claude-code --summary
 ```
 
 ---
@@ -204,13 +204,13 @@ cc-audit --awesome-claude-code --summary
 
 ```bash
 # Markdownバッジを生成
-cc-audit ./skill/ --badge --badge-format markdown
+cc-audit check ./skill/ --badge --badge-format markdown
 
 # HTMLバッジを生成
-cc-audit ./skill/ --badge --badge-format html
+cc-audit check ./skill/ --badge --badge-format html
 
 # shields.io URLのみを生成
-cc-audit ./skill/ --badge --badge-format url
+cc-audit check ./skill/ --badge --badge-format url
 ```
 
 出力例：
@@ -226,16 +226,16 @@ cc-audit ./skill/ --badge --badge-format url
 
 ```bash
 # 現在の設定をピン留め
-cc-audit --type mcp ~/.claude/mcp.json --pin
+cc-audit check --type mcp ~/.claude/mcp.json --pin
 
 # ピンが変更されていないことを検証
-cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+cc-audit check --type mcp ~/.claude/mcp.json --pin-verify
 
 # 承認済み変更後にピンを更新
-cc-audit --type mcp ~/.claude/mcp.json --pin-update
+cc-audit check --type mcp ~/.claude/mcp.json --pin-update
 
 # 既存のピンを強制上書き
-cc-audit --type mcp ~/.claude/mcp.json --pin-update --pin-force
+cc-audit check --type mcp ~/.claude/mcp.json --pin-update --pin-force
 ```
 
 ピン留め対象：
@@ -251,7 +251,7 @@ cc-audit --type mcp ~/.claude/mcp.json --pin-update --pin-force
 リアルタイムスキャン用にClaude Codeフックとしてcc-auditを実行：
 
 ```bash
-cc-audit --hook-mode
+cc-audit check --hook-mode
 ```
 
 Claude Code設定で構成：
@@ -259,7 +259,7 @@ Claude Code設定で構成：
 {
   "hooks": {
     "pre-tool-call": {
-      "command": "cc-audit --hook-mode"
+      "command": "cc-audit check --hook-mode"
     }
   }
 }
@@ -273,10 +273,10 @@ Claude Code設定で構成：
 
 ```bash
 # CycloneDX SBOMを生成
-cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+cc-audit check ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
 
 # 特定のエコシステムを含める
-cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo
+cc-audit check ./skill/ --sbom --sbom-npm --sbom-cargo
 ```
 
 ---
@@ -287,16 +287,19 @@ cc-audit ./skill/ --sbom --sbom-npm --sbom-cargo
 
 ```bash
 # プロキシを起動
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+cc-audit proxy --target localhost:9000
+
+# カスタムポート
+cc-audit proxy --target localhost:9000 --port 8080
 
 # TLS終端付き
-cc-audit --proxy --proxy-port 8443 --proxy-target localhost:9000 --proxy-tls
+cc-audit proxy --target localhost:9000 --port 8443 --tls
 
 # ブロックモード（検出結果のあるメッセージを停止）
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-block
+cc-audit proxy --target localhost:9000 --block
 
 # 全トラフィックをログ
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-log traffic.jsonl
+cc-audit proxy --target localhost:9000 --log traffic.jsonl
 ```
 
 ---
@@ -307,16 +310,16 @@ cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000 --proxy-log tra
 
 ```bash
 # 偽陽性を報告
-cc-audit ./skill/ --report-fp
+cc-audit check ./skill/ --report-fp
 
 # 送信せずにプレビュー
-cc-audit ./skill/ --report-fp --report-fp-dry-run
+cc-audit check ./skill/ --report-fp --report-fp-dry-run
 
 # カスタムエンドポイントを使用
-cc-audit ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
+cc-audit check ./skill/ --report-fp --report-fp-endpoint https://api.example.com/fp
 
 # テレメトリを完全に無効化
-cc-audit ./skill/ --no-telemetry
+cc-audit check ./skill/ --no-telemetry
 ```
 
 ---

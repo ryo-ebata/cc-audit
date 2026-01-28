@@ -1,14 +1,14 @@
 //! Compare handler for comparing scan results between directories.
 
 use crate::run::EffectiveConfig;
-use crate::{Cli, Config, run_scan};
+use crate::{CheckArgs, Config, run_scan_with_check_args};
 use colored::Colorize;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 /// Handle --compare command.
-pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
+pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
     if paths.len() != 2 {
         eprintln!("Error: --compare requires exactly 2 paths");
         return ExitCode::from(2);
@@ -26,13 +26,13 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
         path1.parent()
     };
     let config = Config::load(project_root);
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
-    // Create CLI for scanning with same options but different paths
-    // Use effective config values to ensure config file settings are respected
-    let create_scan_cli = |path: PathBuf| -> Cli {
-        Cli {
+    // Create CheckArgs for scanning with same options but different paths
+    let create_scan_args = |path: PathBuf| -> CheckArgs {
+        CheckArgs {
             paths: vec![path],
+            config: args.config.clone(),
             remote: None,
             git_ref: effective.git_ref.clone(),
             remote_auth: effective.remote_auth.clone(),
@@ -48,16 +48,10 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             min_severity: effective.min_severity,
             min_rule_severity: effective.min_rule_severity,
             scan_type: effective.scan_type,
-            recursive: effective.recursive,
+            no_recursive: !effective.recursive,
             ci: effective.ci,
-            verbose: effective.verbose,
-            include_tests: cli.include_tests,
-            include_node_modules: cli.include_node_modules,
-            include_vendor: cli.include_vendor,
-            min_confidence: effective.min_confidence,
+            min_confidence: Some(effective.min_confidence),
             watch: false,
-            init_hook: false,
-            remove_hook: false,
             skip_comments: effective.skip_comments,
             strict_secrets: effective.strict_secrets,
             fix_hint: effective.fix_hint,
@@ -69,45 +63,37 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
             custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
             baseline: false,
             check_drift: false,
-            init: false,
             output: None,
             save_baseline: None,
             baseline_file: None,
             compare: None,
             fix: false,
             fix_dry_run: false,
-            mcp_server: false,
-            hook_mode: false,
             pin: false,
             pin_verify: false,
             pin_update: false,
             pin_force: false,
             ignore_pin: false,
             deep_scan: effective.deep_scan,
-            profile: cli.profile.clone(),
+            profile: args.profile.clone(),
             save_profile: None,
             all_clients: false,
             client: None,
             report_fp: false,
             report_fp_dry_run: false,
             report_fp_endpoint: None,
-            no_telemetry: cli.no_telemetry,
+            no_telemetry: args.no_telemetry,
             sbom: false,
             sbom_format: None,
             sbom_npm: false,
             sbom_cargo: false,
-            proxy: false,
-            proxy_port: None,
-            proxy_target: None,
-            proxy_tls: false,
-            proxy_block: false,
-            proxy_log: None,
+            hook_mode: false,
         }
     };
 
     // Scan both paths
-    let cli1 = create_scan_cli(path1.clone());
-    let result1 = match run_scan(&cli1) {
+    let args1 = create_scan_args(path1.clone());
+    let result1 = match run_scan_with_check_args(&args1) {
         Some(r) => r,
         None => {
             eprintln!("Failed to scan {}", path1.display());
@@ -115,8 +101,8 @@ pub fn handle_compare(cli: &Cli, paths: &[PathBuf]) -> ExitCode {
         }
     };
 
-    let cli2 = create_scan_cli(path2.clone());
-    let result2 = match run_scan(&cli2) {
+    let args2 = create_scan_args(path2.clone());
+    let result2 = match run_scan_with_check_args(&args2) {
         Some(r) => r,
         None => {
             eprintln!("Failed to scan {}", path2.display());

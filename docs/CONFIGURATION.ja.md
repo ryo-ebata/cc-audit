@@ -20,10 +20,10 @@ cc-auditはプロジェクトレベルの設定ファイルをサポートして
 
 ```bash
 # カレントディレクトリに.cc-audit.yamlを作成
-cc-audit --init ./
+cc-audit init
 
 # 特定のディレクトリに作成
-cc-audit --init /path/to/project/
+cc-audit init /path/to/project/.cc-audit.yaml
 ```
 
 ## 設定例
@@ -38,7 +38,7 @@ scan:
   strict: false             # medium/low重大度の検出を表示
   warn_only: false          # 全ての検出を警告扱い（常にexit 0）
   scan_type: skill          # skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
-  recursive: false
+  recursive: true           # 再帰スキャン（デフォルトで有効）
   ci: false
   verbose: false
   min_confidence: tentative # tentative, firm, certain
@@ -88,17 +88,17 @@ watch:
   debounce_ms: 300
   poll_interval_ms: 500
 
-# 無視設定
+# 無視設定（正規表現パターンを使用）
 ignore:
-  directories:
-    - my_build_output
-    - .cache
+  # 正規表現パターンで無視
+  # 各パターンはファイルの完全パスに対してマッチ
   patterns:
-    - "*.log"
-    - "*.generated.*"
-  include_tests: false
-  include_node_modules: false
-  include_vendor: false
+    - "/(target|dist|build|out)/"      # ビルド出力
+    - "/(node_modules|\\.pnpm|\\.yarn)/" # パッケージマネージャ
+    - "/(\\.git|\\.svn)/"               # バージョン管理
+    - "/tests?/"                        # テストディレクトリ
+    - "\\.test\\.(js|ts)$"              # テストファイル
+    - "\\.(log|tmp|bak)$"               # 一時ファイル
 
 # ルール深刻度設定（v0.5.0+）
 # 検出深刻度とは別にexit codeを制御
@@ -136,16 +136,22 @@ malware_signatures:
     confidence: "certain"
 ```
 
-## デフォルトで無視されるディレクトリ
+## デフォルトで無視されるパターン
 
-| カテゴリ | ディレクトリ |
-|----------|-------------|
-| ビルド出力 | `target`, `dist`, `build`, `out` |
-| パッケージマネージャ | `node_modules`, `.pnpm`, `.yarn` |
-| バージョン管理 | `.git`, `.svn`, `.hg` |
-| IDE | `.idea`, `.vscode` |
-| キャッシュ | `.cache`, `__pycache__`, `.pytest_cache`, `.mypy_cache` |
-| カバレッジ | `coverage`, `.nyc_output` |
+`--init`使用時、以下の正規表現パターンがデフォルトで設定されます：
+
+| カテゴリ | パターン |
+|----------|---------|
+| ビルド出力 | `/(target\|dist\|build\|out\|_build)/` |
+| フレームワーク | `/(\\.next\|\\.nuxt\|\\.svelte-kit\|\\.astro)/` |
+| パッケージマネージャ | `/(node_modules\|\\.pnpm\|\\.yarn)/` |
+| バージョン管理 | `/(\\.git\|\\.svn\|\\.hg)/` |
+| IDE | `/(\\.idea\|\\.vscode)/` |
+| キャッシュ | `/(\\.cache\|__pycache__\|\\.pytest_cache)/` |
+| カバレッジ | `/(coverage\|\\.nyc_output)/` |
+| ベンダー | `/vendor/` |
+
+**注意:** パターンは正規表現構文を使用します。`.`などの特殊文字は`\\`でエスケープしてください。
 
 ## CLIフラグとの統合
 
@@ -156,10 +162,10 @@ CLIフラグと設定ファイルの設定はマージされます：
 
 ```bash
 # 設定でstrict: true - --strictなしでも厳格モードがアクティブ
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # CLI --verbose + 設定のstrict: true - 両方がアクティブ
-cc-audit --verbose ./my-skill/
+cc-audit check ./my-skill/ --verbose
 ```
 
 ---
@@ -237,7 +243,7 @@ Result: FAIL (exit code 1)
 以前の動作に戻すには：
 ```bash
 # オプション1: 初回ベースラインスキャンに--warn-onlyを使用
-cc-audit --warn-only ./my-skill/
+cc-audit check --warn-only ./my-skill/
 
 # オプション2: 設定で特定のルールを警告として設定
 ```
@@ -288,7 +294,7 @@ rules:
 ## 使用方法
 
 ```bash
-cc-audit ./my-skill/ --custom-rules ./my-rules.yaml
+cc-audit check ./my-skill/ --custom-rules ./my-rules.yaml
 ```
 
 ---
@@ -337,8 +343,8 @@ cc-auditには組み込みのマルウェアシグネチャDBが含まれてい�
 
 ```bash
 # カスタムマルウェアDBを使用
-cc-audit ./my-skill/ --malware-db ./custom-signatures.json
+cc-audit check ./my-skill/ --malware-db ./custom-signatures.json
 
 # マルウェアスキャンを無効化
-cc-audit ./my-skill/ --no-malware-scan
+cc-audit check ./my-skill/ --no-malware-scan
 ```

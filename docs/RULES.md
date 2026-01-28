@@ -151,5 +151,5 @@ curl $SECRET_URL  # This line is ignored
 
 ```bash
 # Only show high-confidence findings
-cc-audit --min-confidence certain ./skill/
+cc-audit check --min-confidence certain ./skill/
 ```

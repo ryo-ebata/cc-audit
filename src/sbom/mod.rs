@@ -6,7 +6,9 @@
 pub mod builder;
 pub mod cyclonedx;
 pub mod extractor;
+pub mod spdx;
 
 pub use builder::{Component, ComponentType, SbomBuilder, SbomFormat};
 pub use cyclonedx::CycloneDxBom;
 pub use extractor::DependencyExtractor;
+pub use spdx::SpdxDocument;

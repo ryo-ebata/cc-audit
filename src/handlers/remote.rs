@@ -2,17 +2,18 @@
 
 use crate::remote::{AWESOME_CLAUDE_CODE_URL, GitCloner};
 use crate::run::EffectiveConfig;
-use crate::{Cli, ClonedRepo, Config, OutputFormat, run_scan};
+use crate::{BadgeFormat, CheckArgs, ClonedRepo, Config, OutputFormat, run_scan_with_check_args};
 use colored::Colorize;
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
-use super::run_normal_mode;
+use super::run_normal_check_mode;
 
 /// Handle --remote command: scan a single remote repository.
-pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
-    let url = match &cli.remote {
+pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
+    let url = match &args.remote {
         Some(u) => u,
         None => {
             eprintln!("Error: --remote requires a URL");
@@ -22,7 +23,7 @@ pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
 
     // Load config from current directory to get effective settings
     let config = Config::load(Some(std::path::Path::new(".")));
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     println!("Cloning repository: {}", url);
 
@@ -44,91 +45,16 @@ pub fn handle_remote_scan(cli: &Cli) -> ExitCode {
 
     println!("Scanning: {}", cloned.path().display());
 
-    // Create a new CLI for scanning the cloned repo
-    // Use effective config values to ensure config file settings are respected
-    let scan_cli = Cli {
-        paths: vec![cloned.path().to_path_buf()],
-        scan_type: effective.scan_type,
-        format: effective.format,
-        strict: effective.strict,
-        warn_only: effective.warn_only,
-        min_severity: effective.min_severity,
-        min_rule_severity: effective.min_rule_severity,
-        verbose: effective.verbose,
-        recursive: true, // Always recursive for remote repos
-        ci: effective.ci,
-        include_tests: cli.include_tests,
-        include_node_modules: cli.include_node_modules,
-        include_vendor: cli.include_vendor,
-        min_confidence: effective.min_confidence,
-        watch: false, // No watch mode for remote
-        init_hook: false,
-        remove_hook: false,
-        skip_comments: effective.skip_comments,
-        strict_secrets: effective.strict_secrets,
-        fix_hint: effective.fix_hint,
-        compact: effective.compact,
-        no_malware_scan: effective.no_malware_scan,
-        cve_db: effective.cve_db.as_ref().map(std::path::PathBuf::from),
-        no_cve_scan: effective.no_cve_scan,
-        malware_db: effective.malware_db.as_ref().map(std::path::PathBuf::from),
-        custom_rules: effective
-            .custom_rules
-            .as_ref()
-            .map(std::path::PathBuf::from),
-        baseline: false,
-        check_drift: false,
-        init: false,
-        output: effective.output.as_ref().map(std::path::PathBuf::from),
-        save_baseline: None,
-        baseline_file: cli.baseline_file.clone(),
-        compare: None,
-        fix: false,
-        fix_dry_run: false,
-        mcp_server: false,
-        hook_mode: false,
-        pin: false,
-        pin_verify: false,
-        pin_update: false,
-        pin_force: false,
-        ignore_pin: false,
-        deep_scan: effective.deep_scan,
-        profile: cli.profile.clone(),
-        save_profile: None,
-        remote: None, // Don't recurse into remote
-        git_ref: effective.git_ref.clone(),
-        remote_auth: effective.remote_auth.clone(),
-        remote_list: None,
-        awesome_claude_code: false,
-        parallel_clones: effective.parallel_clones,
-        badge: effective.badge,
-        badge_format: effective.badge_format,
-        summary: effective.summary,
-        all_clients: false,
-        client: None,
-        report_fp: false,
-        report_fp_dry_run: false,
-        report_fp_endpoint: None,
-        no_telemetry: cli.no_telemetry,
-        sbom: false,
-        sbom_format: None,
-        sbom_npm: false,
-        sbom_cargo: false,
-        proxy: false,
-        proxy_port: None,
-        proxy_target: None,
-        proxy_tls: false,
-        proxy_block: false,
-        proxy_log: None,
-    };
+    // Create CheckArgs for scanning the cloned repo
+    let scan_args = create_scan_check_args(vec![cloned.path().to_path_buf()], args, &effective);
 
     // Run the scan
-    run_normal_mode(&scan_cli)
+    run_normal_check_mode(&scan_args)
 }
 
 /// Handle --remote-list command: scan multiple repositories from a file.
-pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
-    let list_path = match &cli.remote_list {
+pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
+    let list_path = match &args.remote_list {
         Some(p) => p,
         None => {
             eprintln!("Error: --remote-list requires a file path");
@@ -138,7 +64,7 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
 
     // Load config from current directory to get effective settings
     let config = Config::load(Some(std::path::Path::new(".")));
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Read URLs from file
     let file = match fs::File::open(list_path) {
@@ -179,84 +105,13 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
         match cloner.clone(url, &effective.git_ref) {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                // Use effective config values to ensure config file settings are respected
-                let scan_cli = Cli {
-                    paths: vec![cloned.path().to_path_buf()],
-                    scan_type: effective.scan_type,
-                    format: OutputFormat::Terminal, // Always terminal for batch
-                    strict: effective.strict,
-                    warn_only: effective.warn_only,
-                    min_severity: effective.min_severity,
-                    min_rule_severity: effective.min_rule_severity,
-                    verbose: effective.verbose,
-                    recursive: true,
-                    ci: false,
-                    include_tests: cli.include_tests,
-                    include_node_modules: cli.include_node_modules,
-                    include_vendor: cli.include_vendor,
-                    min_confidence: effective.min_confidence,
-                    watch: false,
-                    init_hook: false,
-                    remove_hook: false,
-                    skip_comments: effective.skip_comments,
-                    strict_secrets: effective.strict_secrets,
-                    fix_hint: false,
-                    compact: effective.compact,
-                    no_malware_scan: effective.no_malware_scan,
-                    cve_db: effective.cve_db.as_ref().map(std::path::PathBuf::from),
-                    no_cve_scan: effective.no_cve_scan,
-                    malware_db: effective.malware_db.as_ref().map(std::path::PathBuf::from),
-                    custom_rules: effective
-                        .custom_rules
-                        .as_ref()
-                        .map(std::path::PathBuf::from),
-                    baseline: false,
-                    check_drift: false,
-                    init: false,
-                    output: None,
-                    save_baseline: None,
-                    baseline_file: None,
-                    compare: None,
-                    fix: false,
-                    fix_dry_run: false,
-                    mcp_server: false,
-                    hook_mode: false,
-                    pin: false,
-                    pin_verify: false,
-                    pin_update: false,
-                    pin_force: false,
-                    ignore_pin: false,
-                    deep_scan: effective.deep_scan,
-                    profile: cli.profile.clone(),
-                    save_profile: None,
-                    remote: None,
-                    git_ref: effective.git_ref.clone(),
-                    remote_auth: effective.remote_auth.clone(),
-                    remote_list: None,
-                    awesome_claude_code: false,
-                    parallel_clones: effective.parallel_clones,
-                    badge: false,
-                    badge_format: effective.badge_format,
-                    summary: false,
-                    all_clients: false,
-                    client: None,
-                    report_fp: false,
-                    report_fp_dry_run: false,
-                    report_fp_endpoint: None,
-                    no_telemetry: cli.no_telemetry,
-                    sbom: false,
-                    sbom_format: None,
-                    sbom_npm: false,
-                    sbom_cargo: false,
-                    proxy: false,
-                    proxy_port: None,
-                    proxy_target: None,
-                    proxy_tls: false,
-                    proxy_block: false,
-                    proxy_log: None,
-                };
+                let scan_args = create_scan_check_args_batch(
+                    vec![cloned.path().to_path_buf()],
+                    args,
+                    &effective,
+                );
 
-                if let Some(result) = run_scan(&scan_cli) {
+                if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
                         + result.summary.high
                         + result.summary.medium
@@ -303,12 +158,12 @@ pub fn handle_remote_list_scan(cli: &Cli) -> ExitCode {
 }
 
 /// Handle --awesome-claude-code command: scan awesome-claude-code repository links.
-pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
+pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
     println!("Fetching awesome-claude-code repository...");
 
     // Load config from current directory to get effective settings
     let config = Config::load(Some(std::path::Path::new(".")));
-    let effective = EffectiveConfig::from_cli_and_config(cli, &config);
+    let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     let cloner = if let Some(ref token) = effective.remote_auth {
         GitCloner::new().with_auth_token(Some(token.clone()))
@@ -365,84 +220,13 @@ pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
         match cloner.clone(url, "HEAD") {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                // Use effective config values to ensure config file settings are respected
-                let scan_cli = Cli {
-                    paths: vec![cloned.path().to_path_buf()],
-                    scan_type: effective.scan_type,
-                    format: OutputFormat::Terminal,
-                    strict: effective.strict,
-                    warn_only: effective.warn_only,
-                    min_severity: effective.min_severity,
-                    min_rule_severity: effective.min_rule_severity,
-                    verbose: effective.verbose,
-                    recursive: true,
-                    ci: false,
-                    include_tests: cli.include_tests,
-                    include_node_modules: cli.include_node_modules,
-                    include_vendor: cli.include_vendor,
-                    min_confidence: effective.min_confidence,
-                    watch: false,
-                    init_hook: false,
-                    remove_hook: false,
-                    skip_comments: effective.skip_comments,
-                    strict_secrets: effective.strict_secrets,
-                    fix_hint: false,
-                    compact: effective.compact,
-                    no_malware_scan: effective.no_malware_scan,
-                    cve_db: effective.cve_db.as_ref().map(std::path::PathBuf::from),
-                    no_cve_scan: effective.no_cve_scan,
-                    malware_db: effective.malware_db.as_ref().map(std::path::PathBuf::from),
-                    custom_rules: effective
-                        .custom_rules
-                        .as_ref()
-                        .map(std::path::PathBuf::from),
-                    baseline: false,
-                    check_drift: false,
-                    init: false,
-                    output: None,
-                    save_baseline: None,
-                    baseline_file: None,
-                    compare: None,
-                    fix: false,
-                    fix_dry_run: false,
-                    mcp_server: false,
-                    hook_mode: false,
-                    pin: false,
-                    pin_verify: false,
-                    pin_update: false,
-                    pin_force: false,
-                    ignore_pin: false,
-                    deep_scan: effective.deep_scan,
-                    profile: cli.profile.clone(),
-                    save_profile: None,
-                    remote: None,
-                    git_ref: "HEAD".to_string(),
-                    remote_auth: effective.remote_auth.clone(),
-                    remote_list: None,
-                    awesome_claude_code: false,
-                    parallel_clones: effective.parallel_clones,
-                    badge: false,
-                    badge_format: effective.badge_format,
-                    summary: false,
-                    all_clients: false,
-                    client: None,
-                    report_fp: false,
-                    report_fp_dry_run: false,
-                    report_fp_endpoint: None,
-                    no_telemetry: cli.no_telemetry,
-                    sbom: false,
-                    sbom_format: None,
-                    sbom_npm: false,
-                    sbom_cargo: false,
-                    proxy: false,
-                    proxy_port: None,
-                    proxy_target: None,
-                    proxy_tls: false,
-                    proxy_block: false,
-                    proxy_log: None,
-                };
+                let scan_args = create_scan_check_args_batch(
+                    vec![cloned.path().to_path_buf()],
+                    args,
+                    &effective,
+                );
 
-                if let Some(result) = run_scan(&scan_cli) {
+                if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
                         + result.summary.high
                         + result.summary.medium
@@ -524,5 +308,139 @@ pub fn handle_awesome_claude_code_scan(cli: &Cli) -> ExitCode {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+/// Create CheckArgs for scanning with all settings inherited from original args.
+fn create_scan_check_args(
+    paths: Vec<PathBuf>,
+    args: &CheckArgs,
+    effective: &EffectiveConfig,
+) -> CheckArgs {
+    CheckArgs {
+        paths,
+        config: args.config.clone(),
+        remote: None, // Don't recurse into remote
+        git_ref: effective.git_ref.clone(),
+        remote_auth: effective.remote_auth.clone(),
+        remote_list: None,
+        awesome_claude_code: false,
+        parallel_clones: effective.parallel_clones,
+        badge: effective.badge,
+        badge_format: effective.badge_format,
+        summary: effective.summary,
+        format: effective.format,
+        strict: effective.strict,
+        warn_only: effective.warn_only,
+        min_severity: effective.min_severity,
+        min_rule_severity: effective.min_rule_severity,
+        scan_type: effective.scan_type,
+        no_recursive: false, // Always recursive for remote repos
+        ci: effective.ci,
+        min_confidence: Some(effective.min_confidence),
+        watch: false,
+        skip_comments: effective.skip_comments,
+        strict_secrets: effective.strict_secrets,
+        fix_hint: effective.fix_hint,
+        compact: effective.compact,
+        no_malware_scan: effective.no_malware_scan,
+        cve_db: effective.cve_db.as_ref().map(PathBuf::from),
+        no_cve_scan: effective.no_cve_scan,
+        malware_db: effective.malware_db.as_ref().map(PathBuf::from),
+        custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
+        baseline: false,
+        check_drift: false,
+        output: effective.output.as_ref().map(PathBuf::from),
+        save_baseline: None,
+        baseline_file: args.baseline_file.clone(),
+        compare: None,
+        fix: false,
+        fix_dry_run: false,
+        pin: false,
+        pin_verify: false,
+        pin_update: false,
+        pin_force: false,
+        ignore_pin: false,
+        deep_scan: effective.deep_scan,
+        profile: args.profile.clone(),
+        save_profile: None,
+        all_clients: false,
+        client: None,
+        report_fp: false,
+        report_fp_dry_run: false,
+        report_fp_endpoint: None,
+        no_telemetry: args.no_telemetry,
+        sbom: false,
+        sbom_format: None,
+        sbom_npm: false,
+        sbom_cargo: false,
+        hook_mode: false,
+    }
+}
+
+/// Create CheckArgs for batch scanning (simplified settings).
+fn create_scan_check_args_batch(
+    paths: Vec<PathBuf>,
+    args: &CheckArgs,
+    effective: &EffectiveConfig,
+) -> CheckArgs {
+    CheckArgs {
+        paths,
+        config: args.config.clone(),
+        remote: None,
+        git_ref: effective.git_ref.clone(),
+        remote_auth: effective.remote_auth.clone(),
+        remote_list: None,
+        awesome_claude_code: false,
+        parallel_clones: effective.parallel_clones,
+        badge: false, // No badge for batch
+        badge_format: BadgeFormat::Markdown,
+        summary: false,                 // No summary in batch items
+        format: OutputFormat::Terminal, // Always terminal for batch
+        strict: effective.strict,
+        warn_only: effective.warn_only,
+        min_severity: effective.min_severity,
+        min_rule_severity: effective.min_rule_severity,
+        scan_type: effective.scan_type,
+        no_recursive: false, // Always recursive
+        ci: false,           // No CI mode in batch
+        min_confidence: Some(effective.min_confidence),
+        watch: false,
+        skip_comments: effective.skip_comments,
+        strict_secrets: effective.strict_secrets,
+        fix_hint: false, // No fix hints in batch
+        compact: effective.compact,
+        no_malware_scan: effective.no_malware_scan,
+        cve_db: effective.cve_db.as_ref().map(PathBuf::from),
+        no_cve_scan: effective.no_cve_scan,
+        malware_db: effective.malware_db.as_ref().map(PathBuf::from),
+        custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
+        baseline: false,
+        check_drift: false,
+        output: None,
+        save_baseline: None,
+        baseline_file: None,
+        compare: None,
+        fix: false,
+        fix_dry_run: false,
+        pin: false,
+        pin_verify: false,
+        pin_update: false,
+        pin_force: false,
+        ignore_pin: false,
+        deep_scan: effective.deep_scan,
+        profile: args.profile.clone(),
+        save_profile: None,
+        all_clients: false,
+        client: None,
+        report_fp: false,
+        report_fp_dry_run: false,
+        report_fp_endpoint: None,
+        no_telemetry: args.no_telemetry,
+        sbom: false,
+        sbom_format: None,
+        sbom_npm: false,
+        sbom_cargo: false,
+        hook_mode: false,
     }
 }

@@ -5,16 +5,43 @@
 ## 使用方法
 
 ```
-cc-audit [OPTIONS] <PATHS>...
+cc-audit [OPTIONS] <COMMAND>
+cc-audit <COMMAND> [OPTIONS] [ARGS]
 ```
 
-## 引数
+## コマンド
+
+| コマンド | 説明 |
+|----------|------|
+| `check` | パスをスキャンしてセキュリティ脆弱性を検出 |
+| `init`  | デフォルト設定ファイルテンプレートを生成 |
+| `hook`  | Git pre-commit フックを管理 |
+| `serve` | MCP サーバーとして実行 |
+| `proxy` | MCP プロキシとしてランタイム監視を実行 |
+
+## グローバルオプション
+
+| オプション | 説明 |
+|------------|------|
+| `--verbose` | 詳細出力 |
+| `-h, --help` | ヘルプを表示 |
+| `-V, --version` | バージョンを表示 |
+
+---
+
+## `check` コマンド
+
+パスをスキャンしてセキュリティ脆弱性を検出します。
+
+```
+cc-audit check [OPTIONS] <PATHS>...
+```
+
+### 引数
 
 | 引数 | 説明 |
 |------|------|
-| `<PATHS>...` | スキャンするパス（ファイルまたはディレクトリ） |
-
-## オプション
+| `<PATHS>...` | スキャンするパス（ファイルまたはディレクトリ）。`--remote`、`--remote-list`、`--awesome-claude-code`、`--all-clients`、`--client` を使用しない場合は必須 |
 
 ### 出力オプション
 
@@ -22,7 +49,6 @@ cc-audit [OPTIONS] <PATHS>...
 |------------|------|
 | `-f, --format <FORMAT>` | 出力形式: `terminal`（デフォルト）, `json`, `sarif`, `html`, `markdown` |
 | `-o, --output <FILE>` | 出力ファイルパス（HTML/JSON出力用） |
-| `-v, --verbose` | 詳細出力（信頼度レベルを含む） |
 | `--compact` | コンパクト出力形式（lint-styleではなく従来形式） |
 | `--ci` | CIモード: 非インタラクティブ出力 |
 | `--badge` | セキュリティバッジを生成 |
@@ -34,8 +60,8 @@ cc-audit [OPTIONS] <PATHS>...
 | オプション | 説明 |
 |------------|------|
 | `-t, --type <SCAN_TYPE>` | スキャンタイプ（[スキャンタイプ](#スキャンタイプ)参照） |
-| `-s, --strict` | 厳格モード: warningsもエラー扱い（検出があればexit 1） |
-| `-r, --recursive` | 再帰スキャン |
+| `-S, --strict` | 厳格モード: medium/low深刻度も表示し、警告もエラー扱い |
+| `--no-recursive` | 再帰スキャンを無効化（デフォルト: 再帰有効） |
 | `--warn-only` | 警告のみモード: 全ての検出を警告扱い（常にexit 0） |
 | `--min-severity <LEVEL>` | 出力に含める最小深刻度: `critical`, `high`, `medium`, `low` |
 | `--min-rule-severity <LEVEL>` | エラー扱いする最小ルール深刻度: `error`, `warn` |
@@ -44,13 +70,11 @@ cc-audit [OPTIONS] <PATHS>...
 | `--strict-secrets` | 厳格シークレットモード: テストファイルでのダミーキーヒューリスティックを無効化 |
 | `--deep-scan` | 難読化解除付き深いスキャン |
 
-### 含める/除外するオプション
+### 設定
 
 | オプション | 説明 |
 |------------|------|
-| `--include-tests` | テストディレクトリを含める |
-| `--include-node-modules` | node_modulesディレクトリを含める |
-| `--include-vendor` | vendorディレクトリを含める |
+| `-c, --config <FILE>` | 設定ファイルのパス |
 
 ### 修正オプション
 
@@ -65,13 +89,6 @@ cc-audit [OPTIONS] <PATHS>...
 | オプション | 説明 |
 |------------|------|
 | `-w, --watch` | ウォッチモード: ファイル変更を監視 |
-
-### Gitフック
-
-| オプション | 説明 |
-|------------|------|
-| `--init-hook` | pre-commitフックをインストール |
-| `--remove-hook` | pre-commitフックを削除 |
 
 ### カスタムルール & データベース
 
@@ -143,17 +160,6 @@ cc-audit [OPTIONS] <PATHS>...
 | `--sbom-npm` | npm依存関係をSBOMに含める |
 | `--sbom-cargo` | Cargo依存関係をSBOMに含める |
 
-### プロキシモード（MCPランタイム監視）
-
-| オプション | 説明 |
-|------------|------|
-| `--proxy` | MCPランタイム監視用のプロキシモードを有効化 |
-| `--proxy-port <PORT>` | プロキシリッスンポート（デフォルト: 8080） |
-| `--proxy-target <HOST:PORT>` | ターゲットMCPサーバーアドレス |
-| `--proxy-tls` | プロキシモードでTLS終端を有効化 |
-| `--proxy-block` | ブロックモードを有効化（検出結果のあるメッセージをブロック） |
-| `--proxy-log <FILE>` | プロキシトラフィックのログファイル（JSONL形式） |
-
 ### 偽陽性報告
 
 | オプション | 説明 |
@@ -163,14 +169,70 @@ cc-audit [OPTIONS] <PATHS>...
 | `--report-fp-endpoint <URL>` | 偽陽性報告用のカスタムエンドポイントURL |
 | `--no-telemetry` | テレメトリと偽陽性報告を無効化 |
 
-### その他のオプション
+---
+
+## `init` コマンド
+
+デフォルト設定ファイルテンプレートを生成します。
+
+```
+cc-audit init [PATH]
+```
+
+### 引数
+
+| 引数 | 説明 |
+|------|------|
+| `[PATH]` | 設定ファイルの出力パス（デフォルト: `.cc-audit.yaml`） |
+
+---
+
+## `hook` コマンド
+
+Git pre-commit フックを管理します。
+
+```
+cc-audit hook <ACTION> [PATH]
+```
+
+### サブコマンド
+
+| サブコマンド | 説明 |
+|--------------|------|
+| `init [PATH]` | pre-commit フックをインストール（デフォルトパス: `.`） |
+| `remove [PATH]` | pre-commit フックを削除（デフォルトパス: `.`） |
+
+---
+
+## `serve` コマンド
+
+MCP サーバーとして実行します。
+
+```
+cc-audit serve
+```
+
+---
+
+## `proxy` コマンド
+
+MCP プロキシとしてランタイム監視を実行します。
+
+```
+cc-audit proxy [OPTIONS] --target <HOST:PORT>
+```
+
+### オプション
 
 | オプション | 説明 |
 |------------|------|
-| `--init` | デフォルト設定ファイルテンプレートを生成 |
-| `--mcp-server` | MCPサーバーとして実行 |
-| `-h, --help` | ヘルプを表示 |
-| `-V, --version` | バージョンを表示 |
+| `--port <PORT>` | プロキシリッスンポート（デフォルト: 8080） |
+| `--target <HOST:PORT>` | ターゲットMCPサーバーアドレス（必須） |
+| `--tls` | プロキシモードでTLS終端を有効化 |
+| `--block` | ブロックモードを有効化（検出結果のあるメッセージをブロック） |
+| `--log <FILE>` | プロキシトラフィックのログファイル（JSONL形式） |
+
+---
 
 ## スキャンタイプ
 
@@ -242,56 +304,75 @@ cc-audit [OPTIONS] <PATHS>...
 
 ```bash
 # 基本スキャン
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # JSON出力をファイルに保存
-cc-audit ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format json --output results.json
 
 # HTMLレポート出力
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format html --output report.html
 
 # 厳格モードと詳細出力
-cc-audit --strict --verbose ./skill/
+cc-audit check --strict ./skill/ --verbose
 
 # MCP設定をスキャン
-cc-audit --type mcp ~/.claude/mcp.json
+cc-audit check --type mcp ~/.claude/mcp.json
 
 # 開発時のウォッチモード
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 
 # CIパイプラインスキャン
-cc-audit --ci --format sarif --strict ./
+cc-audit check --ci --format sarif --strict ./
 
 # 高信頼度のみ
-cc-audit --min-confidence certain ./skill/
+cc-audit check --min-confidence certain ./skill/
 
 # インストール済みの全AIクライアントをスキャン
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # 特定のクライアントをスキャン
-cc-audit --client cursor
+cc-audit check --client cursor
 
 # リモートリポジトリをスキャン
-cc-audit --remote https://github.com/user/awesome-skill
+cc-audit check --remote https://github.com/user/awesome-skill
 
 # 特定のブランチでリモートリポジトリをスキャン
-cc-audit --remote https://github.com/user/repo --git-ref v1.0.0
+cc-audit check --remote https://github.com/user/repo --git-ref v1.0.0
 
 # awesome-claude-codeの全リポジトリをスキャン
-cc-audit --awesome-claude-code --summary
+cc-audit check --awesome-claude-code --summary
 
 # セキュリティバッジを生成
-cc-audit ./skill/ --badge --badge-format markdown
+cc-audit check ./skill/ --badge --badge-format markdown
 
 # MCPツール設定をピン留め
-cc-audit --type mcp ~/.claude/mcp.json --pin
+cc-audit check --type mcp ~/.claude/mcp.json --pin
 
 # MCPピンを検証
-cc-audit --type mcp ~/.claude/mcp.json --pin-verify
+cc-audit check --type mcp ~/.claude/mcp.json --pin-verify
 
 # SBOMを生成
-cc-audit ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+cc-audit check ./skill/ --sbom --sbom-format cyclonedx --output sbom.json
+
+# 設定ファイルを生成
+cc-audit init
+
+# カスタムパスで設定ファイルを生成
+cc-audit init my-config.yaml
+
+# pre-commitフックをインストール
+cc-audit hook init
+
+# 特定のリポジトリにpre-commitフックをインストール
+cc-audit hook init ./my-repo/
+
+# pre-commitフックを削除
+cc-audit hook remove
+
+# MCPサーバーとして実行
+cc-audit serve
 
 # ランタイム監視用にプロキシとして実行
-cc-audit --proxy --proxy-port 8080 --proxy-target localhost:9000
+cc-audit proxy --target localhost:9000
+cc-audit proxy --target localhost:9000 --port 3000 --tls --block
 ```

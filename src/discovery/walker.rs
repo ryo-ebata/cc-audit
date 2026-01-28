@@ -1,6 +1,6 @@
 //! Directory walking abstraction for consistent file discovery.
 
-use crate::discovery::filter::IgnoreFilter;
+use crate::ignore::IgnoreFilter;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 

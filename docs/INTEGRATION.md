@@ -32,15 +32,15 @@ jobs:
         run: cargo install cc-audit
 
       - name: Scan Skills
-        run: cc-audit --type skill --ci --format sarif .claude/skills/ > skills.sarif
+        run: cc-audit check --type skill --ci --format sarif .claude/skills/ > skills.sarif
         continue-on-error: true
 
       - name: Scan MCP Configuration
-        run: cc-audit --type mcp --ci mcp.json
+        run: cc-audit check --type mcp --ci mcp.json
         continue-on-error: true
 
       - name: Scan Dependencies
-        run: cc-audit --type dependency --ci ./
+        run: cc-audit check --type dependency --ci ./
 
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -58,9 +58,9 @@ cc-audit:
   before_script:
     - cargo install cc-audit
   script:
-    - cc-audit --type skill --ci .claude/
-    - cc-audit --type mcp --ci mcp.json
-    - cc-audit --type dependency --ci ./
+    - cc-audit check --type skill --ci .claude/
+    - cc-audit check --type mcp --ci mcp.json
+    - cc-audit check --type dependency --ci ./
   allow_failure: false
 ```
 
@@ -68,10 +68,10 @@ cc-audit:
 
 ```bash
 # Install hook in your project
-cc-audit --init-hook .
+cc-audit hook init
 
 # Remove hook
-cc-audit --remove-hook .
+cc-audit hook remove
 ```
 
 The pre-commit hook automatically scans staged files before each commit.
@@ -88,8 +88,9 @@ The pre-commit hook automatically scans staged files before each commit.
 # Check if the path exists and contains scannable files
 ls -la ./my-skill/
 
-# Use recursive mode for nested directories
-cc-audit --recursive ./my-skill/
+# Recursive scan is enabled by default. Use --no-recursive to disable
+cc-audit check ./my-skill/
+cc-audit check --no-recursive ./my-skill/
 ```
 
 ### "Permission denied"
@@ -103,23 +104,26 @@ chmod -R +r ./my-skill/
 
 ```bash
 # Increase minimum confidence level
-cc-audit --min-confidence firm ./my-skill/
+cc-audit check --min-confidence firm ./my-skill/
 
 # Or use certain for highest precision
-cc-audit --min-confidence certain ./my-skill/
+cc-audit check --min-confidence certain ./my-skill/
 
 # Skip comment lines
-cc-audit --skip-comments ./my-skill/
+cc-audit check --skip-comments ./my-skill/
 ```
 
 ### Scan is too slow
 
 ```bash
-# Tests are excluded by default
-cc-audit ./my-skill/
+# Common directories (node_modules, .git, etc.) are excluded by default patterns
+# Configure ignore patterns in .cc-audit.yaml
 
-# Explicitly include if needed
-cc-audit --include-tests ./my-skill/
+# Example: add custom ignore patterns
+# ignore:
+#   patterns:
+#     - "/large_directory/"
+#     - "\\.generated\\."
 ```
 
 ### Custom rules not loading

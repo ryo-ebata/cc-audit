@@ -284,7 +284,11 @@ impl SbomBuilder {
                 serde_json::to_string_pretty(&bom)
                     .map_err(|e| SbomError::Serialization(e.to_string()))
             }
-            SbomFormat::Spdx => Err(SbomError::UnsupportedFormat("SPDX".to_string())),
+            SbomFormat::Spdx => {
+                let doc = super::spdx::SpdxDocument::from_components(&self.components);
+                serde_json::to_string_pretty(&doc)
+                    .map_err(|e| SbomError::Serialization(e.to_string()))
+            }
         }
     }
 }
@@ -480,12 +484,13 @@ mod tests {
     }
 
     #[test]
-    fn test_sbom_builder_to_json_spdx_error() {
-        let builder = SbomBuilder::new().with_format(SbomFormat::Spdx);
+    fn test_sbom_builder_to_json_spdx() {
+        let mut builder = SbomBuilder::new().with_format(SbomFormat::Spdx);
+        builder.add_component(Component::new("test", ComponentType::Library).with_version("1.0.0"));
 
-        let result = builder.to_json();
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("SPDX"));
+        let json = builder.to_json().unwrap();
+        assert!(json.contains("SPDX-2.3"));
+        assert!(json.contains("test"));
     }
 
     #[test]

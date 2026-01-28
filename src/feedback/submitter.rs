@@ -22,7 +22,7 @@ pub enum SubmitTarget {
 impl Default for SubmitTarget {
     fn default() -> Self {
         Self::GitHub {
-            repo: "anthropics/cc-audit".to_string(),
+            repo: "ryo-ebata/cc-audit".to_string(),
         }
     }
 }
@@ -205,7 +205,7 @@ mod tests {
         let submitter = ReportSubmitter::new();
         match submitter.target {
             SubmitTarget::GitHub { ref repo } => {
-                assert_eq!(repo, "anthropics/cc-audit");
+                assert_eq!(repo, "ryo-ebata/cc-audit");
             }
             _ => panic!("Expected GitHub target"),
         }

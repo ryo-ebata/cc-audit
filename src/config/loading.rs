@@ -1,10 +1,19 @@
 //! Configuration loading functions.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::error::ConfigError;
 use super::types::Config;
+
+/// Result of trying to find a configuration file.
+#[derive(Debug)]
+pub struct ConfigLoadResult {
+    /// The loaded configuration.
+    pub config: Config,
+    /// The path to the configuration file, if found.
+    pub path: Option<PathBuf>,
+}
 
 impl Config {
     /// Load configuration from a file.
@@ -40,7 +49,72 @@ impl Config {
         }
     }
 
+    /// Try to find a configuration file in the project directory or parent directories.
+    /// Returns `None` if no configuration file is found.
+    ///
+    /// Search order:
+    /// 1. Walk up from project root to find `.cc-audit.yaml`, `.yml`, `.json`, or `.toml`
+    /// 2. `~/.config/cc-audit/config.yaml`
+    pub fn find_config_file(project_root: Option<&Path>) -> Option<PathBuf> {
+        const CONFIG_FILENAMES: &[&str] = &[
+            ".cc-audit.yaml",
+            ".cc-audit.yml",
+            ".cc-audit.json",
+            ".cc-audit.toml",
+        ];
+
+        // Walk up directory tree to find config file (like git finds .git)
+        if let Some(root) = project_root {
+            let mut current = root;
+            loop {
+                for filename in CONFIG_FILENAMES {
+                    let path = current.join(filename);
+                    if path.exists() {
+                        return Some(path);
+                    }
+                }
+
+                // Move to parent directory
+                match current.parent() {
+                    Some(parent) if !parent.as_os_str().is_empty() => {
+                        current = parent;
+                    }
+                    _ => break,
+                }
+            }
+        }
+
+        // Try global config
+        if let Some(config_dir) = dirs::config_dir() {
+            let global_config = config_dir.join("cc-audit").join("config.yaml");
+            if global_config.exists() {
+                return Some(global_config);
+            }
+        }
+
+        None
+    }
+
+    /// Try to load configuration from the project directory or global config.
+    /// Returns both the configuration and the path where it was found.
+    pub fn try_load(project_root: Option<&Path>) -> ConfigLoadResult {
+        if let Some(path) = Self::find_config_file(project_root)
+            && let Ok(config) = Self::from_file(&path)
+        {
+            return ConfigLoadResult {
+                config,
+                path: Some(path),
+            };
+        }
+
+        ConfigLoadResult {
+            config: Self::default(),
+            path: None,
+        }
+    }
+
     /// Load configuration from the project directory or global config.
+    /// Returns default configuration if no file is found.
     ///
     /// Search order:
     /// 1. `.cc-audit.yaml` in project root
@@ -49,34 +123,6 @@ impl Config {
     /// 4. `~/.config/cc-audit/config.yaml`
     /// 5. Default configuration
     pub fn load(project_root: Option<&Path>) -> Self {
-        // Try project-level config files
-        if let Some(root) = project_root {
-            for filename in &[
-                ".cc-audit.yaml",
-                ".cc-audit.yml",
-                ".cc-audit.json",
-                ".cc-audit.toml",
-            ] {
-                let path = root.join(filename);
-                if path.exists()
-                    && let Ok(config) = Self::from_file(&path)
-                {
-                    return config;
-                }
-            }
-        }
-
-        // Try global config
-        if let Some(config_dir) = dirs::config_dir() {
-            let global_config = config_dir.join("cc-audit").join("config.yaml");
-            if global_config.exists()
-                && let Ok(config) = Self::from_file(&global_config)
-            {
-                return config;
-            }
-        }
-
-        // Return default
-        Self::default()
+        Self::try_load(project_root).config
     }
 }

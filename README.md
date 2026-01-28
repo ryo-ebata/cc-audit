@@ -54,11 +54,11 @@ cargo install cc-audit
 
 ```bash
 # Run directly
-npx @cc-audit/cc-audit ./my-skill/
+npx @cc-audit/cc-audit check ./my-skill/
 
 # Or install globally
 npm install -g @cc-audit/cc-audit
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 ```
 
 ### From Source
@@ -76,32 +76,35 @@ Download binaries from [GitHub Releases](https://github.com/ryo-ebata/cc-audit/r
 
 ```bash
 # Scan a skill directory
-cc-audit ./my-skill/
+cc-audit check ./my-skill/
 
 # Scan with JSON/HTML output
-cc-audit ./skill/ --format json --output results.json
-cc-audit ./skill/ --format html --output report.html
+cc-audit check ./skill/ --format json --output results.json
+cc-audit check ./skill/ --format html --output report.html
 
 # Strict mode (includes medium/low severity)
-cc-audit ./skill/ --strict
+cc-audit check ./skill/ --strict
 
 # Scan different artifact types
-cc-audit --type mcp ~/.claude/mcp.json
-cc-audit --type docker ./
-cc-audit --type dependency ./
+cc-audit check --type mcp ~/.claude/mcp.json
+cc-audit check --type docker ./
+cc-audit check --type dependency ./
 
 # Watch mode for development
-cc-audit --watch ./my-skill/
+cc-audit check --watch ./my-skill/
 
 # Scan all installed AI coding clients
-cc-audit --all-clients
+cc-audit check --all-clients
 
 # Scan a specific client
-cc-audit --client cursor
-cc-audit --client claude
+cc-audit check --client cursor
+cc-audit check --client claude
 
 # Generate config file
-cc-audit --init ./
+cc-audit init
+
+# Install pre-commit hook
+cc-audit hook init
 ```
 
 ## Example Output
@@ -131,6 +134,16 @@ Risk Score: 60/100 [██████░░░░] HIGH
 Summary: 2 errors, 0 warnings (1 critical, 1 high, 0 medium, 0 low)
 Result: FAIL (exit code 1)
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `check` | Scan paths for security vulnerabilities |
+| `init`  | Generate a default configuration file |
+| `hook`  | Manage Git pre-commit hooks |
+| `serve` | Run as MCP server |
+| `proxy` | Run as MCP proxy for runtime monitoring |
 
 ## Documentation
 

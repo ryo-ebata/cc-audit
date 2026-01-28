@@ -1,22 +1,22 @@
 # cc-audit Pre-commit Hook
 
-## 自動インストール
+## Automatic Installation
 
 ```bash
-cc-audit --init-hook
+cc-audit hook init
 ```
 
-これで `.git/hooks/pre-commit` にフックがインストールされます。
+This installs the hook to `.git/hooks/pre-commit`.
 
-## 削除
+## Removal
 
 ```bash
-cc-audit --remove-hook
+cc-audit hook remove
 ```
 
-## 手動設定 (pre-commit framework)
+## Manual Setup (pre-commit framework)
 
-`.pre-commit-config.yaml` に以下を追加:
+Add the following to `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
@@ -24,7 +24,7 @@ repos:
     hooks:
       - id: cc-audit
         name: cc-audit
-        entry: cc-audit --type skill --ci .
+        entry: cc-audit check --type skill --ci .
         language: system
         pass_filenames: false
         files: ^\.claude/
@@ -33,5 +33,29 @@ repos:
 ## husky (Node.js)
 
 ```bash
-npx husky add .husky/pre-commit "cc-audit --type skill --ci ."
+npx husky add .husky/pre-commit "cc-audit check --type skill --ci ."
+```
+
+## lint-staged
+
+Add to `package.json`:
+
+```json
+{
+  "lint-staged": {
+    ".claude/**/*.md": "cc-audit check --type skill --ci"
+  }
+}
+```
+
+## lefthook
+
+Add to `lefthook.yml`:
+
+```yaml
+pre-commit:
+  commands:
+    cc-audit:
+      glob: ".claude/**/*.md"
+      run: cc-audit check --type skill --ci {staged_files}
 ```

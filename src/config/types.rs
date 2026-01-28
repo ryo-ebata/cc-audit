@@ -361,10 +361,22 @@ impl Default for IgnoreConfig {
             "dist",
             "build",
             "out",
+            "_build",
+            // Framework-specific build directories
+            ".next",
+            ".nuxt",
+            ".output",
+            ".svelte-kit",
+            ".astro",
+            ".remix",
+            ".gatsby",
+            ".expo",
+            "storybook-static",
             // Package manager directories
             "node_modules",
             ".pnpm",
             ".yarn",
+            "bower_components",
             // Version control
             ".git",
             ".svn",
@@ -372,14 +384,53 @@ impl Default for IgnoreConfig {
             // IDE directories
             ".idea",
             ".vscode",
-            // Cache directories
+            ".eclipse",
+            ".settings",
+            // Deployment directories
+            ".vercel",
+            ".netlify",
+            ".amplify",
+            ".serverless",
+            // Cache and temp directories
             ".cache",
+            ".parcel-cache",
+            ".vite",
+            ".turbo",
+            ".esbuild",
+            ".rpt2_cache",
+            "tmp",
+            "temp",
+            // Python
             "__pycache__",
             ".pytest_cache",
             ".mypy_cache",
+            ".ruff_cache",
+            ".venv",
+            "venv",
+            ".tox",
+            ".nox",
+            "__pypackages__",
+            "site-packages",
+            ".eggs",
+            "*.egg-info",
+            // Ruby
+            ".bundle",
+            // Java/Kotlin/Gradle
+            ".gradle",
+            ".mvn",
+            // Go
+            "vendor",
+            // Rust
+            "target",
             // Coverage directories
             "coverage",
             ".nyc_output",
+            "htmlcov",
+            ".coverage",
+            // Logs
+            "logs",
+            // Docker
+            ".docker",
         ]
         .into_iter()
         .map(String::from)

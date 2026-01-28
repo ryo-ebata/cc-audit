@@ -103,21 +103,8 @@ fn run_scan_internal(cli: &Cli, preloaded_config: Option<Config>) -> Option<Scan
     // Load CVE database if enabled (using effective config)
     let cve_db = load_cve_database(&effective);
 
-    // Create ignore filter from config, then apply CLI overrides
-    let create_ignore_filter = |path: &Path| {
-        let mut filter = IgnoreFilter::from_config(path, &config.ignore);
-        // CLI flags override config settings if explicitly set
-        if cli.include_tests {
-            filter = filter.with_include_tests(true);
-        }
-        if cli.include_node_modules {
-            filter = filter.with_include_node_modules(true);
-        }
-        if cli.include_vendor {
-            filter = filter.with_include_vendor(true);
-        }
-        filter
-    };
+    // Create ignore filter from config
+    let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
 
     for path in &scan_paths {
         // Use effective scan_type from merged config
@@ -475,7 +462,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "# Normal content without obfuscation").unwrap();
 
-        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let filter = IgnoreFilter::from_config(&Default::default());
         let findings = run_deep_scan(&file_path, &filter);
         assert!(findings.is_empty());
     }
@@ -488,7 +475,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "# Normal content").unwrap();
 
-        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let filter = IgnoreFilter::from_config(&Default::default());
         let findings = run_deep_scan(temp_dir.path(), &filter);
         assert!(findings.is_empty());
     }
@@ -525,7 +512,7 @@ mod tests {
         )
         .unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Hook,
             &file_path,
@@ -552,7 +539,7 @@ mod tests {
         )
         .unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Mcp,
             &file_path,
@@ -573,7 +560,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "# Commands\nRun this command").unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Command,
             &file_path,
@@ -594,7 +581,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "FROM ubuntu:latest").unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Docker,
             &file_path,
@@ -621,7 +608,7 @@ mod tests {
         )
         .unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Dependency,
             &file_path,
@@ -642,7 +629,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "name: test").unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Subagent,
             &file_path,
@@ -669,7 +656,7 @@ mod tests {
         )
         .unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Plugin,
             &file_path,
@@ -690,7 +677,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         writeln!(file, "rules: []").unwrap();
 
-        let ignore_fn = |path: &Path| IgnoreFilter::from_config(path, &Default::default());
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
         let result = run_scanner_for_type(
             &ScanType::Rules,
             &file_path,
@@ -757,14 +744,14 @@ mod tests {
 
     #[test]
     fn test_run_deep_scan_nonexistent_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        let filter = IgnoreFilter::from_config(&Default::default());
         let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter);
         assert!(findings.is_empty());
     }
 
     #[test]
     fn test_run_deep_scan_respects_ignore_patterns() {
+        use crate::config::IgnoreConfig;
         let temp_dir = TempDir::new().unwrap();
 
         // Create a file in an ignored directory
@@ -775,8 +762,11 @@ mod tests {
         // Write base64 encoded content that would normally trigger a finding
         writeln!(file, "eval(atob('bWFsaWNpb3VzIGNvZGU='))").unwrap();
 
-        // Default config ignores node_modules
-        let filter = IgnoreFilter::from_config(temp_dir.path(), &Default::default());
+        // Config with pattern to ignore node_modules
+        let config = IgnoreConfig {
+            patterns: vec!["node_modules".to_string()],
+        };
+        let filter = IgnoreFilter::from_config(&config);
         let findings = run_deep_scan(temp_dir.path(), &filter);
 
         // Should be empty because node_modules is ignored

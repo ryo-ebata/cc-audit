@@ -90,7 +90,7 @@ impl ScannerConfig {
             ignore_filter: None,
             skip_comments: false,
             strict_secrets: false,
-            recursive: false,
+            recursive: true,
         }
     }
 
@@ -108,9 +108,9 @@ impl ScannerConfig {
 
     /// Returns the max_depth for directory walking based on recursive setting.
     /// - recursive = true: None (unlimited depth)
-    /// - recursive = false: Some(1) (immediate directory only)
+    /// - recursive = false: Some(3) (default depth for reasonable scanning)
     pub fn max_depth(&self) -> Option<usize> {
-        if self.recursive { None } else { Some(1) }
+        if self.recursive { None } else { Some(3) }
     }
 
     /// Enables or disables comment skipping during scanning.

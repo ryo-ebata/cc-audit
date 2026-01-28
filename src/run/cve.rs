@@ -158,8 +158,8 @@ mod tests {
     use std::io::Write;
     use tempfile::TempDir;
 
-    fn create_default_filter(path: &Path) -> IgnoreFilter {
-        IgnoreFilter::from_config(path, &IgnoreConfig::default())
+    fn create_default_filter(_path: &Path) -> IgnoreFilter {
+        IgnoreFilter::from_config(&IgnoreConfig::default())
     }
 
     #[test]

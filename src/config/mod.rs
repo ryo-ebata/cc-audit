@@ -352,17 +352,7 @@ malware_signatures:
     #[test]
     fn test_ignore_config_default() {
         let config = IgnoreConfig::default();
-        // Check that common directories are in the default ignore list
-        assert!(config.directories.contains("node_modules"));
-        assert!(config.directories.contains("target"));
-        assert!(config.directories.contains(".git"));
-        assert!(config.directories.contains("dist"));
-        assert!(config.directories.contains("build"));
-        // Default flags
-        assert!(!config.include_tests);
-        assert!(!config.include_node_modules);
-        assert!(!config.include_vendor);
-        // No custom patterns by default
+        // Default has no patterns
         assert!(config.patterns.is_empty());
     }
 
@@ -374,28 +364,19 @@ malware_signatures:
             &config_path,
             r#"
 ignore:
-  directories:
-    - custom_dir
-    - my_cache
   patterns:
-    - "*.log"
-    - "temp/**"
-  include_tests: true
-  include_node_modules: false
-  include_vendor: true
+    - "node_modules"
+    - "/tests?/"
+    - "\\.log$"
 "#,
         )
         .unwrap();
 
         let config = Config::from_file(&config_path).unwrap();
-        assert!(config.ignore.directories.contains("custom_dir"));
-        assert!(config.ignore.directories.contains("my_cache"));
-        assert_eq!(config.ignore.patterns.len(), 2);
-        assert!(config.ignore.patterns.contains(&"*.log".to_string()));
-        assert!(config.ignore.patterns.contains(&"temp/**".to_string()));
-        assert!(config.ignore.include_tests);
-        assert!(!config.ignore.include_node_modules);
-        assert!(config.ignore.include_vendor);
+        assert_eq!(config.ignore.patterns.len(), 3);
+        assert!(config.ignore.patterns.contains(&"node_modules".to_string()));
+        assert!(config.ignore.patterns.contains(&"/tests?/".to_string()));
+        assert!(config.ignore.patterns.contains(&"\\.log$".to_string()));
     }
 
     #[test]
@@ -427,24 +408,21 @@ disabled_rules:
     }
 
     #[test]
-    fn test_config_ignore_default_when_partial() {
+    fn test_config_ignore_default_when_empty() {
         let dir = TempDir::new().unwrap();
         let config_path = dir.path().join(".cc-audit.yaml");
         fs::write(
             &config_path,
             r#"
 ignore:
-  include_tests: true
+  patterns: []
 "#,
         )
         .unwrap();
 
         let config = Config::from_file(&config_path).unwrap();
-        // include_tests is set to true
-        assert!(config.ignore.include_tests);
-        // Other values should be default
-        assert!(!config.ignore.include_node_modules);
-        assert!(!config.ignore.include_vendor);
+        // patterns is empty
+        assert!(config.ignore.patterns.is_empty());
     }
 
     #[test]

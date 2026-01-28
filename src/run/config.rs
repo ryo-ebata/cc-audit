@@ -179,7 +179,8 @@ impl EffectiveConfig {
             min_severity,
             min_rule_severity,
             scan_type,
-            recursive: cli.recursive || config.scan.recursive,
+            // Default to true (scan subdirectories by default)
+            recursive: true,
             ci: cli.ci || config.scan.ci,
             verbose: cli.verbose || config.scan.verbose,
             min_confidence,

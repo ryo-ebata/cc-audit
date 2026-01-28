@@ -6,12 +6,11 @@
 //! - File pattern matching
 //! - Scan target definitions
 
-pub mod filter;
 pub mod patterns;
 pub mod targets;
 pub mod walker;
 
-pub use filter::IgnoreFilter;
+pub use crate::ignore::IgnoreFilter;
 pub use patterns::{
     COMMAND_PATTERNS, DEPENDENCY_PATTERNS, FilePattern, MCP_PATTERNS, SKILL_PATTERNS,
 };

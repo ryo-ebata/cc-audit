@@ -184,18 +184,6 @@ pub struct Cli {
     #[arg(short, long)]
     pub verbose: bool,
 
-    /// Include test directories (tests/, spec/, __tests__, etc.) in scan
-    #[arg(long)]
-    pub include_tests: bool,
-
-    /// Include node_modules directories in scan
-    #[arg(long)]
-    pub include_node_modules: bool,
-
-    /// Include vendor directories (vendor/, third_party/) in scan
-    #[arg(long)]
-    pub include_vendor: bool,
-
     /// Minimum confidence level for findings to be reported
     #[arg(long, value_enum, default_value_t = Confidence::Tentative)]
     pub min_confidence: Confidence,
@@ -404,12 +392,9 @@ impl Default for Cli {
             min_severity: None,
             min_rule_severity: None,
             scan_type: ScanType::Skill,
-            recursive: false,
+            recursive: true,
             ci: false,
             verbose: false,
-            include_tests: false,
-            include_node_modules: false,
-            include_vendor: false,
             min_confidence: Confidence::Tentative,
             skip_comments: false,
             strict_secrets: false,
@@ -589,43 +574,7 @@ mod tests {
         assert!(!cli.recursive);
         assert!(!cli.ci);
         assert!(!cli.verbose);
-        assert!(!cli.include_tests);
-        assert!(!cli.include_node_modules);
-        assert!(!cli.include_vendor);
         assert!(matches!(cli.min_confidence, Confidence::Tentative));
-    }
-
-    #[test]
-    fn test_parse_include_tests() {
-        let cli = Cli::try_parse_from(["cc-audit", "--include-tests", "./skill/"]).unwrap();
-        assert!(cli.include_tests);
-    }
-
-    #[test]
-    fn test_parse_include_node_modules() {
-        let cli = Cli::try_parse_from(["cc-audit", "--include-node-modules", "./skill/"]).unwrap();
-        assert!(cli.include_node_modules);
-    }
-
-    #[test]
-    fn test_parse_include_vendor() {
-        let cli = Cli::try_parse_from(["cc-audit", "--include-vendor", "./skill/"]).unwrap();
-        assert!(cli.include_vendor);
-    }
-
-    #[test]
-    fn test_parse_all_include_options() {
-        let cli = Cli::try_parse_from([
-            "cc-audit",
-            "--include-tests",
-            "--include-node-modules",
-            "--include-vendor",
-            "./skill/",
-        ])
-        .unwrap();
-        assert!(cli.include_tests);
-        assert!(cli.include_node_modules);
-        assert!(cli.include_vendor);
     }
 
     #[test]

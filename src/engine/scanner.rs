@@ -79,6 +79,7 @@ pub struct ScannerConfig {
     ignore_filter: Option<IgnoreFilter>,
     skip_comments: bool,
     strict_secrets: bool,
+    recursive: bool,
 }
 
 impl ScannerConfig {
@@ -89,7 +90,27 @@ impl ScannerConfig {
             ignore_filter: None,
             skip_comments: false,
             strict_secrets: false,
+            recursive: false,
         }
+    }
+
+    /// Enables or disables recursive scanning.
+    /// When disabled, only scans the immediate directory (max_depth = 1).
+    pub fn with_recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
+
+    /// Returns whether recursive scanning is enabled.
+    pub fn is_recursive(&self) -> bool {
+        self.recursive
+    }
+
+    /// Returns the max_depth for directory walking based on recursive setting.
+    /// - recursive = true: None (unlimited depth)
+    /// - recursive = false: Some(1) (immediate directory only)
+    pub fn max_depth(&self) -> Option<usize> {
+        if self.recursive { None } else { Some(1) }
     }
 
     /// Enables or disables comment skipping during scanning.

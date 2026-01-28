@@ -209,21 +209,12 @@ watch:
 ignore:
   # Directories to ignore (overwrites defaults if specified)
   # directories:
-  #   - node_modules
-  #   - target
-  #   - .git
-  #   - dist
-  #   - build
-  #   - .next
-  #   - .nuxt
-  #   - .venv
+  #   - my-custom-dir
 
   # Glob patterns to ignore
   # patterns:
   #   - "*.log"
-  #   - "temp/**"
   #   - "*.min.js"
-  #   - "*.bundle.js"
 
   # Include test directories in scan
   include_tests: false

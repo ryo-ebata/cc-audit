@@ -44,14 +44,6 @@ cc-audit [OPTIONS] <PATHS>...
 | `--strict-secrets` | Strict secrets mode: disable dummy key heuristics for test files |
 | `--deep-scan` | Enable deep scan with deobfuscation |
 
-### Include/Exclude Options
-
-| Option | Description |
-|--------|-------------|
-| `--include-tests` | Include test directories in scan |
-| `--include-node-modules` | Include node_modules directories in scan |
-| `--include-vendor` | Include vendor directories in scan |
-
 ### Fix Options
 
 | Option | Description |

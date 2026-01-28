@@ -44,14 +44,6 @@ cc-audit [OPTIONS] <PATHS>...
 | `--strict-secrets` | 厳格シークレットモード: テストファイルでのダミーキーヒューリスティックを無効化 |
 | `--deep-scan` | 難読化解除付き深いスキャン |
 
-### 含める/除外するオプション
-
-| オプション | 説明 |
-|------------|------|
-| `--include-tests` | テストディレクトリを含める |
-| `--include-node-modules` | node_modulesディレクトリを含める |
-| `--include-vendor` | vendorディレクトリを含める |
-
 ### 修正オプション
 
 | オプション | 説明 |

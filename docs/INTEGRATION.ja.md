@@ -115,11 +115,14 @@ cc-audit --skip-comments ./my-skill/
 ### スキャンが遅い
 
 ```bash
-# テストはデフォルトで除外
-cc-audit ./my-skill/
+# 一般的なディレクトリ（node_modules, .gitなど）はデフォルトパターンで除外
+# .cc-audit.yamlで無視パターンを設定
 
-# 必要な場合は明示的に含める
-cc-audit --include-tests ./my-skill/
+# 例: カスタム無視パターンを追加
+# ignore:
+#   patterns:
+#     - "/large_directory/"
+#     - "\\.generated\\."
 ```
 
 ### カスタムルールが読み込まれない

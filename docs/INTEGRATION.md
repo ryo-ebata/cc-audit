@@ -115,11 +115,14 @@ cc-audit --skip-comments ./my-skill/
 ### Scan is too slow
 
 ```bash
-# Tests are excluded by default
-cc-audit ./my-skill/
+# Common directories (node_modules, .git, etc.) are excluded by default patterns
+# Configure ignore patterns in .cc-audit.yaml
 
-# Explicitly include if needed
-cc-audit --include-tests ./my-skill/
+# Example: add custom ignore patterns
+# ignore:
+#   patterns:
+#     - "/large_directory/"
+#     - "\\.generated\\."
 ```
 
 ### Custom rules not loading

@@ -38,7 +38,7 @@ scan:
   strict: false             # Show medium/low severity findings
   warn_only: false          # Treat all findings as warnings (always exit 0)
   scan_type: skill          # skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
-  recursive: false
+  recursive: true           # Recursive scan (enabled by default)
   ci: false
   verbose: false
   min_confidence: tentative # tentative, firm, certain
@@ -88,17 +88,17 @@ watch:
   debounce_ms: 300
   poll_interval_ms: 500
 
-# Ignore settings
+# Ignore settings (uses regex patterns)
 ignore:
-  directories:
-    - my_build_output
-    - .cache
+  # Regex patterns to ignore
+  # Each pattern is matched against the full path of the file
   patterns:
-    - "*.log"
-    - "*.generated.*"
-  include_tests: false
-  include_node_modules: false
-  include_vendor: false
+    - "/(target|dist|build|out)/"      # Build outputs
+    - "/(node_modules|\\.pnpm|\\.yarn)/" # Package managers
+    - "/(\\.git|\\.svn)/"               # Version control
+    - "/tests?/"                        # Test directories
+    - "\\.test\\.(js|ts)$"              # Test files
+    - "\\.(log|tmp|bak)$"               # Temp files
 
 # Rule severity configuration (v0.5.0+)
 # Controls exit codes independently of detection severity
@@ -136,16 +136,22 @@ malware_signatures:
     confidence: "certain"
 ```
 
-## Default Ignored Directories
+## Default Ignored Patterns
 
-| Category | Directories |
-|----------|-------------|
-| Build output | `target`, `dist`, `build`, `out` |
-| Package managers | `node_modules`, `.pnpm`, `.yarn` |
-| Version control | `.git`, `.svn`, `.hg` |
-| IDE | `.idea`, `.vscode` |
-| Cache | `.cache`, `__pycache__`, `.pytest_cache`, `.mypy_cache` |
-| Coverage | `coverage`, `.nyc_output` |
+By default (when using `--init`), the following regex patterns are configured to ignore common directories:
+
+| Category | Pattern |
+|----------|---------|
+| Build output | `/(target\|dist\|build\|out\|_build)/` |
+| Frameworks | `/(\\.next\|\\.nuxt\|\\.svelte-kit\|\\.astro)/` |
+| Package managers | `/(node_modules\|\\.pnpm\|\\.yarn)/` |
+| Version control | `/(\\.git\|\\.svn\|\\.hg)/` |
+| IDE | `/(\\.idea\|\\.vscode)/` |
+| Cache | `/(\\.cache\|__pycache__\|\\.pytest_cache)/` |
+| Coverage | `/(coverage\|\\.nyc_output)/` |
+| Vendor | `/vendor/` |
+
+**Note:** Patterns use regex syntax. Use `\\` to escape special characters like `.`
 
 ## CLI Flag Override
 

@@ -1,7 +1,7 @@
 //! Summary builder for scan results.
 
 use crate::rules::{Finding, Severity, Summary};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Builder for creating scan summaries.
 #[derive(Debug, Default)]
@@ -37,7 +37,7 @@ impl SummaryBuilder {
 
     /// Build the summary.
     pub fn build(self) -> Summary {
-        let mut by_severity: HashMap<Severity, usize> = HashMap::new();
+        let mut by_severity: FxHashMap<Severity, usize> = FxHashMap::default();
 
         for finding in &self.findings {
             *by_severity.entry(finding.severity).or_default() += 1;

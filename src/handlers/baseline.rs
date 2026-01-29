@@ -2,7 +2,8 @@
 
 use crate::{Baseline, CheckArgs, RiskScore, ScanResult, Summary};
 use colored::Colorize;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::FxHashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -38,7 +39,7 @@ pub fn handle_save_baseline(paths: &[PathBuf], baseline_path: &Path) -> ExitCode
     // Multiple paths case: use prefixed paths to distinguish sources
     let single_path = paths.len() == 1;
 
-    let mut combined_hashes = HashMap::new();
+    let mut combined_hashes = FxHashMap::default();
 
     for path in paths {
         match Baseline::from_directory(path) {

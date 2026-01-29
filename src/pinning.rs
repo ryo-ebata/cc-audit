@@ -4,9 +4,9 @@
 //! and detect unauthorized changes that may indicate supply chain attacks.
 
 use crate::error::{AuditError, Result};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ pub struct ToolPins {
     /// When the pins were last updated.
     pub updated_at: String,
     /// Pinned tools by name.
-    pub tools: HashMap<String, PinnedTool>,
+    pub tools: FxHashMap<String, PinnedTool>,
 }
 
 /// A single pinned tool entry.
@@ -85,7 +85,7 @@ impl ToolPins {
                 message: e.to_string(),
             })?;
 
-        let mut tools = HashMap::new();
+        let mut tools = FxHashMap::default();
         let now = chrono::Utc::now().to_rfc3339();
 
         // Extract mcpServers from the config
@@ -595,7 +595,7 @@ mod tests {
             version: "1".to_string(),
             created_at: "2024-01-01".to_string(),
             updated_at: "2024-01-01".to_string(),
-            tools: HashMap::new(),
+            tools: FxHashMap::default(),
         };
         pins.save(temp_dir.path()).unwrap();
 

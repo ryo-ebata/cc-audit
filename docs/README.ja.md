@@ -75,6 +75,9 @@ cd cc-audit && cargo install --path .
 ## クイックスタート
 
 ```bash
+# 設定ファイルを生成
+cc-audit init
+
 # Skill ディレクトリをスキャン
 cc-audit check ./my-skill/
 
@@ -99,9 +102,6 @@ cc-audit check --all-clients
 # 特定のクライアントをスキャン
 cc-audit check --client cursor
 cc-audit check --client claude
-
-# 設定ファイルを生成
-cc-audit init
 
 # pre-commitフックをインストール
 cc-audit hook init
@@ -137,23 +137,24 @@ Result: FAIL (exit code 1)
 
 ## コマンド
 
-| コマンド | 説明 |
-|----------|------|
-| `check` | パスをスキャンしてセキュリティ脆弱性を検出 |
-| `init`  | デフォルト設定ファイルを生成 |
-| `hook`  | Git pre-commit フックを管理 |
-| `serve` | MCP サーバーとして実行 |
-| `proxy` | MCP プロキシとしてランタイム監視を実行 |
+| コマンド | 説明                                       |
+| -------- | ------------------------------------------ |
+| `check`  | パスをスキャンしてセキュリティ脆弱性を検出 |
+| `init`   | デフォルト設定ファイルを生成               |
+| `hook`   | Git pre-commit フックを管理                |
+| `serve`  | MCP サーバーとして実行                     |
+| `proxy`  | MCP プロキシとしてランタイム監視を実行     |
 
 ## ドキュメント
 
-| ドキュメント                      | 説明                                                   |
-| --------------------------------- | ------------------------------------------------------ |
-| [CLI リファレンス](./CLI.ja.md)   | 全コマンドラインオプション                             |
-| [設定](./CONFIGURATION.ja.md)     | 設定ファイル、カスタムルール、マルウェアシグネチャ     |
-| [検出ルール](./RULES.ja.md)       | 全検出ルールと深刻度レベル                             |
-| [高度な機能](./FEATURES.ja.md)    | ベースライン/ドリフト検出、自動修正、MCPサーバーモード |
-| [CI/CD 統合](./INTEGRATION.ja.md) | GitHub Actions、GitLab CI、トラブルシューティング      |
+| ドキュメント                      | 説明                                                |
+| --------------------------------- | --------------------------------------------------- |
+| [CLI リファレンス](./CLI.ja.md)   | 全コマンドラインオプション                          |
+| [MCP 統合](./MCP.ja.md)           | Claude Code で MCP サーバーとして使用する方法       |
+| [設定](./CONFIGURATION.ja.md)     | 設定ファイル、カスタムルール、マルウェアシグネチャ  |
+| [検出ルール](./RULES.ja.md)       | 全検出ルールと深刻度レベル                          |
+| [高度な機能](./FEATURES.ja.md)    | ベースライン/ドリフト検出、自動修正、ウォッチモード |
+| [CI/CD 統合](./INTEGRATION.ja.md) | GitHub Actions、GitLab CI、トラブルシューティング   |
 
 ## 主な機能
 
@@ -187,7 +188,6 @@ cargo build --release
 ## 関連プロジェクト
 
 - [Claude Code](https://code.claude.com/) — Anthropic 公式の Claude CLI
-- [awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) — Claude Code リソースのキュレーションリスト
 - [Model Context Protocol](https://modelcontextprotocol.io/) — MCP 仕様
 
 ## セキュリティ

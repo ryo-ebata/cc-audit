@@ -1,6 +1,6 @@
 use crate::rules::{Category, Finding, Severity};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 /// Risk score configuration
 const CRITICAL_WEIGHT: u32 = 40;
@@ -80,7 +80,7 @@ pub struct SeverityBreakdown {
 impl RiskScore {
     /// Calculate risk score from findings
     pub fn from_findings(findings: &[Finding]) -> Self {
-        let mut category_scores: HashMap<Category, (u32, usize)> = HashMap::new();
+        let mut category_scores: FxHashMap<Category, (u32, usize)> = FxHashMap::default();
         let mut severity_scores = SeverityBreakdown {
             critical: 0,
             high: 0,

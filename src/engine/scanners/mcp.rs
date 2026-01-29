@@ -1,15 +1,17 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
+use rayon::prelude::*;
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use tracing::debug;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McpConfig {
     #[serde(default)]
-    pub mcp_servers: HashMap<String, McpServer>,
+    pub mcp_servers: FxHashMap<String, McpServer>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -19,7 +21,7 @@ pub struct McpServer {
     #[serde(default)]
     pub args: Option<Vec<String>>,
     #[serde(default)]
-    pub env: Option<HashMap<String, String>>,
+    pub env: Option<FxHashMap<String, String>>,
     #[serde(default)]
     pub url: Option<String>,
 }
@@ -95,25 +97,28 @@ impl Scanner for McpScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
+        // Collect candidate paths
+        let candidate_paths = vec![
+            dir.join("mcp.json"),
+            dir.join(".mcp.json"),
+            dir.join(".claude").join("mcp.json"),
+        ];
 
-        // Check for mcp.json
-        let mcp_json = dir.join("mcp.json");
-        if mcp_json.exists() {
-            findings.extend(self.scan_file(&mcp_json)?);
-        }
+        // Filter existing files
+        let files: Vec<PathBuf> = candidate_paths.into_iter().filter(|p| p.exists()).collect();
 
-        // Check for .mcp.json (hidden)
-        let dot_mcp_json = dir.join(".mcp.json");
-        if dot_mcp_json.exists() {
-            findings.extend(self.scan_file(&dot_mcp_json)?);
-        }
-
-        // Check for .claude/mcp.json
-        let claude_mcp = dir.join(".claude").join("mcp.json");
-        if claude_mcp.exists() {
-            findings.extend(self.scan_file(&claude_mcp)?);
-        }
+        // Parallel scan using Rayon
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                let result = self.scan_file(path);
+                self.config.report_progress();
+                result.unwrap_or_else(|e| {
+                    debug!(path = %path.display(), error = %e, "Failed to scan file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

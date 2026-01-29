@@ -486,7 +486,11 @@ where
             } else {
                 let walker =
                     DirectoryWalker::new(WalkConfig::default()).with_ignore_filter(ignore_filter);
-                walker.walk_single(path).filter(|p| is_text_file(p)).count()
+                walker
+                    .walk_single(path)
+                    .into_iter()
+                    .filter(|p| is_text_file(p))
+                    .count()
             }
         })
         .sum()

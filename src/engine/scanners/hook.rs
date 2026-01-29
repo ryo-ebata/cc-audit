@@ -1,8 +1,10 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
+use rayon::prelude::*;
 use serde::Deserialize;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use tracing::debug;
 
 #[derive(Debug, Deserialize)]
 pub struct SettingsJson {
@@ -108,19 +110,27 @@ impl Scanner for HookScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
+        // Collect candidate paths
+        let candidate_paths = vec![
+            dir.join("settings.json"),
+            dir.join(".claude").join("settings.json"),
+        ];
 
-        // Check for settings.json
-        let settings_json = dir.join("settings.json");
-        if settings_json.exists() {
-            findings.extend(self.scan_file(&settings_json)?);
-        }
+        // Filter existing files
+        let files: Vec<PathBuf> = candidate_paths.into_iter().filter(|p| p.exists()).collect();
 
-        // Check for .claude/settings.json (common pattern)
-        let claude_settings = dir.join(".claude").join("settings.json");
-        if claude_settings.exists() {
-            findings.extend(self.scan_file(&claude_settings)?);
-        }
+        // Parallel scan using Rayon
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                let result = self.scan_file(path);
+                self.config.report_progress();
+                result.unwrap_or_else(|e| {
+                    debug!(path = %path.display(), error = %e, "Failed to scan file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

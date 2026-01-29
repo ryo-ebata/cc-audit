@@ -11,6 +11,7 @@
 
 mod error;
 mod loading;
+mod parsers;
 mod severity;
 mod template;
 mod types;
@@ -21,12 +22,15 @@ pub use loading::ConfigLoadResult;
 pub use severity::SeverityConfig;
 pub use types::{BaselineConfig, Config, IgnoreConfig, ScanConfig, TextFilesConfig, WatchConfig};
 
+// Re-export parsers (L2: Configuration Layer)
+pub use parsers::{
+    parse_badge_format, parse_client_type, parse_confidence, parse_output_format,
+    parse_rule_severity, parse_scan_type, parse_severity,
+};
+
 // Re-export from other modules (will be moved here in Phase 10)
 pub use crate::profile::{Profile, profile_from_check_args};
-pub use crate::run::config::{
-    EffectiveConfig, load_custom_rules_from_effective, parse_badge_format, parse_client_type,
-    parse_confidence, parse_output_format, parse_scan_type,
-};
+pub use crate::run::config::{EffectiveConfig, load_custom_rules_from_effective};
 
 #[cfg(test)]
 mod tests {

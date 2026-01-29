@@ -233,40 +233,13 @@ impl EffectiveConfig {
     }
 }
 
-/// Parse badge format from string using FromStr.
-pub fn parse_badge_format(s: Option<&str>) -> Option<BadgeFormat> {
-    s?.parse().ok()
-}
-
-/// Parse client type from string using FromStr.
-pub fn parse_client_type(s: Option<&str>) -> Option<ClientType> {
-    s?.parse().ok()
-}
-
-/// Parse output format from string using FromStr.
-pub fn parse_output_format(s: Option<&str>) -> Option<OutputFormat> {
-    s?.parse().ok()
-}
-
-/// Parse scan type from string using FromStr.
-pub fn parse_scan_type(s: Option<&str>) -> Option<ScanType> {
-    s?.parse().ok()
-}
-
-/// Parse confidence level from string using FromStr.
-pub fn parse_confidence(s: Option<&str>) -> Option<Confidence> {
-    s?.parse().ok()
-}
-
-/// Parse severity level from string using FromStr.
-pub fn parse_severity(s: Option<&str>) -> Option<Severity> {
-    s?.parse().ok()
-}
-
-/// Parse rule severity level from string using FromStr.
-pub fn parse_rule_severity(s: Option<&str>) -> Option<RuleSeverity> {
-    s?.parse().ok()
-}
+// Re-export parse functions from L2 (config layer) for backward compatibility.
+// These functions were moved to `crate::config::parsers` in v3.3.0 to fix
+// architecture violation V3 (L2 → L1 reverse dependency).
+pub use crate::config::{
+    parse_badge_format, parse_client_type, parse_confidence, parse_output_format,
+    parse_rule_severity, parse_scan_type, parse_severity,
+};
 
 /// Load custom rules from effective config (CLI or config file).
 pub fn load_custom_rules_from_effective(effective: &EffectiveConfig) -> Vec<DynamicRule> {

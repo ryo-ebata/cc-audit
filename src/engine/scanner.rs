@@ -168,6 +168,11 @@ impl ScannerConfig {
             .is_some_and(|f| f.is_ignored(path))
     }
 
+    /// Returns a reference to the ignore filter, if set.
+    pub fn ignore_filter(&self) -> Option<&IgnoreFilter> {
+        self.ignore_filter.as_ref()
+    }
+
     /// Reads a file and returns its content as a string.
     pub fn read_file(&self, path: &Path) -> Result<String> {
         trace!(path = %path.display(), "Reading file");

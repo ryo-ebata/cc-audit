@@ -118,4 +118,93 @@ mod tests {
         assert_eq!(PipelineStage::Detection.name(), "detection");
         assert_eq!(PipelineStage::Output.name(), "output");
     }
+
+    #[test]
+    fn test_all_stage_names() {
+        // Comprehensive test for all 7 stage names
+        assert_eq!(PipelineStage::Input.name(), "input");
+        assert_eq!(PipelineStage::Config.name(), "config");
+        assert_eq!(PipelineStage::Discovery.name(), "discovery");
+        assert_eq!(PipelineStage::Parsing.name(), "parsing");
+        assert_eq!(PipelineStage::Detection.name(), "detection");
+        assert_eq!(PipelineStage::Aggregation.name(), "aggregation");
+        assert_eq!(PipelineStage::Output.name(), "output");
+    }
+
+    #[test]
+    fn test_stage_next_chain() {
+        // Test complete next() chain from Input to Output
+        assert_eq!(PipelineStage::Input.next(), Some(PipelineStage::Config));
+        assert_eq!(PipelineStage::Config.next(), Some(PipelineStage::Discovery));
+        assert_eq!(
+            PipelineStage::Discovery.next(),
+            Some(PipelineStage::Parsing)
+        );
+        assert_eq!(
+            PipelineStage::Parsing.next(),
+            Some(PipelineStage::Detection)
+        );
+        assert_eq!(
+            PipelineStage::Detection.next(),
+            Some(PipelineStage::Aggregation)
+        );
+        assert_eq!(
+            PipelineStage::Aggregation.next(),
+            Some(PipelineStage::Output)
+        );
+        assert_eq!(PipelineStage::Output.next(), None);
+    }
+
+    #[test]
+    fn test_pipeline_advance_returns_false_at_end() {
+        let mut pipeline = Pipeline::new();
+
+        // Advance to Output stage
+        while pipeline.advance().unwrap() {}
+
+        // Should be at Output
+        assert_eq!(pipeline.current_stage(), PipelineStage::Output);
+
+        // Calling advance() again should return false
+        let result = pipeline.advance().unwrap();
+        assert!(!result);
+
+        // Should still be at Output
+        assert_eq!(pipeline.current_stage(), PipelineStage::Output);
+    }
+
+    #[test]
+    fn test_pipeline_multiple_advances() {
+        let mut pipeline = Pipeline::new();
+
+        // First advance: Input -> Config
+        assert_eq!(pipeline.current_stage(), PipelineStage::Input);
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Config);
+
+        // Second advance: Config -> Discovery
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Discovery);
+
+        // Third advance: Discovery -> Parsing
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Parsing);
+
+        // Fourth advance: Parsing -> Detection
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Detection);
+
+        // Fifth advance: Detection -> Aggregation
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Aggregation);
+
+        // Sixth advance: Aggregation -> Output
+        assert!(pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Output);
+        assert!(pipeline.is_complete());
+
+        // Seventh advance: Output -> None (returns false)
+        assert!(!pipeline.advance().unwrap());
+        assert_eq!(pipeline.current_stage(), PipelineStage::Output);
+    }
 }

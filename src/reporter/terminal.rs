@@ -3,6 +3,61 @@ use crate::rules::{Confidence, Finding, RuleSeverity, ScanResult, Severity};
 use crate::scoring::RiskLevel;
 use colored::Colorize;
 
+/// Trim long lines for terminal output.
+///
+/// If the line is over 200 characters, trim it to show 50 characters before
+/// and 50 characters after the match position (indicated by column).
+///
+/// # Arguments
+///
+/// * `code` - The full line of code
+/// * `column` - Optional column number where the match starts (1-indexed)
+///
+/// # Returns
+///
+/// Trimmed line with "..." ellipsis where content is omitted
+fn trim_long_line(code: &str, column: Option<usize>) -> String {
+    const MAX_LEN: usize = 200;
+    const CONTEXT: usize = 50;
+
+    // If line is short enough, return as-is
+    if code.len() <= MAX_LEN {
+        return code.to_string();
+    }
+
+    // If no column info, show first 100 chars with trailing ellipsis
+    let col = match column {
+        Some(c) if c > 0 => c - 1, // Convert 1-indexed to 0-indexed
+        _ => {
+            let end = code.len().min(100);
+            return format!("{}...", &code[..end]);
+        }
+    };
+
+    // Calculate slice boundaries
+    // Show CONTEXT chars before match and CONTEXT chars after match start
+    let start = col.saturating_sub(CONTEXT);
+    let end = (col + CONTEXT).min(code.len());
+
+    // Extract the slice
+    let mut trimmed = String::new();
+
+    // Add leading ellipsis if we're not at the start
+    if start > 0 {
+        trimmed.push_str("...");
+    }
+
+    // Add the content
+    trimmed.push_str(&code[start..end]);
+
+    // Add trailing ellipsis if we're not at the end
+    if end < code.len() {
+        trimmed.push_str("...");
+    }
+
+    trimmed
+}
+
 pub struct TerminalReporter {
     strict: bool,
     verbose: bool,
@@ -106,12 +161,13 @@ impl TerminalReporter {
             width = gutter_width
         ));
 
-        // Code line
+        // Code line (trimmed if over 200 chars)
+        let code_display = trim_long_line(&finding.code, finding.location.column);
         output.push_str(&format!(
             "{:>width$} {} {}\n",
             line_num.to_string().cyan(),
             "|".dimmed(),
-            finding.code,
+            code_display,
             width = gutter_width
         ));
 
@@ -200,7 +256,8 @@ impl TerminalReporter {
             "  Location: {}:{}\n",
             finding.location.file, finding.location.line
         ));
-        output.push_str(&format!("  Code: {}\n", finding.code.dimmed()));
+        let code_display = trim_long_line(&finding.code, finding.location.column);
+        output.push_str(&format!("  Code: {}\n", code_display.dimmed()));
 
         if self.verbose {
             output.push_str(&format!(
@@ -937,5 +994,55 @@ mod tests {
         // Non-strict mode should show PASS with only warnings
         assert!(output.contains("PASS"));
         assert!(output.contains("exit code 0"));
+    }
+
+    #[test]
+    fn test_trim_long_line_short_line() {
+        // Lines under 200 chars should not be trimmed
+        let short = "This is a short line";
+        assert_eq!(trim_long_line(short, Some(5)), short);
+    }
+
+    #[test]
+    fn test_trim_long_line_at_start() {
+        // Long line with match at the start should only have trailing ellipsis
+        let long = "a".repeat(250);
+        let trimmed = trim_long_line(&long, Some(10));
+        assert!(trimmed.starts_with("aaaa"));
+        assert!(trimmed.ends_with("..."));
+        assert!(!trimmed.starts_with("..."));
+        assert!(trimmed.len() < 150); // Should be much shorter than original
+    }
+
+    #[test]
+    fn test_trim_long_line_in_middle() {
+        // Long line with match in the middle should have both ellipses
+        let long = "a".repeat(100) + "MATCH" + &"b".repeat(100);
+        let trimmed = trim_long_line(&long, Some(105)); // Column at 'MATCH'
+        assert!(trimmed.starts_with("..."));
+        assert!(trimmed.ends_with("..."));
+        assert!(trimmed.contains("MATCH"));
+        assert!(trimmed.len() < 150);
+    }
+
+    #[test]
+    fn test_trim_long_line_at_end() {
+        // Long line with match at the end should only have leading ellipsis
+        let long = "a".repeat(250);
+        let trimmed = trim_long_line(&long, Some(240));
+        assert!(trimmed.starts_with("..."));
+        assert!(trimmed.ends_with("aaaa"));
+        assert!(!trimmed.ends_with("..."));
+        assert!(trimmed.len() < 150);
+    }
+
+    #[test]
+    fn test_trim_long_line_no_column() {
+        // No column info: show first 100 chars with trailing ellipsis
+        let long = "a".repeat(250);
+        let trimmed = trim_long_line(&long, None);
+        assert!(!trimmed.starts_with("..."));
+        assert!(trimmed.ends_with("..."));
+        assert!(trimmed.len() <= 103); // 100 chars + "..."
     }
 }

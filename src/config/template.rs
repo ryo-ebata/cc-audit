@@ -226,9 +226,13 @@ ignore:
 
     # Package managers
     - "**/node_modules/**"        # npm/yarn/pnpm packages
-    - "**/.pnpm/**"               # pnpm store
+    - "**/.pnpm/**"               # pnpm virtual store
+    - "**/.pnpm-store/**"         # pnpm global store
     - "**/.yarn/**"               # Yarn cache/offline mirror
+    - "**/.npm/**"                # npm cache
+    - "**/.pnp.*"                 # Yarn PnP loader files
     - "**/bower_components/**"    # Bower packages
+    - "**/jspm_packages/**"       # jspm packages
 
     # Version control
     - "**/.git/**"                # Git repository
@@ -253,6 +257,7 @@ ignore:
     - "**/.vite/**"               # Vite cache
     - "**/.turbo/**"              # Turborepo cache
     - "**/.esbuild/**"            # esbuild cache
+    - "**/.webpack/**"            # webpack cache
     - "**/.rpt2_cache/**"         # rollup-plugin-typescript2
     - "**/tmp/**"                 # Temporary files
     - "**/temp/**"                # Temporary files
@@ -292,6 +297,18 @@ ignore:
     - "**/report/**"              # Report directories
     - "**/reports/**"             # Report directories
     - "**/.report/**"             # Hidden report directories
+    - "**/*report*/**"            # Any directory containing 'report' (e.g., playwright-report, test-report)
+
+    # Generated and minified files
+    - "*.min.js"                  # Minified JavaScript
+    - "*.min.css"                 # Minified CSS
+    - "*.d.ts"                    # TypeScript declaration files
+    - "*.generated.*"             # Generated files
+    - "*.g.ts"                    # Generated TypeScript
+    - "*.g.dart"                  # Generated Dart
+    - "*.map"                     # Source maps
+    - "**/bundle.*"               # Bundle outputs
+    - "**/chunk-*"                # Webpack/Vite chunks
 
     # Temporary and backup files
     - "**/*.tmp"                  # Temporary files
@@ -425,6 +442,9 @@ mod tests {
         assert!(template.contains("**/reports/**"));
         assert!(template.contains("**/.report/**"));
 
+        // Should include wildcard report pattern (e.g., playwright-report, test-report)
+        assert!(template.contains("**/*report*/**"));
+
         // Should include log patterns
         assert!(template.contains("**/logs/**"));
         assert!(template.contains("**/*.log"));
@@ -443,7 +463,11 @@ mod tests {
         // Package managers
         assert!(template.contains("**/node_modules/**"));
         assert!(template.contains("**/.pnpm/**"));
+        assert!(template.contains("**/.pnpm-store/**"));
         assert!(template.contains("**/.yarn/**"));
+        assert!(template.contains("**/.npm/**"));
+        assert!(template.contains("**/.pnp.*"));
+        assert!(template.contains("**/jspm_packages/**"));
 
         // Version control
         assert!(template.contains("**/.git/**"));
@@ -468,6 +492,7 @@ mod tests {
         // Cache directories
         assert!(template.contains("**/.cache/**"));
         assert!(template.contains("**/.vite/**"));
+        assert!(template.contains("**/.webpack/**"));
 
         // Temporary files
         assert!(template.contains("**/tmp/**"));
@@ -539,5 +564,27 @@ mod tests {
         assert!(template.contains("# WATCH MODE CONFIGURATION"));
         assert!(template.contains("watch:"));
         assert!(template.contains("debounce_ms:"));
+    }
+
+    #[test]
+    fn test_template_includes_generated_and_minified_files() {
+        let template = Config::generate_template();
+
+        // Minified files (v3.2.0)
+        assert!(template.contains("\"*.min.js\""));
+        assert!(template.contains("\"*.min.css\""));
+
+        // Generated files (v3.2.0)
+        assert!(template.contains("\"*.d.ts\""));
+        assert!(template.contains("\"*.generated.*\""));
+        assert!(template.contains("\"*.g.ts\""));
+        assert!(template.contains("\"*.g.dart\""));
+
+        // Source maps (v3.2.0)
+        assert!(template.contains("\"*.map\""));
+
+        // Bundle outputs (v3.2.0)
+        assert!(template.contains("\"**/bundle.*\""));
+        assert!(template.contains("\"**/chunk-*\""));
     }
 }

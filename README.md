@@ -75,6 +75,9 @@ Download binaries from [GitHub Releases](https://github.com/ryo-ebata/cc-audit/r
 ## Quick Start
 
 ```bash
+# Generate config file
+cc-audit init
+
 # Scan a skill directory
 cc-audit check ./my-skill/
 
@@ -99,9 +102,6 @@ cc-audit check --all-clients
 # Scan a specific client
 cc-audit check --client cursor
 cc-audit check --client claude
-
-# Generate config file
-cc-audit init
 
 # Install pre-commit hook
 cc-audit hook init
@@ -137,23 +137,24 @@ Result: FAIL (exit code 1)
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
+| Command | Description                             |
+| ------- | --------------------------------------- |
 | `check` | Scan paths for security vulnerabilities |
-| `init`  | Generate a default configuration file |
-| `hook`  | Manage Git pre-commit hooks |
-| `serve` | Run as MCP server |
+| `init`  | Generate a default configuration file   |
+| `hook`  | Manage Git pre-commit hooks             |
+| `serve` | Run as MCP server                       |
 | `proxy` | Run as MCP proxy for runtime monitoring |
 
 ## Documentation
 
-| Document                                   | Description                                         |
-| ------------------------------------------ | --------------------------------------------------- |
-| [CLI Reference](./docs/CLI.md)             | All command-line options                            |
-| [Configuration](./docs/CONFIGURATION.md)   | Config files, custom rules, malware signatures      |
-| [Detection Rules](./docs/RULES.md)         | All detection rules and severity levels             |
-| [Advanced Features](./docs/FEATURES.md)    | Baseline/drift detection, auto-fix, MCP server mode |
-| [CI/CD Integration](./docs/INTEGRATION.md) | GitHub Actions, GitLab CI, troubleshooting          |
+| Document                                   | Description                                      |
+| ------------------------------------------ | ------------------------------------------------ |
+| [CLI Reference](./docs/CLI.md)             | All command-line options                         |
+| [MCP Integration](./docs/MCP.md)           | Using cc-audit as an MCP server with Claude Code |
+| [Configuration](./docs/CONFIGURATION.md)   | Config files, custom rules, malware signatures   |
+| [Detection Rules](./docs/RULES.md)         | All detection rules and severity levels          |
+| [Advanced Features](./docs/FEATURES.md)    | Baseline/drift detection, auto-fix, watch mode   |
+| [CI/CD Integration](./docs/INTEGRATION.md) | GitHub Actions, GitLab CI, troubleshooting       |
 
 ## Key Features
 
@@ -187,7 +188,6 @@ cargo build --release
 ## Related Projects
 
 - [Claude Code](https://code.claude.com/) — Anthropic's official CLI for Claude
-- [awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code) — Curated list of Claude Code resources
 - [Model Context Protocol](https://modelcontextprotocol.io/) — MCP specification
 
 ## Security

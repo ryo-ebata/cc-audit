@@ -75,6 +75,31 @@ cc-audit serve
 
 This exposes scanning functionality as MCP tools that Claude Code can invoke.
 
+**Available MCP Tools:**
+- `scan` — Scan files or directories
+- `scan_content` — Scan code snippets inline
+- `check_rule` — Test specific security rules
+- `list_rules` — Get all available detection rules
+- `get_fix_suggestion` — Get automated fix suggestions
+
+**Setup:**
+
+Create or edit `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "cc-audit": {
+      "command": "cc-audit",
+      "args": ["serve"],
+      "description": "Security audit tool for Claude Code"
+    }
+  }
+}
+```
+
+For complete MCP integration guide, see [MCP Integration Documentation](./MCP.md).
+
 ---
 
 ## Profiles

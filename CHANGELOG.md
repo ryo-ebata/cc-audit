@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.5](https://github.com/ryo-ebata/cc-audit/compare/v3.2.4...v3.2.5) (2026-01-29)
+
+
+### Bug Fixes
+
+* **performance:** parallelize file scanning with Rayon ([#64](https://github.com/ryo-ebata/cc-audit/issues/64)) ([a47c6a0](https://github.com/ryo-ebata/cc-audit/commit/a47c6a0cc775ac9d8174d775724ff6c99885f911))
+
 ## [3.2.4](https://github.com/ryo-ebata/cc-audit/compare/v3.2.3...v3.2.4) (2026-01-29)
 
 

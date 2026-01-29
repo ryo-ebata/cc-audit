@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.7](https://github.com/ryo-ebata/cc-audit/compare/v3.2.6...v3.2.7) (2026-01-29)
+
+
+### Bug Fixes
+
+* **performance:** Phase 1+2 - parallel scanners, directory walker, and deobfuscation ([#68](https://github.com/ryo-ebata/cc-audit/issues/68)) ([083a44f](https://github.com/ryo-ebata/cc-audit/commit/083a44fbf5e08864f2bb1e991601c16861ecc8ec))
+
 ## [3.2.6](https://github.com/ryo-ebata/cc-audit/compare/v3.2.5...v3.2.6) (2026-01-29)
 
 

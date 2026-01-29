@@ -35,10 +35,10 @@ jobs:
         id: checksums
         run: |
           cd checksums
-          echo "darwin_arm64=$(grep aarch64-apple-darwin *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "darwin_x64=$(grep x86_64-apple-darwin *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "linux_arm64=$(grep aarch64-unknown-linux-gnu *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "linux_x64=$(grep x86_64-unknown-linux-gnu *.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_arm64=$(cat *aarch64-apple-darwin.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_x64=$(cat *x86_64-apple-darwin.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm64=$(cat *aarch64-unknown-linux-gnu.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_x64=$(cat *x86_64-unknown-linux-gnu.sha256 | awk '{print $1}')" >> $GITHUB_OUTPUT
 
       - name: Checkout homebrew-tap
         uses: actions/checkout@v6

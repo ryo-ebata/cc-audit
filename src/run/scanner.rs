@@ -16,10 +16,11 @@ use std::time::Instant;
 use tracing::{debug, info, warn};
 
 use super::client::{detect_client_for_path, resolve_scan_paths_from_check_args};
-use super::config::{EffectiveConfig, load_custom_rules_from_effective};
 use super::cve::scan_path_with_cve_db;
 use super::malware::scan_path_with_malware_db;
-use super::text_file::is_text_file;
+use crate::config::EffectiveConfig;
+use crate::config::effective::load_custom_rules_from_effective;
+use crate::discovery::text_detection::is_text_file;
 
 // Orchestrator layer: Coordinates L1-L7, so L7 usage is appropriate here.
 // ScanProgress is created here and converted to ProgressCallback (abstraction)
@@ -36,16 +37,127 @@ pub fn run_scan_with_check_args_config(args: &CheckArgs, config: Config) -> Opti
     run_scan_with_check_args_internal(args, Some(config))
 }
 
-fn run_scan_with_check_args_internal(
+/// Execute all scanners on the given paths.
+///
+/// Returns (findings, targets) or None if an error occurred.
+#[allow(clippy::too_many_arguments)]
+fn execute_scanners_on_paths(
+    scan_paths: &[PathBuf],
+    effective: &EffectiveConfig,
+    create_ignore_filter: &impl Fn(&Path) -> IgnoreFilter,
+    custom_rules: &[DynamicRule],
+    malware_db: &Option<MalwareDatabase>,
+    cve_db: &Option<CveDatabase>,
+    progress_callback: crate::engine::scanner::ProgressCallback,
+    progress: &Arc<ScanProgress>,
+) -> Option<(Vec<Finding>, Vec<String>)> {
+    let mut all_findings: Vec<Finding> = Vec::new();
+    let mut targets: Vec<String> = Vec::new();
+
+    for path in scan_paths {
+        // Use effective scan_type from merged config
+        let result = run_scanner_for_type(
+            &effective.scan_type,
+            path,
+            create_ignore_filter,
+            effective.skip_comments,
+            effective.strict_secrets,
+            effective.recursive,
+            custom_rules,
+            progress_callback.clone(),
+        );
+
+        match result {
+            Ok(findings) => {
+                all_findings.extend(findings);
+                targets.push(path.display().to_string());
+            }
+            Err(e) => {
+                eprintln!("Error scanning {}: {}", path.display(), e);
+                progress.finish();
+                return None;
+            }
+        }
+
+        // Run malware database scan on files
+        if let Some(db) = malware_db {
+            let ignore_filter = create_ignore_filter(path);
+            let malware_findings = scan_path_with_malware_db(path, db, &ignore_filter);
+            all_findings.extend(malware_findings);
+        }
+
+        // Run deep scan with deobfuscation if enabled
+        if effective.deep_scan {
+            let ignore_filter = create_ignore_filter(path);
+            let deep_findings = run_deep_scan(path, &ignore_filter);
+            all_findings.extend(deep_findings);
+        }
+
+        // Run CVE database scan on dependency files
+        if let Some(db) = cve_db {
+            let ignore_filter = create_ignore_filter(path);
+            let cve_findings = scan_path_with_cve_db(path, db, &ignore_filter);
+            all_findings.extend(cve_findings);
+        }
+    }
+
+    Some((all_findings, targets))
+}
+
+/// Load scan resources: custom rules, malware database, and CVE database.
+///
+/// Returns (custom_rules, malware_db, cve_db).
+fn load_scan_resources(
+    effective: &EffectiveConfig,
+    config: &Config,
+) -> (
+    Vec<DynamicRule>,
+    Option<MalwareDatabase>,
+    Option<CveDatabase>,
+) {
+    // Load custom rules: merge effective config rules with config file inline rules
+    let mut custom_rules = load_custom_rules_from_effective(effective);
+
+    // Add rules from config file (inline rules section)
+    if !config.rules.is_empty() {
+        match CustomRuleLoader::convert_yaml_rules(config.rules.clone()) {
+            Ok(config_rules) => {
+                let config_rules_count = config_rules.len();
+                custom_rules.extend(config_rules);
+                if config_rules_count > 0 {
+                    debug!(
+                        count = config_rules_count,
+                        "Loaded custom rules from config file"
+                    );
+                    eprintln!(
+                        "Loaded {} custom rule(s) from config file",
+                        config_rules_count
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to load rules from config file");
+                eprintln!("Warning: Failed to load rules from config file: {}", e);
+            }
+        }
+    }
+
+    // Load malware database if enabled
+    let malware_db = load_malware_database(effective, config);
+
+    // Load CVE database if enabled
+    let cve_db = load_cve_database(effective);
+
+    (custom_rules, malware_db, cve_db)
+}
+
+/// Setup scan context: resolve paths, load config, apply profile, and create effective config.
+///
+/// Returns (scan_paths, config, effective_config) or None if paths are empty.
+fn setup_scan_context(
     args: &CheckArgs,
     preloaded_config: Option<Config>,
-) -> Option<ScanResult> {
-    // Start time measurement
-    let start_time = Instant::now();
-
-    let mut all_findings = Vec::new();
-    let mut targets = Vec::new();
-
+) -> Option<(Vec<PathBuf>, Config, EffectiveConfig)> {
     // Resolve paths based on scan mode (client scan or path scan)
     let scan_paths: Vec<PathBuf> = resolve_scan_paths_from_check_args(args);
 
@@ -85,38 +197,21 @@ fn run_scan_with_check_args_internal(
     // Merge CheckArgs options with config file settings
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
-    // Load custom rules: merge effective config rules with config file inline rules
-    let mut custom_rules = load_custom_rules_from_effective(&effective);
+    Some((scan_paths, config, effective))
+}
 
-    // Add rules from config file (inline rules section)
-    if !config.rules.is_empty() {
-        match CustomRuleLoader::convert_yaml_rules(config.rules.clone()) {
-            Ok(config_rules) => {
-                let config_rules_count = config_rules.len();
-                custom_rules.extend(config_rules);
-                if config_rules_count > 0 {
-                    debug!(
-                        count = config_rules_count,
-                        "Loaded custom rules from config file"
-                    );
-                    eprintln!(
-                        "Loaded {} custom rule(s) from config file",
-                        config_rules_count
-                    );
-                }
-            }
-            Err(e) => {
-                warn!(error = %e, "Failed to load rules from config file");
-                eprintln!("Warning: Failed to load rules from config file: {}", e);
-            }
-        }
-    }
+fn run_scan_with_check_args_internal(
+    args: &CheckArgs,
+    preloaded_config: Option<Config>,
+) -> Option<ScanResult> {
+    // Start time measurement
+    let start_time = Instant::now();
 
-    // Load malware database if enabled (using effective config)
-    let malware_db = load_malware_database(&effective, &config);
+    // Setup: resolve paths, load config, apply profile
+    let (scan_paths, config, effective) = setup_scan_context(args, preloaded_config)?;
 
-    // Load CVE database if enabled (using effective config)
-    let cve_db = load_cve_database(&effective);
+    // Load resources: custom rules, malware DB, CVE DB
+    let (custom_rules, malware_db, cve_db) = load_scan_resources(&effective, &config);
 
     // Create ignore filter from config
     let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
@@ -136,55 +231,23 @@ fn run_scan_with_check_args_internal(
     let progress_callback: crate::engine::scanner::ProgressCallback =
         Arc::new(move || progress_clone.inc());
 
-    for path in &scan_paths {
-        // Use effective scan_type from merged config
-        let result = run_scanner_for_type(
-            &effective.scan_type,
-            path,
-            &create_ignore_filter,
-            effective.skip_comments,
-            effective.strict_secrets,
-            effective.recursive,
-            &custom_rules,
-            progress_callback.clone(),
-        );
-
-        match result {
-            Ok(findings) => {
-                all_findings.extend(findings);
-                targets.push(path.display().to_string());
-            }
-            Err(e) => {
-                eprintln!("Error scanning {}: {}", path.display(), e);
-                progress.finish();
-                return None;
-            }
-        }
-
-        // Run malware database scan on files
-        if let Some(ref db) = malware_db {
-            let ignore_filter = create_ignore_filter(path);
-            let malware_findings = scan_path_with_malware_db(path, db, &ignore_filter);
-            all_findings.extend(malware_findings);
-        }
-
-        // Run deep scan with deobfuscation if enabled
-        if effective.deep_scan {
-            let ignore_filter = create_ignore_filter(path);
-            let deep_findings = run_deep_scan(path, &ignore_filter);
-            all_findings.extend(deep_findings);
-        }
-
-        // Run CVE database scan on dependency files
-        if let Some(ref db) = cve_db {
-            let ignore_filter = create_ignore_filter(path);
-            let cve_findings = scan_path_with_cve_db(path, db, &ignore_filter);
-            all_findings.extend(cve_findings);
-        }
-    }
+    // Execute scanners on all paths
+    let scan_result = execute_scanners_on_paths(
+        &scan_paths,
+        &effective,
+        &create_ignore_filter,
+        &custom_rules,
+        &malware_db,
+        &cve_db,
+        progress_callback,
+        &progress,
+    );
 
     // Finish and clear progress bar
     progress.finish();
+
+    // Check if scanning succeeded
+    let (all_findings, targets) = scan_result?;
 
     // Filter and process findings
     let filtered_findings =

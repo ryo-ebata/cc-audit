@@ -89,15 +89,13 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping MSRV checks"
-            exit 0
-          fi
-          if [[ "${{ needs.msrv-check.result }}" == "failure" || \
-                "${{ needs.msrv-verify.result }}" == "failure" ]]; then
-            echo "MSRV check failed"
-            exit 1
-          fi
-          echo "MSRV checks passed"
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'MSRV'
+          skip-condition: ${{ needs.changes.outputs.rust != 'true' && 'No relevant changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "msrv-check", "result": "${{ needs.msrv-check.result }}"},
+              {"name": "msrv-verify", "result": "${{ needs.msrv-verify.result }}"}
+            ]

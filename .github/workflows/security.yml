@@ -114,18 +114,16 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping security checks"
-            exit 0
-          fi
-          if [[ "${{ needs.audit.result }}" == "failure" || \
-                "${{ needs.deny.result }}" == "failure" || \
-                "${{ needs.supply-chain.result }}" == "failure" || \
-                "${{ needs.advisory-db.result }}" == "failure" || \
-                "${{ needs.outdated.result }}" == "failure" ]]; then
-            echo "One or more security jobs failed"
-            exit 1
-          fi
-          echo "All security checks passed"
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'Security'
+          skip-condition: ${{ needs.changes.outputs.should_run != 'true' && 'No relevant changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "audit", "result": "${{ needs.audit.result }}"},
+              {"name": "deny", "result": "${{ needs.deny.result }}"},
+              {"name": "supply-chain", "result": "${{ needs.supply-chain.result }}"},
+              {"name": "advisory-db", "result": "${{ needs.advisory-db.result }}"},
+              {"name": "outdated", "result": "${{ needs.outdated.result }}"}
+            ]

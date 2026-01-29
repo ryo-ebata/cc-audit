@@ -10,6 +10,10 @@ use std::sync::LazyLock;
 /// - `cc-audit-ignore-next-line` - suppress all rules on next line
 /// - `cc-audit-disable` - disable all checks until `cc-audit-enable`
 /// - `cc-audit-disable:RULE-ID` - disable specific rule until `cc-audit-enable`
+///
+/// SAFETY: These regex patterns are compile-time constants and have been validated
+/// by unit tests. If any of these patterns are invalid, it indicates a programming
+/// error and the program should panic during initialization.
 static IGNORE_PATTERN: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"cc-audit-ignore(?::([A-Z0-9,-]+))?(?:\s|$)").unwrap());
 

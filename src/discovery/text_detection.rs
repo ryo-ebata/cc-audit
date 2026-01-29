@@ -1,4 +1,7 @@
 //! Text file detection utilities.
+//!
+//! Provides functions to detect whether a file should be scanned based on
+//! its extension, name, or other characteristics.
 
 use std::path::Path;
 

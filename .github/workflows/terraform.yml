@@ -204,29 +204,15 @@ jobs:
     needs: [changes, fmt, validate, tflint, tfsec]
     if: always()
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.infra }}" != "true" ]]; then
-            echo "No infrastructure changes detected, skipping Terraform checks"
-            exit 0
-          fi
-          if [[ "${{ needs.fmt.result }}" == "failure" || \
-                "${{ needs.validate.result }}" == "failure" || \
-                "${{ needs.tflint.result }}" == "failure" || \
-                "${{ needs.tfsec.result }}" == "failure" ]]; then
-            echo "One or more Terraform jobs failed"
-            exit 1
-          fi
-          echo "All Terraform checks passed"
-
-      - name: Create Summary
-        if: needs.changes.outputs.infra == 'true'
-        run: |
-          echo "## Terraform CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Format | ${{ needs.fmt.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Validate | ${{ needs.validate.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| TFLint | ${{ needs.tflint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security | ${{ needs.tfsec.result }} |" >> $GITHUB_STEP_SUMMARY
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'Terraform'
+          skip-condition: ${{ needs.changes.outputs.infra != 'true' && 'No infrastructure changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "fmt", "result": "${{ needs.fmt.result }}"},
+              {"name": "validate", "result": "${{ needs.validate.result }}"},
+              {"name": "tflint", "result": "${{ needs.tflint.result }}"},
+              {"name": "tfsec", "result": "${{ needs.tfsec.result }}"}
+            ]

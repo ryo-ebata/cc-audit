@@ -95,15 +95,13 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping semver checks"
-            exit 0
-          fi
-          if [[ "${{ needs.semver-check.result }}" == "failure" || \
-                "${{ needs.changelog-check.result }}" == "failure" ]]; then
-            echo "Semver check failed"
-            exit 1
-          fi
-          echo "Semver checks passed"
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'Semver'
+          skip-condition: ${{ needs.changes.outputs.should_run != 'true' && 'No relevant changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "semver-check", "result": "${{ needs.semver-check.result }}"},
+              {"name": "changelog-check", "result": "${{ needs.changelog-check.result }}"}
+            ]

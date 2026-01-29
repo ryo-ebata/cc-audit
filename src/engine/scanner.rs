@@ -8,7 +8,7 @@
 use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
-use std::fs;
+use crate::security::SafeFileReader;
 use std::path::Path;
 use tracing::{debug, trace};
 
@@ -173,14 +173,19 @@ impl ScannerConfig {
         self.ignore_filter.as_ref()
     }
 
-    /// Reads a file and returns its content as a string.
+    /// Reads a file safely without following symlinks (prevents TOCTOU attacks).
+    ///
+    /// Uses SafeFileReader which:
+    /// - Rejects symlinks immediately
+    /// - Uses O_NOFOLLOW on Unix to prevent symlink following
+    /// - Verifies inode hasn't changed (TOCTOU mitigation)
     pub fn read_file(&self, path: &Path) -> Result<String> {
         trace!(path = %path.display(), "Reading file");
-        fs::read_to_string(path).map_err(|e| {
+        SafeFileReader::read_to_string(path).map_err(|e| {
             debug!(path = %path.display(), error = %e, "Failed to read file");
             AuditError::ReadError {
                 path: path.display().to_string(),
-                source: e,
+                source: std::io::Error::other(e),
             }
         })
     }
@@ -229,6 +234,7 @@ impl Default for ScannerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::sync::Arc;
     use tempfile::TempDir;
 

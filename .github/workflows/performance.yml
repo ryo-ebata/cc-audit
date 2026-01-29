@@ -175,26 +175,14 @@ jobs:
     needs: [changes, benchmark, binary-size, build-time]
     if: always()
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping performance checks"
-            exit 0
-          fi
-          if [[ "${{ needs.benchmark.result }}" == "failure" || \
-                "${{ needs.binary-size.result }}" == "failure" || \
-                "${{ needs.build-time.result }}" == "failure" ]]; then
-            echo "One or more performance jobs failed"
-            exit 1
-          fi
-          echo "All performance checks passed"
-
-      - name: Create summary
-        if: needs.changes.outputs.rust == 'true'
-        run: |
-          echo "# Performance Check Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Jobs Status" >> $GITHUB_STEP_SUMMARY
-          echo "- Benchmark: ${{ needs.benchmark.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Binary Size: ${{ needs.binary-size.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Build Time: ${{ needs.build-time.result }}" >> $GITHUB_STEP_SUMMARY
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'Performance'
+          skip-condition: ${{ needs.changes.outputs.rust != 'true' && 'No relevant changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "benchmark", "result": "${{ needs.benchmark.result }}"},
+              {"name": "binary-size", "result": "${{ needs.binary-size.result }}"},
+              {"name": "build-time", "result": "${{ needs.build-time.result }}"}
+            ]

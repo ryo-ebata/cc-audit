@@ -1,0 +1,43 @@
+name: 'Check Workflow Results'
+description: 'Reusable result checker for workflow jobs'
+inputs:
+  jobs:
+    description: 'JSON array of job results (format: [{"name":"fmt","result":"success"}])'
+    required: true
+  skip-condition:
+    description: 'Condition to skip checks (e.g., "no changes detected")'
+    required: false
+    default: ''
+  workflow-name:
+    description: 'Name of the workflow for summary'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Check results
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.skip-condition }}" ]; then
+          echo "${{ inputs.skip-condition }}"
+          exit 0
+        fi
+
+        FAILED_JOBS=$(echo '${{ inputs.jobs }}' | jq -r '.[] | select(.result == "failure") | .name' | tr '\n' ', ' | sed 's/,$//')
+
+        if [ -n "$FAILED_JOBS" ]; then
+          echo "::error::Failed jobs: $FAILED_JOBS"
+          exit 1
+        fi
+
+        echo "All ${{ inputs.workflow-name }} checks passed"
+
+    - name: Create summary
+      if: inputs.skip-condition == ''
+      shell: bash
+      run: |
+        echo "## ${{ inputs.workflow-name }} Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+
+        echo '${{ inputs.jobs }}' | jq -r '.[] | "| \(.name) | \(.result) |"' >> $GITHUB_STEP_SUMMARY

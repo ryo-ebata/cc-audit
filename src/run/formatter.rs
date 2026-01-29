@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::client::resolve_scan_paths_from_check_args;
-use super::config::EffectiveConfig;
+use crate::config::EffectiveConfig;
 
 /// Generate a badge URL based on scan result.
 fn generate_badge_url(result: &ScanResult) -> String {

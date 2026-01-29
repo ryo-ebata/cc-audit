@@ -1,6 +1,7 @@
 //! Scan mode handlers.
 
 use crate::run::EffectiveConfig;
+use crate::security::SafePath;
 use crate::{
     CheckArgs, Config, WatchModeResult, format_result_check_args, run_scan_with_check_args_config,
     setup_watch_mode, watch_iteration,
@@ -18,22 +19,50 @@ use super::{
 
 /// Validate that a path is safe to write to.
 /// Prevents symlink attacks and path traversal issues.
+///
+/// Uses SafePath for comprehensive security validation including:
+/// - Path traversal detection (literal, URL-encoded, Unicode homoglyphs)
+/// - Symlink detection and prevention
+/// - Null byte injection prevention
 fn validate_output_path(path: &Path) -> Result<(), String> {
-    // Check for path traversal attempts
-    let path_str = path.to_string_lossy();
-    if path_str.contains("..") {
-        return Err("Path contains parent directory reference (..)".to_string());
+    // First, check for traversal patterns without canonicalization
+    // This catches obvious attacks even if the file doesn't exist yet
+    use crate::security::PathSecurityError;
+
+    // Try to check the path itself for traversal patterns
+    if let Err(e) = SafePath::check_traversal_patterns_static(path) {
+        return Err(match e {
+            PathSecurityError::TraversalAttempt(_) => {
+                "Path contains parent directory reference (..)".to_string()
+            }
+            PathSecurityError::EncodedTraversal(_) => {
+                "Path contains encoded traversal attempt".to_string()
+            }
+            PathSecurityError::HomoglyphTraversal(_) => {
+                "Path contains Unicode homoglyph traversal".to_string()
+            }
+            PathSecurityError::NullByteInPath(_) => "Path contains null byte".to_string(),
+            _ => format!("Path validation failed: {}", e),
+        });
     }
 
-    // If path exists, check it's not a symlink
+    // If path exists, check it's not a symlink before full validation
     if path.exists() {
         let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
         if metadata.file_type().is_symlink() {
             return Err("Output path is a symbolic link".to_string());
         }
+
+        // Full validation with SafePath
+        SafePath::new(path).map_err(|e| match e {
+            PathSecurityError::TraversalAttempt(_) => {
+                "Path contains parent directory reference (..)".to_string()
+            }
+            _ => format!("Path validation failed: {}", e),
+        })?;
     }
 
-    // Check parent directory exists and is writable
+    // Check parent directory exists and is not a symlink
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() && !parent.exists() {
             return Err(format!(
@@ -48,6 +77,10 @@ fn validate_output_path(path: &Path) -> Result<(), String> {
             if metadata.file_type().is_symlink() {
                 return Err("Parent directory is a symbolic link".to_string());
             }
+
+            // Full validation with SafePath
+            SafePath::new(parent)
+                .map_err(|e| format!("Parent directory validation failed: {}", e))?;
         }
     }
 

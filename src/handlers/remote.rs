@@ -444,3 +444,212 @@ fn create_scan_check_args_batch(
         hook_mode: false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Confidence;
+    use crate::cli::ScanType;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    /// Helper to create minimal CheckArgs for testing
+    fn create_test_check_args(paths: Vec<PathBuf>) -> CheckArgs {
+        CheckArgs {
+            paths,
+            config: None,
+            remote: None,
+            git_ref: "HEAD".to_string(),
+            remote_auth: None,
+            remote_list: None,
+            awesome_claude_code: false,
+            parallel_clones: 1,
+            badge: false,
+            badge_format: BadgeFormat::Markdown,
+            summary: false,
+            format: OutputFormat::Terminal,
+            strict: false,
+            warn_only: false,
+            min_severity: None,
+            min_rule_severity: None,
+            scan_type: ScanType::Skill,
+            no_recursive: false,
+            ci: false,
+            min_confidence: None,
+            watch: false,
+            skip_comments: false,
+            strict_secrets: false,
+            fix_hint: false,
+            compact: false,
+            no_malware_scan: false,
+            cve_db: None,
+            no_cve_scan: false,
+            malware_db: None,
+            custom_rules: None,
+            baseline: false,
+            check_drift: false,
+            output: None,
+            save_baseline: None,
+            baseline_file: None,
+            compare: None,
+            fix: false,
+            fix_dry_run: false,
+            pin: false,
+            pin_verify: false,
+            pin_update: false,
+            pin_force: false,
+            ignore_pin: false,
+            deep_scan: false,
+            profile: None,
+            save_profile: None,
+            all_clients: false,
+            client: None,
+            report_fp: false,
+            report_fp_dry_run: false,
+            report_fp_endpoint: None,
+            no_telemetry: false,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
+            hook_mode: false,
+        }
+    }
+
+    #[test]
+    fn test_handle_remote_scan_missing_url() {
+        let args = create_test_check_args(vec![]);
+        let exit_code = handle_remote_scan(&args);
+        assert_eq!(
+            exit_code,
+            ExitCode::from(2),
+            "Should return error code when URL is missing"
+        );
+    }
+
+    #[test]
+    fn test_handle_remote_list_scan_missing_file() {
+        let args = create_test_check_args(vec![]);
+        let exit_code = handle_remote_list_scan(&args);
+        assert_eq!(
+            exit_code,
+            ExitCode::from(2),
+            "Should return error code when file path is missing"
+        );
+    }
+
+    #[test]
+    fn test_handle_remote_list_scan_file_not_found() {
+        let mut args = create_test_check_args(vec![]);
+        args.remote_list = Some(PathBuf::from("/nonexistent/urls.txt"));
+
+        let exit_code = handle_remote_list_scan(&args);
+        assert_eq!(
+            exit_code,
+            ExitCode::from(2),
+            "Should return error code when file doesn't exist"
+        );
+    }
+
+    #[test]
+    fn test_handle_remote_list_scan_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let list_file = temp_dir.path().join("empty.txt");
+        fs::write(&list_file, "").unwrap();
+
+        let mut args = create_test_check_args(vec![]);
+        args.remote_list = Some(list_file);
+
+        let exit_code = handle_remote_list_scan(&args);
+        assert_eq!(
+            exit_code,
+            ExitCode::from(2),
+            "Should return error code when no URLs found"
+        );
+    }
+
+    #[test]
+    fn test_handle_remote_list_scan_only_comments() {
+        let temp_dir = TempDir::new().unwrap();
+        let list_file = temp_dir.path().join("comments.txt");
+
+        let mut file = fs::File::create(&list_file).unwrap();
+        writeln!(file, "# This is a comment").unwrap();
+        writeln!(file, "# Another comment").unwrap();
+        writeln!(file).unwrap();
+        writeln!(file, "   ").unwrap();
+
+        let mut args = create_test_check_args(vec![]);
+        args.remote_list = Some(list_file);
+
+        let exit_code = handle_remote_list_scan(&args);
+        assert_eq!(
+            exit_code,
+            ExitCode::from(2),
+            "Should return error code when only comments/empty lines"
+        );
+    }
+
+    #[test]
+    fn test_create_scan_check_args_inherits_settings() {
+        let mut base_args = create_test_check_args(vec![]);
+        base_args.strict = true;
+        base_args.skip_comments = true;
+        base_args.min_confidence = Some(Confidence::Certain);
+
+        let effective = EffectiveConfig::from_check_args_and_config(&base_args, &Config::default());
+
+        let scan_args =
+            create_scan_check_args(vec![PathBuf::from("/test/path")], &base_args, &effective);
+
+        assert_eq!(scan_args.paths, vec![PathBuf::from("/test/path")]);
+        assert!(scan_args.strict, "Should inherit strict mode");
+        assert!(scan_args.skip_comments, "Should inherit skip_comments");
+        assert_eq!(
+            scan_args.min_confidence,
+            Some(Confidence::Certain),
+            "Should inherit min_confidence"
+        );
+        assert!(scan_args.remote.is_none(), "Should not recurse into remote");
+    }
+
+    #[test]
+    fn test_create_scan_check_args_batch_simplifies_settings() {
+        let mut base_args = create_test_check_args(vec![]);
+        base_args.badge = true;
+        base_args.summary = true;
+        base_args.ci = true;
+        base_args.fix_hint = true;
+
+        let effective = EffectiveConfig::from_check_args_and_config(&base_args, &Config::default());
+
+        let batch_args =
+            create_scan_check_args_batch(vec![PathBuf::from("/test/path")], &base_args, &effective);
+
+        assert!(!batch_args.badge, "Should disable badge in batch");
+        assert!(!batch_args.summary, "Should disable summary in batch");
+        assert!(!batch_args.ci, "Should disable CI mode in batch");
+        assert!(!batch_args.fix_hint, "Should disable fix_hint in batch");
+        assert_eq!(
+            batch_args.format,
+            OutputFormat::Terminal,
+            "Should use terminal format in batch"
+        );
+    }
+
+    #[test]
+    fn test_create_scan_check_args_no_recursive_always_false() {
+        let mut base_args = create_test_check_args(vec![]);
+        base_args.no_recursive = true; // User wants no recursion
+
+        let effective = EffectiveConfig::from_check_args_and_config(&base_args, &Config::default());
+
+        let scan_args =
+            create_scan_check_args(vec![PathBuf::from("/test/path")], &base_args, &effective);
+
+        assert!(
+            !scan_args.no_recursive,
+            "Should always be recursive for remote repos"
+        );
+    }
+}

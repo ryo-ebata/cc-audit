@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  security-events: write  # For SARIF upload to GitHub Security tab
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -23,59 +27,460 @@ jobs:
       - name: Build cc-audit
         run: cargo build --release
 
-      - name: Audit Skills
+      - name: Setup output directories
         run: |
-          echo "## Skill Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type skill . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          mkdir -p .cc-audit-reports/{skill,hook,mcp,command,docker,dependency,strict}
+
+      - name: Audit Skills
+        id: scan-skill
+        continue-on-error: true
+        run: |
+          SCAN_TYPE="skill"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "SKILL_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "SKILL_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "SKILL_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "SKILL_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "SKILL_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Skills)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/skill/report.sarif
+          category: cc-audit-skill
+        continue-on-error: true
 
       - name: Audit Hooks
+        id: scan-hook
+        continue-on-error: true
         run: |
-          echo "## Hook Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type hook . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="hook"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "HOOK_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "HOOK_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "HOOK_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "HOOK_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "HOOK_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Hooks)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/hook/report.sarif
+          category: cc-audit-hook
+        continue-on-error: true
 
       - name: Audit MCP Configurations
+        id: scan-mcp
+        continue-on-error: true
         run: |
-          echo "## MCP Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type mcp . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="mcp"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "MCP_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "MCP_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "MCP_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "MCP_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "MCP_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (MCP)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/mcp/report.sarif
+          category: cc-audit-mcp
+        continue-on-error: true
 
       - name: Audit Commands
+        id: scan-command
+        continue-on-error: true
         run: |
-          echo "## Command Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type command . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="command"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "COMMAND_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "COMMAND_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "COMMAND_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "COMMAND_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "COMMAND_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Commands)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/command/report.sarif
+          category: cc-audit-command
+        continue-on-error: true
 
       - name: Audit Dockerfiles
+        id: scan-docker
+        continue-on-error: true
         run: |
-          echo "## Docker Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type docker . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="docker"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "DOCKER_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "DOCKER_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "DOCKER_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "DOCKER_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "DOCKER_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Docker)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/docker/report.sarif
+          category: cc-audit-docker
+        continue-on-error: true
 
       - name: Audit Dependencies
+        id: scan-dependency
+        continue-on-error: true
         run: |
-          echo "## Dependency Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type dependency . 2>&1 | tee -a $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="dependency"
+
+          # Generate Terminal output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
+
+          # Generate JSON output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          # Generate SARIF output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          # Generate Markdown output
+          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics from JSON for summary
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          # Determine status icon
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save to environment for summary table
+          echo "DEPENDENCY_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "DEPENDENCY_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "DEPENDENCY_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "DEPENDENCY_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "DEPENDENCY_LOW=${LOW}" >> $GITHUB_ENV
+
+          # Exit with original scan exit code
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Dependencies)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/dependency/report.sarif
+          category: cc-audit-dependency
+        continue-on-error: true
 
       - name: Strict Mode Check (CI)
+        id: scan-strict
+        continue-on-error: true
         run: |
-          echo "## Strict Mode Results" >> $GITHUB_STEP_SUMMARY
+          SCAN_TYPE="strict"
+
+          # Generate Terminal output with warning
+          ./target/release/cc-audit check --type skill --ci . \
+            > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || {
+              echo "::warning::Strict mode found issues"
+              SCAN_EXIT_CODE=1
+            }
+
+          # Generate other formats
+          ./target/release/cc-audit check --type skill --format json --ci . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
+
+          ./target/release/cc-audit check --type skill --format sarif --ci . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
+
+          ./target/release/cc-audit check --type skill --format markdown --ci . \
+            > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
+
+          # Extract metrics
+          if [ -f ".cc-audit-reports/${SCAN_TYPE}/report.json" ]; then
+            CRITICAL=$(jq -r '.summary.critical // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            HIGH=$(jq -r '.summary.high // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            MEDIUM=$(jq -r '.summary.medium // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            LOW=$(jq -r '.summary.low // 0' .cc-audit-reports/${SCAN_TYPE}/report.json)
+            PASSED=$(jq -r '.summary.passed // false' .cc-audit-reports/${SCAN_TYPE}/report.json)
+          else
+            CRITICAL=0; HIGH=0; MEDIUM=0; LOW=0; PASSED=true
+          fi
+
+          if [ "$PASSED" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="⚠️"
+          fi
+
+          echo "STRICT_STATUS=${STATUS}" >> $GITHUB_ENV
+          echo "STRICT_CRITICAL=${CRITICAL}" >> $GITHUB_ENV
+          echo "STRICT_HIGH=${HIGH}" >> $GITHUB_ENV
+          echo "STRICT_MEDIUM=${MEDIUM}" >> $GITHUB_ENV
+          echo "STRICT_LOW=${LOW}" >> $GITHUB_ENV
+
+          exit ${SCAN_EXIT_CODE:-0}
+
+      - name: Upload SARIF (Strict)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: .cc-audit-reports/strict/report.sarif
+          category: cc-audit-strict
+        continue-on-error: true
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-audit-reports
+          path: .cc-audit-reports/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "## 🔍 Self-Audit Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          ./target/release/cc-audit check --type skill --ci . || echo "::warning::Strict mode found issues"
+          echo "| Scan Type | Status | Critical | High | Medium | Low |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|----------|------|--------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Skill | ${SKILL_STATUS:-⏭️} | ${SKILL_CRITICAL:-0} | ${SKILL_HIGH:-0} | ${SKILL_MEDIUM:-0} | ${SKILL_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Hook | ${HOOK_STATUS:-⏭️} | ${HOOK_CRITICAL:-0} | ${HOOK_HIGH:-0} | ${HOOK_MEDIUM:-0} | ${HOOK_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| MCP | ${MCP_STATUS:-⏭️} | ${MCP_CRITICAL:-0} | ${MCP_HIGH:-0} | ${MCP_MEDIUM:-0} | ${MCP_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Command | ${COMMAND_STATUS:-⏭️} | ${COMMAND_CRITICAL:-0} | ${COMMAND_HIGH:-0} | ${COMMAND_MEDIUM:-0} | ${COMMAND_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker | ${DOCKER_STATUS:-⏭️} | ${DOCKER_CRITICAL:-0} | ${DOCKER_HIGH:-0} | ${DOCKER_MEDIUM:-0} | ${DOCKER_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency | ${DEPENDENCY_STATUS:-⏭️} | ${DEPENDENCY_CRITICAL:-0} | ${DEPENDENCY_HIGH:-0} | ${DEPENDENCY_MEDIUM:-0} | ${DEPENDENCY_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Strict | ${STRICT_STATUS:-⏭️} | ${STRICT_CRITICAL:-0} | ${STRICT_HIGH:-0} | ${STRICT_MEDIUM:-0} | ${STRICT_LOW:-0} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifact Downloads" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [Download all reports](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔒 Security Tab" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [View SARIF results in Security tab](https://github.com/${{ github.repository }}/security/code-scanning)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Add collapsed terminal output sections
+          for TYPE in skill hook mcp command docker dependency strict; do
+            TYPE_UPPER=$(echo ${TYPE} | tr '[:lower:]' '[:upper:]')
+            echo "<details>" >> $GITHUB_STEP_SUMMARY
+            echo "<summary>📄 ${TYPE_UPPER} Terminal Output</summary>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat .cc-audit-reports/${TYPE}/terminal.txt 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No output" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "</details>" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
 
   self-audit-result:
     name: Self Audit Result
@@ -83,10 +488,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.self-audit.result }}" == "failure" ]]; then
-            echo "Self audit job failed"
-            exit 1
-          fi
-          echo "Self audit passed"
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'Self Audit'
+          jobs: |
+            [
+              {"name": "self-audit", "result": "${{ needs.self-audit.result }}"}
+            ]

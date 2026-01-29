@@ -13,27 +13,32 @@ static TRUSTED_DOMAINS: LazyLock<TrustedDomainMatcher> = LazyLock::new(TrustedDo
 
 /// Critical dangerous patterns for Bash commands.
 /// These are pre-compiled for fast matching.
+///
+/// SECURITY: All patterns use lazy quantifiers (.*?) and length limits to prevent ReDoS attacks.
+/// Patterns are designed to complete within 10ms for normal commands and <200ms for large inputs.
 static DANGEROUS_BASH_PATTERNS: LazyLock<Vec<DangerousPattern>> = LazyLock::new(|| {
     vec![
         // EX-001: Network request with environment variable
+        // Use lazy quantifier (.*?) to prevent backtracking
         DangerousPattern {
             rule_id: "EX-001",
             severity: "critical",
             patterns: vec![
-                Regex::new(r"(curl|wget)\s+.*\$[A-Z_][A-Z0-9_]*").unwrap(),
-                Regex::new(r"(curl|wget)\s+.*\$\{[A-Z_][A-Z0-9_]*\}").unwrap(),
+                Regex::new(r"(curl|wget)\s+.*?\$[A-Z_][A-Z0-9_]*").unwrap(),
+                Regex::new(r"(curl|wget)\s+.*?\$\{[A-Z_][A-Z0-9_]*\}").unwrap(),
             ],
             exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1|::1|\[::1\]").unwrap()],
             message: "Potential data exfiltration: network request with environment variable",
             recommendation: "Remove sensitive data from network request",
         },
         // EX-002: Base64 encoded network transmission
+        // Use lazy quantifier (.*?) to prevent backtracking
         DangerousPattern {
             rule_id: "EX-002",
             severity: "critical",
             patterns: vec![
-                Regex::new(r"base64.*\|\s*(curl|wget|nc|netcat)").unwrap(),
-                Regex::new(r"(curl|wget|nc|netcat).*base64").unwrap(),
+                Regex::new(r"base64.*?\|\s*(curl|wget|nc|netcat)").unwrap(),
+                Regex::new(r"(curl|wget|nc|netcat).*?base64").unwrap(),
             ],
             exclusions: vec![Regex::new(r"localhost|127\.0\.0\.1").unwrap()],
             message: "Potential data exfiltration: base64 encoding with network transmission",
@@ -142,12 +147,15 @@ static DANGEROUS_BASH_PATTERNS: LazyLock<Vec<DangerousPattern>> = LazyLock::new(
             recommendation: "Download and review the script before execution",
         },
         // OB-001: Eval execution
+        // Use lazy quantifier and limit length to prevent ReDoS
         DangerousPattern {
             rule_id: "OB-001",
             severity: "high",
             patterns: vec![
                 Regex::new(r"\beval\s+").unwrap(),
-                Regex::new(r"\$\(.*\)").unwrap(),
+                // Use lazy quantifier and non-greedy match for command substitution
+                // Limit to 500 chars to prevent catastrophic backtracking
+                Regex::new(r"\$\([^)]{0,500}?\)").unwrap(),
             ],
             exclusions: vec![
                 // Common safe patterns
@@ -338,12 +346,14 @@ impl HookAnalyzer {
     }
 
     /// Analyze content for potential secret leaks.
+    ///
+    /// SECURITY: All patterns use length limits to prevent ReDoS attacks.
     fn analyze_content_for_secrets(content: &str) -> Vec<HookFinding> {
         static SECRET_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
             vec![
-                // API Keys
+                // API Keys - limit to 200 chars to prevent ReDoS
                 (
-                    Regex::new(r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,}['"]?"#)
+                    Regex::new(r#"(?i)(api[_-]?key|apikey)\s*[:=]\s*['"]?[a-zA-Z0-9_-]{20,200}['"]?"#)
                         .unwrap(),
                     "API key detected",
                 ),
@@ -367,9 +377,9 @@ impl HookAnalyzer {
                     Regex::new(r"-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----").unwrap(),
                     "Private key detected",
                 ),
-                // Generic secrets
+                // Generic secrets - limit to 200 chars to prevent ReDoS
                 (
-                    Regex::new(r#"(?i)(password|passwd|secret|token)\s*[:=]\s*['"][^'"]{8,}['"]"#).unwrap(),
+                    Regex::new(r#"(?i)(password|passwd|secret|token)\s*[:=]\s*['"][^'"]{8,200}['"]"#).unwrap(),
                     "Hardcoded secret detected",
                 ),
             ]

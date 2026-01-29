@@ -9,6 +9,7 @@
 //! - `effective`: CLI + config + profile merging (from run/config.rs)
 //! - `profile`: Profile management (from profile.rs)
 
+pub mod effective;
 mod error;
 mod loading;
 mod parsers;
@@ -17,6 +18,7 @@ mod template;
 mod types;
 
 // Re-export all public types
+pub use effective::EffectiveConfig;
 pub use error::ConfigError;
 pub use loading::ConfigLoadResult;
 pub use severity::SeverityConfig;
@@ -28,9 +30,9 @@ pub use parsers::{
     parse_rule_severity, parse_scan_type, parse_severity,
 };
 
-// Re-export from other modules (will be moved here in Phase 10)
+// Re-export from other modules
 pub use crate::profile::{Profile, profile_from_check_args};
-pub use crate::run::config::{EffectiveConfig, load_custom_rules_from_effective};
+pub use effective::load_custom_rules_from_effective;
 
 #[cfg(test)]
 mod tests {

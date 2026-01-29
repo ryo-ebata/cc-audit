@@ -258,6 +258,7 @@ dependencies = [
  "ignore",
  "indicatif",
  "insta",
+ "libc",
  "notify",
  "predicates",
  "rayon",

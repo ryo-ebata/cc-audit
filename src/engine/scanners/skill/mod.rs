@@ -5,13 +5,13 @@ pub use file_filter::SkillFileFilter;
 pub use frontmatter::FrontmatterParser;
 
 use super::walker::{DirectoryWalker, WalkConfig};
+use crate::discovery::is_text_file;
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
-use crate::run::is_text_file;
+use crate::security::CanonicalPathSet;
 use rayon::prelude::*;
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -50,6 +50,43 @@ impl SkillScanner {
     /// Check if a file should be scanned
     fn should_scan_file(&self, path: &Path) -> bool {
         SkillFileFilter::should_scan(path)
+    }
+
+    /// Scan special files (SKILL.md, CLAUDE.md, .claude/CLAUDE.md).
+    ///
+    /// Returns (findings, scanned_files) where scanned_files tracks which files were already scanned.
+    fn scan_special_files(&self, dir: &Path) -> Result<(Vec<Finding>, CanonicalPathSet)> {
+        let mut findings = Vec::new();
+        let mut scanned_files = CanonicalPathSet::new();
+
+        // Check for SKILL.md
+        let skill_md = dir.join("SKILL.md");
+        if skill_md.exists() {
+            debug!(path = %skill_md.display(), "Scanning SKILL.md");
+            findings.extend(self.scan_skill_md(&skill_md)?);
+            // Ignore canonicalization errors - file may have been deleted after exists() check
+            let _ = scanned_files.insert(&skill_md);
+        }
+
+        // Check for CLAUDE.md (project instructions file)
+        let claude_md = dir.join("CLAUDE.md");
+        if claude_md.exists() {
+            debug!(path = %claude_md.display(), "Scanning CLAUDE.md");
+            findings.extend(self.scan_skill_md(&claude_md)?);
+            // Ignore canonicalization errors - file may have been deleted after exists() check
+            let _ = scanned_files.insert(&claude_md);
+        }
+
+        // Check for .claude/CLAUDE.md
+        let dot_claude_md = dir.join(".claude").join("CLAUDE.md");
+        if dot_claude_md.exists() {
+            debug!(path = %dot_claude_md.display(), "Scanning .claude/CLAUDE.md");
+            findings.extend(self.scan_skill_md(&dot_claude_md)?);
+            // Ignore canonicalization errors - file may have been deleted after exists() check
+            let _ = scanned_files.insert(&dot_claude_md);
+        }
+
+        Ok((findings, scanned_files))
     }
 }
 
@@ -100,33 +137,10 @@ impl Scanner for SkillScanner {
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
         let mut findings = Vec::new();
-        let mut scanned_files: HashSet<std::path::PathBuf> = HashSet::new();
 
-        // Check for SKILL.md
-        let skill_md = dir.join("SKILL.md");
-        if skill_md.exists() {
-            debug!(path = %skill_md.display(), "Scanning SKILL.md");
-            findings.extend(self.scan_skill_md(&skill_md)?);
-            scanned_files.insert(skill_md.canonicalize().unwrap_or(skill_md));
-        }
-
-        // Check for CLAUDE.md (project instructions file)
-        let claude_md = dir.join("CLAUDE.md");
-        if claude_md.exists() {
-            debug!(path = %claude_md.display(), "Scanning CLAUDE.md");
-            findings.extend(self.scan_skill_md(&claude_md)?);
-            let canonical = claude_md.canonicalize().unwrap_or(claude_md);
-            scanned_files.insert(canonical);
-        }
-
-        // Check for .claude/CLAUDE.md
-        let dot_claude_md = dir.join(".claude").join("CLAUDE.md");
-        if dot_claude_md.exists() {
-            debug!(path = %dot_claude_md.display(), "Scanning .claude/CLAUDE.md");
-            findings.extend(self.scan_skill_md(&dot_claude_md)?);
-            let canonical = dot_claude_md.canonicalize().unwrap_or(dot_claude_md);
-            scanned_files.insert(canonical);
-        }
+        // Scan special files (SKILL.md, CLAUDE.md, etc.)
+        let (special_findings, mut scanned_files) = self.scan_special_files(dir)?;
+        findings.extend(special_findings);
 
         // Determine max_depth based on recursive setting
         // recursive = true: None (unlimited depth)
@@ -153,10 +167,12 @@ impl Scanner for SkillScanner {
                 // Only process text files (matching count_files_to_scan behavior)
                 // Note: ignore filter is already applied by DirectoryWalker
                 if is_text_file(&path) {
-                    let canonical = path.canonicalize().unwrap_or(path.clone());
-                    if !scanned_files.contains(&canonical) {
-                        files_to_scan.push(path);
-                        scanned_files.insert(canonical);
+                    // Check if already scanned (ignore canonicalization errors for nonexistent files)
+                    let already_scanned = scanned_files.contains(&path).unwrap_or(false);
+                    if !already_scanned {
+                        files_to_scan.push(path.clone());
+                        // Ignore canonicalization errors - file may be inaccessible
+                        let _ = scanned_files.insert(&path);
                     }
                 }
             }
@@ -172,10 +188,12 @@ impl Scanner for SkillScanner {
             // Only process text files (matching count_files_to_scan behavior)
             // Note: ignore filter is already applied by DirectoryWalker
             if is_text_file(&path) {
-                let canonical = path.canonicalize().unwrap_or(path.clone());
-                if !scanned_files.contains(&canonical) {
-                    files_to_scan.push(path);
-                    scanned_files.insert(canonical);
+                // Check if already scanned (ignore canonicalization errors for nonexistent files)
+                let already_scanned = scanned_files.contains(&path).unwrap_or(false);
+                if !already_scanned {
+                    files_to_scan.push(path.clone());
+                    // Ignore canonicalization errors - file may be inaccessible
+                    let _ = scanned_files.insert(&path);
                 }
             }
         }

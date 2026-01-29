@@ -61,6 +61,7 @@ pub mod reporter;
 pub mod error;
 pub mod external;
 pub mod runtime;
+pub mod security;
 pub mod types;
 
 // External integrations
@@ -146,10 +147,13 @@ pub use reporter::{
 
 // Runtime & Orchestration
 pub use run::{
-    ScanMode, WatchModeResult, format_result_check_args, format_result_with_config, is_text_file,
-    is_text_file_with_config, run_scan_with_check_args, run_scan_with_check_args_config,
-    scan_path_with_cve_db, scan_path_with_malware_db, setup_watch_mode, watch_iteration,
+    ScanMode, WatchModeResult, format_result_check_args, format_result_with_config,
+    run_scan_with_check_args, run_scan_with_check_args_config, scan_path_with_cve_db,
+    scan_path_with_malware_db, setup_watch_mode, watch_iteration,
 };
+
+// Re-export text detection functions from their new location
+pub use discovery::text_detection::{is_config_file, is_text_file, is_text_file_with_config};
 pub use runtime::{HookRunner, Pipeline, PipelineStage, ScanContext, ScanExecutor};
 
 // External Integrations

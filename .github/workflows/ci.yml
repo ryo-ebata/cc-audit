@@ -108,18 +108,16 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
-            echo "No Rust changes detected, skipping CI checks"
-            exit 0
-          fi
-          if [[ "${{ needs.fmt.result }}" == "failure" || \
-                "${{ needs.clippy.result }}" == "failure" || \
-                "${{ needs.test.result }}" == "failure" || \
-                "${{ needs.coverage.result }}" == "failure" || \
-                "${{ needs.doc.result }}" == "failure" ]]; then
-            echo "One or more CI jobs failed"
-            exit 1
-          fi
-          echo "All CI checks passed"
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/check-results
+        with:
+          workflow-name: 'CI'
+          skip-condition: ${{ needs.changes.outputs.rust != 'true' && 'No Rust changes detected' || '' }}
+          jobs: |
+            [
+              {"name": "fmt", "result": "${{ needs.fmt.result }}"},
+              {"name": "clippy", "result": "${{ needs.clippy.result }}"},
+              {"name": "test", "result": "${{ needs.test.result }}"},
+              {"name": "coverage", "result": "${{ needs.coverage.result }}"},
+              {"name": "doc", "result": "${{ needs.doc.result }}"}
+            ]

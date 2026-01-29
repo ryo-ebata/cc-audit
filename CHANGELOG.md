@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.4](https://github.com/ryo-ebata/cc-audit/compare/v3.2.3...v3.2.4) (2026-01-29)
+
+
+### Bug Fixes
+
+* **ux:** improve Japanese text, minified files, long lines, and progress bar ([#61](https://github.com/ryo-ebata/cc-audit/issues/61)) ([f76b44b](https://github.com/ryo-ebata/cc-audit/commit/f76b44b245492f52733cd51abb517d4ce730dd16))
+
 ## [3.2.3](https://github.com/ryo-ebata/cc-audit/compare/v3.2.2...v3.2.3) (2026-01-29)
 
 

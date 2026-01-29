@@ -68,39 +68,46 @@ impl Config {
 
         // Walk up directory tree to find config file (like git finds .git)
         if let Some(root) = project_root {
-            // Canonicalize to resolve relative paths (e.g., "subdir" -> "/abs/path/subdir")
-            // so that parent() traversal works correctly.
-            let canonical = fs::canonicalize(root).unwrap_or_else(|e| {
-                debug!(error = %e, path = %root.display(), "Failed to canonicalize project root, using as-is");
-                root.to_path_buf()
-            });
+            // Canonicalize the path to handle relative paths properly
+            let root_canonical = match fs::canonicalize(root) {
+                Ok(canonical) => canonical,
+                Err(e) => {
+                    debug!(error = %e, path = %root.display(), "Failed to canonicalize project root, using as-is");
+                    root.to_path_buf()
+                }
+            };
 
-            let mut current = canonical.as_path();
+            let mut current = root_canonical.as_path();
             loop {
-                debug!(directory = %current.display(), "Checking directory for config file");
+                debug!(current = %current.display(), "Checking directory for config file");
                 for filename in CONFIG_FILENAMES {
                     let path = current.join(filename);
+                    debug!(path = %path.display(), exists = %path.exists(), "Checking config file");
                     if path.exists() {
                         debug!(path = %path.display(), "Found configuration file");
                         return Some(path);
                     }
                 }
 
+                // Move to parent directory
                 match current.parent() {
-                    Some(parent) if !parent.as_os_str().is_empty() => current = parent,
+                    Some(parent) if !parent.as_os_str().is_empty() => {
+                        debug!(parent = %parent.display(), "Moving to parent directory");
+                        current = parent;
+                    }
                     _ => {
-                        debug!("Reached filesystem root, stopping search");
+                        debug!("Reached root directory, stopping search");
                         break;
                     }
                 }
             }
         }
 
-        // Fall back to global config (~/.config/cc-audit/config.yaml)
+        // Try global config
         if let Some(config_dir) = dirs::config_dir() {
             let global_config = config_dir.join("cc-audit").join("config.yaml");
+            debug!(global_config = %global_config.display(), exists = %global_config.exists(), "Checking global config");
             if global_config.exists() {
-                debug!(path = %global_config.display(), "Found global configuration file");
                 return Some(global_config);
             }
         }
@@ -147,50 +154,54 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    /// Helper to canonicalize and compare two paths for equality.
-    fn assert_paths_eq(actual: &Path, expected: &Path) {
+    #[test]
+    fn test_find_config_file_in_subdirectory() {
+        // Test that find_config_file walks up from a subdirectory to find config in parent
+        let temp_dir = TempDir::new().unwrap();
+        let subdir = temp_dir.path().join("subdir");
+        fs::create_dir(&subdir).unwrap();
+
+        // Create config file in parent directory
+        let config_path = temp_dir.path().join(".cc-audit.yaml");
+        fs::write(&config_path, "# Test config\n").unwrap();
+
+        // Search from subdirectory
+        let found = Config::find_config_file(Some(&subdir));
+
+        assert!(found.is_some());
         assert_eq!(
-            actual.canonicalize().unwrap(),
-            expected.canonicalize().unwrap()
+            found.unwrap().canonicalize().unwrap(),
+            config_path.canonicalize().unwrap()
         );
     }
 
     #[test]
-    fn test_find_config_file_walks_up_to_parent() {
-        let temp_dir = TempDir::new().unwrap();
-        let subdir = temp_dir.path().join("subdir");
-        fs::create_dir(&subdir).unwrap();
-
-        let config_path = temp_dir.path().join(".cc-audit.yaml");
-        fs::write(&config_path, "# Test config\n").unwrap();
-
-        let found = Config::find_config_file(Some(&subdir))
-            .expect("should find config in parent directory");
-
-        assert_paths_eq(&found, &config_path);
-    }
-
-    #[test]
     fn test_find_config_file_with_relative_path() {
+        // Test that find_config_file works with relative paths
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("subdir");
         fs::create_dir(&subdir).unwrap();
 
+        // Create config file in parent directory
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, "# Test config\n").unwrap();
 
-        // Temporarily change cwd so that a relative path resolves correctly.
-        // NOTE: set_current_dir is process-global and not thread-safe.
+        // Change to temp_dir and search from relative path
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(temp_dir.path()).unwrap();
+
+        // Search using relative path
         let found = Config::find_config_file(Some(Path::new("subdir")));
+
+        // Restore original directory
         std::env::set_current_dir(original_dir).unwrap();
 
-        assert!(found.is_some(), "should find config via relative path");
+        assert!(found.is_some());
     }
 
     #[test]
-    fn test_find_config_file_returns_none_when_missing() {
+    fn test_find_config_file_not_found() {
+        // Test that find_config_file returns None when no config is found
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("subdir");
         fs::create_dir(&subdir).unwrap();
@@ -201,46 +212,66 @@ mod tests {
     }
 
     #[test]
-    fn test_find_config_file_in_same_directory() {
+    fn test_find_config_file_in_current_directory() {
+        // Test that find_config_file finds config in the specified directory
         let temp_dir = TempDir::new().unwrap();
 
+        // Create config file in current directory
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, "# Test config\n").unwrap();
 
-        let found = Config::find_config_file(Some(temp_dir.path()))
-            .expect("should find config in same directory");
+        let found = Config::find_config_file(Some(temp_dir.path()));
 
-        assert_paths_eq(&found, &config_path);
+        assert!(found.is_some());
+        assert_eq!(
+            found.unwrap().canonicalize().unwrap(),
+            config_path.canonicalize().unwrap()
+        );
     }
 
     #[test]
-    fn test_find_config_file_traverses_multiple_levels() {
+    fn test_find_config_file_multiple_levels() {
+        // Test walking up multiple directory levels
         let temp_dir = TempDir::new().unwrap();
-        let level3 = temp_dir.path().join("level1").join("level2").join("level3");
+        let level1 = temp_dir.path().join("level1");
+        let level2 = level1.join("level2");
+        let level3 = level2.join("level3");
         fs::create_dir_all(&level3).unwrap();
 
+        // Create config at root
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, "# Test config\n").unwrap();
 
-        let found =
-            Config::find_config_file(Some(&level3)).expect("should find config 3 levels up");
+        // Search from level3
+        let found = Config::find_config_file(Some(&level3));
 
-        assert_paths_eq(&found, &config_path);
+        assert!(found.is_some());
+        assert_eq!(
+            found.unwrap().canonicalize().unwrap(),
+            config_path.canonicalize().unwrap()
+        );
     }
 
     #[test]
-    fn test_find_config_file_prefers_closest_config() {
+    fn test_find_config_file_prefers_closer_config() {
+        // Test that find_config_file prefers config files closer to the search root
         let temp_dir = TempDir::new().unwrap();
         let subdir = temp_dir.path().join("subdir");
         fs::create_dir(&subdir).unwrap();
 
+        // Create config in both parent and subdirectory
         let parent_config = temp_dir.path().join(".cc-audit.yaml");
         let subdir_config = subdir.join(".cc-audit.yaml");
         fs::write(&parent_config, "# Parent config\n").unwrap();
         fs::write(&subdir_config, "# Subdir config\n").unwrap();
 
-        let found = Config::find_config_file(Some(&subdir)).expect("should find closest config");
+        // Search from subdirectory - should find the closer one
+        let found = Config::find_config_file(Some(&subdir));
 
-        assert_paths_eq(&found, &subdir_config);
+        assert!(found.is_some());
+        assert_eq!(
+            found.unwrap().canonicalize().unwrap(),
+            subdir_config.canonicalize().unwrap()
+        );
     }
 }

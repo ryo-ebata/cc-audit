@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
 regex = "1"
+rustc-hash = "2.0"
 rayon = "1.10"
 walkdir = "2"
 thiserror = "2"

@@ -110,7 +110,7 @@ impl DirectoryWalker {
     }
 
     /// Walk a single directory (not using patterns).
-    pub fn walk_single(&self, dir: &Path) -> impl Iterator<Item = PathBuf> + '_ {
+    pub fn walk_single(&self, dir: &Path) -> Vec<PathBuf> {
         let mut walker = WalkDir::new(dir).follow_links(self.config.follow_symlinks);
 
         if let Some(depth) = self.config.max_depth {
@@ -124,8 +124,7 @@ impl DirectoryWalker {
             .filter(|e| self.matches_extension(e.path()))
             .filter(|e| !self.is_ignored(e.path()))
             .map(|e| e.path().to_path_buf())
-            .collect::<Vec<_>>()
-            .into_iter()
+            .collect()
     }
 }
 
@@ -181,7 +180,7 @@ mod tests {
 
         let walker = DirectoryWalker::new(config);
         let scripts_dir = dir.path().join("scripts");
-        let files: Vec<_> = walker.walk_single(&scripts_dir).collect();
+        let files = walker.walk_single(&scripts_dir);
 
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("script.sh"));

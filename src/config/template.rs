@@ -299,6 +299,17 @@ ignore:
     - "**/.report/**"             # Hidden report directories
     - "**/*report*/**"            # Any directory containing 'report' (e.g., playwright-report, test-report)
 
+    # Generated and minified files
+    - "*.min.js"                  # Minified JavaScript
+    - "*.min.css"                 # Minified CSS
+    - "*.d.ts"                    # TypeScript declaration files
+    - "*.generated.*"             # Generated files
+    - "*.g.ts"                    # Generated TypeScript
+    - "*.g.dart"                  # Generated Dart
+    - "*.map"                     # Source maps
+    - "**/bundle.*"               # Bundle outputs
+    - "**/chunk-*"                # Webpack/Vite chunks
+
     # Temporary and backup files
     - "**/*.tmp"                  # Temporary files
     - "**/*.temp"                 # Temporary files
@@ -553,5 +564,27 @@ mod tests {
         assert!(template.contains("# WATCH MODE CONFIGURATION"));
         assert!(template.contains("watch:"));
         assert!(template.contains("debounce_ms:"));
+    }
+
+    #[test]
+    fn test_template_includes_generated_and_minified_files() {
+        let template = Config::generate_template();
+
+        // Minified files (v3.2.0)
+        assert!(template.contains("\"*.min.js\""));
+        assert!(template.contains("\"*.min.css\""));
+
+        // Generated files (v3.2.0)
+        assert!(template.contains("\"*.d.ts\""));
+        assert!(template.contains("\"*.generated.*\""));
+        assert!(template.contains("\"*.g.ts\""));
+        assert!(template.contains("\"*.g.dart\""));
+
+        // Source maps (v3.2.0)
+        assert!(template.contains("\"*.map\""));
+
+        // Bundle outputs (v3.2.0)
+        assert!(template.contains("\"**/bundle.*\""));
+        assert!(template.contains("\"**/chunk-*\""));
     }
 }

@@ -2,8 +2,9 @@ use super::walker::{DirectoryWalker, WalkConfig};
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
+use rayon::prelude::*;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
 
 /// Scanner for Claude Code subagent definitions in .claude/agents/
@@ -75,34 +76,36 @@ impl Scanner for SubagentScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
+        // Collect files to scan
+        let mut files: Vec<PathBuf> = Vec::new();
 
-        // Look for .claude/agents/ directory using DirectoryWalker
+        // Collect files from .claude/agents/ directory
         let walker_config =
             WalkConfig::new([".claude/agents"]).with_extensions(&["md", "yaml", "yml", "json"]);
         let walker = DirectoryWalker::new(walker_config);
+        files.extend(walker.walk(dir));
 
-        for path in walker.walk(dir) {
-            debug!(path = %path.display(), "Scanning agent file");
-            match self.scan_file(&path) {
-                Ok(f) => findings.extend(f),
-                Err(e) => warn!(path = %path.display(), error = %e, "Failed to scan agent file"),
-            }
-        }
-
-        // Also scan any agent definition files in the root
+        // Collect root agent definition files
         for pattern in &["agent.md", "agent.yaml", "agent.yml", "AGENT.md"] {
             let agent_file = dir.join(pattern);
             if agent_file.exists() {
-                debug!(path = %agent_file.display(), "Scanning root agent file");
-                match self.scan_file(&agent_file) {
-                    Ok(f) => findings.extend(f),
-                    Err(e) => {
-                        warn!(path = %agent_file.display(), error = %e, "Failed to scan root agent file")
-                    }
-                }
+                files.push(agent_file);
             }
         }
+
+        // Parallel scan of collected files
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                debug!(path = %path.display(), "Scanning agent file");
+                let result = self.scan_file(path);
+                self.config.report_progress(); // Thread-safe progress reporting
+                result.unwrap_or_else(|e| {
+                    warn!(path = %path.display(), error = %e, "Failed to scan agent file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

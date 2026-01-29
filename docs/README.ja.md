@@ -192,7 +192,7 @@ cargo build --release
 
 ## セキュリティ
 
-セキュリティ脆弱性を発見した場合は、[GitHub Security Advisories](https://github.com/ryo-ebata/cc-audit/security/advisories/new) から報告してください。
+セキュリティ脆弱性を発見した場合は、[GitHub Security Advisories](https://github.com/ryo-ebata/cc-audit/security) から報告してください。
 
 ## ライセンス
 

@@ -64,6 +64,16 @@ macro_rules! impl_scanner_builder {
                 self.config = self.config.with_recursive(recursive);
                 self
             }
+
+            /// Sets a progress callback that will be called for each scanned file.
+            #[allow(dead_code)]
+            pub fn with_progress_callback(
+                mut self,
+                callback: $crate::engine::scanner::ProgressCallback,
+            ) -> Self {
+                self.config = self.config.with_progress_callback(callback);
+                self
+            }
         }
 
         impl Default for $scanner {

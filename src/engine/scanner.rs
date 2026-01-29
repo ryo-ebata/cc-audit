@@ -70,6 +70,11 @@ pub trait ContentScanner: Scanner {
     }
 }
 
+/// Type alias for progress callback function.
+/// Called each time a file is scanned to report progress.
+/// Uses Arc to allow cloning and sharing across threads.
+pub type ProgressCallback = std::sync::Arc<dyn Fn() + Send + Sync>;
+
 /// Common configuration shared by all scanners.
 ///
 /// This struct provides a unified way to manage RuleEngine settings,
@@ -80,6 +85,7 @@ pub struct ScannerConfig {
     skip_comments: bool,
     strict_secrets: bool,
     recursive: bool,
+    progress_callback: Option<ProgressCallback>,
 }
 
 impl ScannerConfig {
@@ -91,6 +97,7 @@ impl ScannerConfig {
             skip_comments: false,
             strict_secrets: false,
             recursive: true,
+            progress_callback: None,
         }
     }
 
@@ -138,6 +145,20 @@ impl ScannerConfig {
     pub fn with_dynamic_rules(mut self, rules: Vec<DynamicRule>) -> Self {
         self.engine = self.engine.with_dynamic_rules(rules);
         self
+    }
+
+    /// Sets a progress callback that will be called for each scanned file.
+    pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
+        self.progress_callback = Some(callback);
+        self
+    }
+
+    /// Reports progress by calling the progress callback if set.
+    /// This should be called by scanners after processing each file.
+    pub fn report_progress(&self) {
+        if let Some(ref callback) = self.progress_callback {
+            callback();
+        }
     }
 
     /// Returns whether the given path should be ignored.
@@ -203,12 +224,35 @@ impl Default for ScannerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
     #[test]
     fn test_new_config() {
         let config = ScannerConfig::new();
         assert!(!config.skip_comments());
+    }
+
+    #[test]
+    fn test_progress_callback_is_called() {
+        use std::sync::Mutex;
+        // Track how many times progress callback is called
+        let call_count = Arc::new(Mutex::new(0));
+        let call_count_clone = Arc::clone(&call_count);
+
+        let progress_fn = move || {
+            let mut count = call_count_clone.lock().unwrap();
+            *count += 1;
+        };
+
+        let config = ScannerConfig::new().with_progress_callback(Arc::new(progress_fn));
+
+        // Simulate file scanning
+        config.report_progress();
+        config.report_progress();
+
+        let final_count = *call_count.lock().unwrap();
+        assert_eq!(final_count, 2, "Progress callback should be called twice");
     }
 
     #[test]

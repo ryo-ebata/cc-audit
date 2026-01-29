@@ -226,9 +226,13 @@ ignore:
 
     # Package managers
     - "**/node_modules/**"        # npm/yarn/pnpm packages
-    - "**/.pnpm/**"               # pnpm store
+    - "**/.pnpm/**"               # pnpm virtual store
+    - "**/.pnpm-store/**"         # pnpm global store
     - "**/.yarn/**"               # Yarn cache/offline mirror
+    - "**/.npm/**"                # npm cache
+    - "**/.pnp.*"                 # Yarn PnP loader files
     - "**/bower_components/**"    # Bower packages
+    - "**/jspm_packages/**"       # jspm packages
 
     # Version control
     - "**/.git/**"                # Git repository
@@ -253,6 +257,7 @@ ignore:
     - "**/.vite/**"               # Vite cache
     - "**/.turbo/**"              # Turborepo cache
     - "**/.esbuild/**"            # esbuild cache
+    - "**/.webpack/**"            # webpack cache
     - "**/.rpt2_cache/**"         # rollup-plugin-typescript2
     - "**/tmp/**"                 # Temporary files
     - "**/temp/**"                # Temporary files
@@ -447,7 +452,11 @@ mod tests {
         // Package managers
         assert!(template.contains("**/node_modules/**"));
         assert!(template.contains("**/.pnpm/**"));
+        assert!(template.contains("**/.pnpm-store/**"));
         assert!(template.contains("**/.yarn/**"));
+        assert!(template.contains("**/.npm/**"));
+        assert!(template.contains("**/.pnp.*"));
+        assert!(template.contains("**/jspm_packages/**"));
 
         // Version control
         assert!(template.contains("**/.git/**"));
@@ -472,6 +481,7 @@ mod tests {
         // Cache directories
         assert!(template.contains("**/.cache/**"));
         assert!(template.contains("**/.vite/**"));
+        assert!(template.contains("**/.webpack/**"));
 
         // Temporary files
         assert!(template.contains("**/tmp/**"));

@@ -188,42 +188,133 @@ watch:
 # =============================================================================
 # IGNORE CONFIGURATION
 # =============================================================================
-# Uses regex patterns to determine which paths to ignore during scanning.
+# Uses glob patterns to determine which paths to ignore during scanning.
 # Each pattern is matched against the full path of the file.
+#
+# Glob pattern syntax:
+#   *       - matches any sequence of characters except /
+#   **      - matches any sequence of characters including /
+#   ?       - matches any single character
+#   {a,b}   - matches either a or b
+#   [abc]   - matches any character in the set
+#   [!abc]  - matches any character not in the set
+#
+# Examples:
+#   - "**/node_modules/**"       # Ignore node_modules anywhere
+#   - "**/*.test.{js,ts}"        # Match .test.js or .test.ts files
+#   - "**/test{,s}/**"           # Match test or tests directories
+#   - "**/*.{log,tmp,bak}"       # Match files by extension
 ignore:
-  # Regex patterns to ignore
-  # Examples:
-  #   - "node_modules"           # Simple directory name match
-  #   - "/tests?/"               # Match /test/ or /tests/
-  #   - "\\.test\\.(js|ts)$"     # Match .test.js or .test.ts files
-  #   - "\\.(log|tmp|bak)$"      # Match files by extension
   patterns:
     # Build outputs
-    - "/(target|dist|build|out|_build)/"
-    # Frameworks
-    - "/(\\.next|\\.nuxt|\\.output|\\.svelte-kit|\\.astro|\\.remix|\\.gatsby|\\.expo|storybook-static)/"
+    - "**/target/**"              # Rust build artifacts
+    - "**/dist/**"                # Distribution/build output
+    - "**/build/**"               # Build directories
+    - "**/out/**"                 # Output directories
+    - "**/_build/**"              # Elixir/Phoenix build
+
+    # JavaScript/TypeScript frameworks
+    - "**/.next/**"               # Next.js
+    - "**/.nuxt/**"               # Nuxt.js
+    - "**/.output/**"             # Nitro/Nuxt output
+    - "**/.svelte-kit/**"         # SvelteKit
+    - "**/.astro/**"              # Astro
+    - "**/.remix/**"              # Remix
+    - "**/.gatsby/**"             # Gatsby
+    - "**/.expo/**"               # Expo
+    - "**/storybook-static/**"    # Storybook
+
     # Package managers
-    - "/(node_modules|\\.pnpm|\\.yarn|bower_components)/"
+    - "**/node_modules/**"        # npm/yarn/pnpm packages
+    - "**/.pnpm/**"               # pnpm store
+    - "**/.yarn/**"               # Yarn cache/offline mirror
+    - "**/bower_components/**"    # Bower packages
+
     # Version control
-    - "/(\\.git|\\.svn|\\.hg)/"
-    # IDEs
-    - "/(\\.idea|\\.vscode|\\.eclipse|\\.settings)/"
-    # Deployment
-    - "/(\\.vercel|\\.netlify|\\.amplify|\\.serverless)/"
-    # Cache/Bundlers
-    - "/(\\.cache|\\.parcel-cache|\\.vite|\\.turbo|\\.esbuild|\\.rpt2_cache|tmp|temp)/"
+    - "**/.git/**"                # Git repository
+    - "**/.svn/**"                # SVN repository
+    - "**/.hg/**"                 # Mercurial repository
+
+    # IDEs and editors
+    - "**/.idea/**"               # JetBrains IDEs
+    - "**/.vscode/**"             # Visual Studio Code
+    - "**/.eclipse/**"            # Eclipse
+    - "**/.settings/**"           # Eclipse settings
+
+    # Deployment platforms
+    - "**/.vercel/**"             # Vercel
+    - "**/.netlify/**"            # Netlify
+    - "**/.amplify/**"            # AWS Amplify
+    - "**/.serverless/**"         # Serverless Framework
+
+    # Cache and bundlers
+    - "**/.cache/**"              # General cache
+    - "**/.parcel-cache/**"       # Parcel bundler
+    - "**/.vite/**"               # Vite cache
+    - "**/.turbo/**"              # Turborepo cache
+    - "**/.esbuild/**"            # esbuild cache
+    - "**/.rpt2_cache/**"         # rollup-plugin-typescript2
+    - "**/tmp/**"                 # Temporary files
+    - "**/temp/**"                # Temporary files
+
     # Python
-    - "/(__pycache__|\\.pytest_cache|\\.mypy_cache|\\.ruff_cache|\\.venv|venv|\\.tox|\\.nox|__pypackages__|site-packages|\\.eggs)/"
+    - "**/__pycache__/**"         # Python bytecode cache
+    - "**/.pytest_cache/**"       # pytest cache
+    - "**/.mypy_cache/**"         # mypy type checker cache
+    - "**/.ruff_cache/**"         # Ruff linter cache
+    - "**/.venv/**"               # Virtual environment
+    - "**/venv/**"                # Virtual environment
+    - "**/.tox/**"                # Tox testing tool
+    - "**/.nox/**"                # Nox testing tool
+    - "**/__pypackages__/**"      # PEP 582
+    - "**/site-packages/**"       # Installed packages
+    - "**/.eggs/**"               # setuptools eggs
+
     # Ruby
-    - "/\\.bundle/"
-    # Java/Gradle
-    - "/(\\.gradle|\\.mvn)/"
+    - "**/.bundle/**"             # Bundler
+
+    # Java/Gradle/Maven
+    - "**/.gradle/**"             # Gradle cache
+    - "**/.mvn/**"                # Maven wrapper
+
     # Go
-    - "/vendor/"
-    # Coverage
-    - "/(coverage|\\.nyc_output|htmlcov|\\.coverage)/"
-    # Misc
-    - "/(logs|\\.docker)/"
+    - "**/vendor/**"              # Go vendor directory
+
+    # Coverage reports
+    - "**/coverage/**"            # Coverage reports
+    - "**/.nyc_output/**"         # NYC/Istanbul coverage
+    - "**/htmlcov/**"             # Python coverage HTML
+    - "**/.coverage/**"           # Python coverage data
+
+    # Logs and reports
+    - "**/logs/**"                # Log directories
+    - "**/*.log"                  # Log files
+    - "**/report/**"              # Report directories
+    - "**/reports/**"             # Report directories
+    - "**/.report/**"             # Hidden report directories
+
+    # Temporary and backup files
+    - "**/*.tmp"                  # Temporary files
+    - "**/*.temp"                 # Temporary files
+    - "**/*.bak"                  # Backup files
+    - "**/*.swp"                  # Vim swap files
+    - "**/*.swo"                  # Vim swap files
+    - "**/*~"                     # Backup files (emacs, etc.)
+
+    # OS-specific
+    - "**/.DS_Store"              # macOS
+    - "**/Thumbs.db"              # Windows
+    - "**/desktop.ini"            # Windows
+
+    # Docker
+    - "**/.docker/**"             # Docker cache/data
+
+    # Test directories (optional - uncomment if needed)
+    # - "**/test/**"              # Test directories
+    # - "**/tests/**"             # Test directories
+    # - "**/__tests__/**"         # Jest tests
+    # - "**/*.test.{js,ts,jsx,tsx}"  # Test files
+    # - "**/*.spec.{js,ts,jsx,tsx}"  # Spec files
 
 # =============================================================================
 # RULE CONFIGURATION
@@ -268,5 +359,185 @@ ignore:
 #     confidence: "firm"
 "#
         .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_template_is_valid_yaml() {
+        let template = Config::generate_template();
+
+        // Should parse as valid YAML
+        let result: Result<serde_yaml::Value, _> = serde_yaml::from_str(&template);
+        assert!(
+            result.is_ok(),
+            "Template should be valid YAML: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_template_contains_ignore_section() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("# IGNORE CONFIGURATION"));
+        assert!(template.contains("ignore:"));
+        assert!(template.contains("patterns:"));
+    }
+
+    #[test]
+    fn test_template_contains_glob_syntax_documentation() {
+        let template = Config::generate_template();
+
+        // Should document glob pattern syntax
+        assert!(template.contains("Glob pattern syntax:"));
+        assert!(template.contains("*       - matches any sequence"));
+        assert!(template.contains("**      - matches any sequence"));
+        assert!(template.contains("?       - matches any single character"));
+        assert!(template.contains("{a,b}   - matches either"));
+        assert!(template.contains("[abc]   - matches any character in the set"));
+    }
+
+    #[test]
+    fn test_template_uses_glob_patterns_not_regex() {
+        let template = Config::generate_template();
+
+        // Should use glob patterns (starting with **/)
+        assert!(template.contains("**/node_modules/**"));
+        assert!(template.contains("**/target/**"));
+        assert!(template.contains("**/.git/**"));
+
+        // Should NOT use old regex patterns
+        assert!(!template.contains("/(target|dist|build|out)/"));
+        assert!(!template.contains("/(node_modules|\\.pnpm|\\.yarn)/"));
+        assert!(!template.contains("/(\\.git|\\.svn|\\.hg)/"));
+    }
+
+    #[test]
+    fn test_template_includes_report_and_log_patterns() {
+        let template = Config::generate_template();
+
+        // Should include report directories
+        assert!(template.contains("**/report/**"));
+        assert!(template.contains("**/reports/**"));
+        assert!(template.contains("**/.report/**"));
+
+        // Should include log patterns
+        assert!(template.contains("**/logs/**"));
+        assert!(template.contains("**/*.log"));
+    }
+
+    #[test]
+    fn test_template_includes_common_build_artifacts() {
+        let template = Config::generate_template();
+
+        // Build outputs
+        assert!(template.contains("**/target/**"));
+        assert!(template.contains("**/dist/**"));
+        assert!(template.contains("**/build/**"));
+        assert!(template.contains("**/out/**"));
+
+        // Package managers
+        assert!(template.contains("**/node_modules/**"));
+        assert!(template.contains("**/.pnpm/**"));
+        assert!(template.contains("**/.yarn/**"));
+
+        // Version control
+        assert!(template.contains("**/.git/**"));
+        assert!(template.contains("**/.svn/**"));
+    }
+
+    #[test]
+    fn test_template_includes_framework_specific_patterns() {
+        let template = Config::generate_template();
+
+        // JavaScript/TypeScript frameworks
+        assert!(template.contains("**/.next/**"));
+        assert!(template.contains("**/.nuxt/**"));
+        assert!(template.contains("**/.svelte-kit/**"));
+        assert!(template.contains("**/.astro/**"));
+    }
+
+    #[test]
+    fn test_template_includes_cache_and_temp_patterns() {
+        let template = Config::generate_template();
+
+        // Cache directories
+        assert!(template.contains("**/.cache/**"));
+        assert!(template.contains("**/.vite/**"));
+
+        // Temporary files
+        assert!(template.contains("**/tmp/**"));
+        assert!(template.contains("**/temp/**"));
+        assert!(template.contains("**/*.tmp"));
+        assert!(template.contains("**/*.bak"));
+    }
+
+    #[test]
+    fn test_template_includes_python_patterns() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("**/__pycache__/**"));
+        assert!(template.contains("**/.pytest_cache/**"));
+        assert!(template.contains("**/.venv/**"));
+        assert!(template.contains("**/venv/**"));
+    }
+
+    #[test]
+    fn test_template_includes_coverage_patterns() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("**/coverage/**"));
+        assert!(template.contains("**/.nyc_output/**"));
+        assert!(template.contains("**/htmlcov/**"));
+    }
+
+    #[test]
+    fn test_template_includes_os_specific_patterns() {
+        let template = Config::generate_template();
+
+        // macOS
+        assert!(template.contains("**/.DS_Store"));
+
+        // Windows
+        assert!(template.contains("**/Thumbs.db"));
+        assert!(template.contains("**/desktop.ini"));
+    }
+
+    #[test]
+    fn test_template_includes_severity_configuration() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("# RULE SEVERITY CONFIGURATION"));
+        assert!(template.contains("severity:"));
+        assert!(template.contains("default: error"));
+    }
+
+    #[test]
+    fn test_template_includes_scan_configuration() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("# SCAN CONFIGURATION"));
+        assert!(template.contains("scan:"));
+    }
+
+    #[test]
+    fn test_template_includes_baseline_configuration() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("# BASELINE CONFIGURATION"));
+        assert!(template.contains("baseline:"));
+    }
+
+    #[test]
+    fn test_template_includes_watch_configuration() {
+        let template = Config::generate_template();
+
+        assert!(template.contains("# WATCH MODE CONFIGURATION"));
+        assert!(template.contains("watch:"));
+        assert!(template.contains("debounce_ms:"));
     }
 }

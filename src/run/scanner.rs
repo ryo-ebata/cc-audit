@@ -9,6 +9,7 @@ use crate::{
 };
 use chrono::Utc;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
@@ -17,6 +18,7 @@ use super::config::{EffectiveConfig, load_custom_rules_from_effective};
 use super::cve::scan_path_with_cve_db;
 use super::malware::scan_path_with_malware_db;
 use super::text_file::is_text_file;
+use crate::reporter::progress::ScanProgress;
 
 /// Run a scan using CheckArgs settings.
 pub fn run_scan_with_check_args(args: &CheckArgs) -> Option<ScanResult> {
@@ -110,6 +112,15 @@ fn run_scan_with_check_args_internal(
     // Create ignore filter from config
     let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
 
+    // Count total files for progress bar
+    let total_files = count_total_files(&scan_paths, &create_ignore_filter);
+
+    // Check if running in TTY (interactive terminal)
+    let is_tty = std::io::stderr().is_terminal();
+
+    // Create progress bar (shown only if 10+ files, TTY, and not CI mode)
+    let progress = ScanProgress::new(total_files, is_tty, effective.ci);
+
     for path in &scan_paths {
         // Use effective scan_type from merged config
         let result = run_scanner_for_type(
@@ -129,6 +140,7 @@ fn run_scan_with_check_args_internal(
             }
             Err(e) => {
                 eprintln!("Error scanning {}: {}", path.display(), e);
+                progress.finish();
                 return None;
             }
         }
@@ -153,7 +165,24 @@ fn run_scan_with_check_args_internal(
             let cve_findings = scan_path_with_cve_db(path, db, &ignore_filter);
             all_findings.extend(cve_findings);
         }
+
+        // Update progress: count files in this path
+        let files_scanned = if path.is_file() {
+            1
+        } else {
+            let ignore_filter = create_ignore_filter(path);
+            let walker =
+                DirectoryWalker::new(WalkConfig::default()).with_ignore_filter(ignore_filter);
+            walker.walk_single(path).filter(|p| is_text_file(p)).count()
+        };
+
+        for _ in 0..files_scanned {
+            progress.inc();
+        }
     }
+
+    // Finish and clear progress bar
+    progress.finish();
 
     // Filter and process findings
     let filtered_findings =
@@ -423,6 +452,33 @@ pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Fi
     }
 
     findings
+}
+
+/// Count total files to be scanned across all paths.
+///
+/// This function walks through all scan paths and counts files that will be
+/// scanned, respecting the ignore filter. Used to initialize progress bar.
+fn count_total_files<F>(paths: &[PathBuf], create_ignore_filter: &F) -> usize
+where
+    F: Fn(&Path) -> IgnoreFilter,
+{
+    paths
+        .iter()
+        .map(|path| {
+            let ignore_filter = create_ignore_filter(path);
+            if path.is_file() {
+                if ignore_filter.is_ignored(path) || !is_text_file(path) {
+                    0
+                } else {
+                    1
+                }
+            } else {
+                let walker =
+                    DirectoryWalker::new(WalkConfig::default()).with_ignore_filter(ignore_filter);
+                walker.walk_single(path).filter(|p| is_text_file(p)).count()
+            }
+        })
+        .sum()
 }
 
 #[cfg(test)]

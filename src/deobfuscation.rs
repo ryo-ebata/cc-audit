@@ -1,4 +1,5 @@
 use base64::Engine;
+use rayon::prelude::*;
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -26,34 +27,33 @@ impl Deobfuscator {
 
     /// Deobfuscate content and return a list of decoded strings
     pub fn deobfuscate(&self, content: &str) -> Vec<DecodedContent> {
-        let mut results = Vec::new();
-
-        // Try base64 decoding
-        for decoded in self.decode_base64(content) {
-            results.push(decoded);
+        // Early return if no encoded patterns detected
+        if !self.has_encoded_patterns(content) {
+            return Vec::new();
         }
 
-        // Try hex decoding
-        for decoded in self.decode_hex(content) {
-            results.push(decoded);
-        }
+        // Parallel decode operations using Rayon
+        // Use a Vec of decoder functions that return Vec<DecodedContent>
+        vec![
+            self.decode_base64(content),
+            self.decode_hex(content),
+            self.decode_url(content),
+            self.decode_unicode_escapes(content),
+            self.decode_char_code(content),
+        ]
+        .into_par_iter()
+        .flatten()
+        .collect()
+    }
 
-        // Try URL decoding
-        for decoded in self.decode_url(content) {
-            results.push(decoded);
-        }
-
-        // Try unicode escape decoding
-        for decoded in self.decode_unicode_escapes(content) {
-            results.push(decoded);
-        }
-
-        // Try JavaScript charCode decoding
-        for decoded in self.decode_char_code(content) {
-            results.push(decoded);
-        }
-
-        results
+    /// Check if content contains encoded patterns
+    fn has_encoded_patterns(&self, content: &str) -> bool {
+        // Use regex patterns for more accurate detection
+        BASE64_PATTERN.is_match(content)
+            || HEX_PATTERN.is_match(content)
+            || URL_ENCODED_PATTERN.is_match(content)
+            || UNICODE_ESCAPE_PATTERN.is_match(content)
+            || CHAR_CODE_PATTERN.is_match(content)
     }
 
     /// Decode base64 encoded strings

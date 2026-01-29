@@ -19,6 +19,10 @@ use super::config::{EffectiveConfig, load_custom_rules_from_effective};
 use super::cve::scan_path_with_cve_db;
 use super::malware::scan_path_with_malware_db;
 use super::text_file::is_text_file;
+
+// Orchestrator layer: Coordinates L1-L7, so L7 usage is appropriate here.
+// ScanProgress is created here and converted to ProgressCallback (abstraction)
+// before being passed to L5 scanners, maintaining layer separation.
 use crate::reporter::progress::ScanProgress;
 
 /// Run a scan using CheckArgs settings.

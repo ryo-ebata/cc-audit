@@ -1,7 +1,8 @@
+use crate::engine::scanner::{Scanner, ScannerConfig};
+use crate::engine::scanners::SkillScanner;
 use crate::error::Result;
 use crate::fix::AutoFixer;
 use crate::rules::{Finding, RuleEngine, ScanResult, Summary};
-use crate::scanner::{Scanner, ScannerConfig, SkillScanner};
 use crate::scoring::RiskScore;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

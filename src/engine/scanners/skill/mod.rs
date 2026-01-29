@@ -9,6 +9,7 @@ use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
+use crate::run::is_text_file;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -53,13 +54,46 @@ impl SkillScanner {
 }
 
 impl Scanner for SkillScanner {
+    fn scan_path(&self, path: &Path) -> Result<Vec<Finding>> {
+        use tracing::trace;
+
+        trace!(path = %path.display(), "Scanning path");
+
+        if !path.exists() {
+            use tracing::debug;
+            debug!(path = %path.display(), "Path not found");
+            return Err(crate::error::AuditError::FileNotFound(
+                path.display().to_string(),
+            ));
+        }
+
+        if path.is_file() {
+            trace!(path = %path.display(), "Scanning as file");
+            let findings = self.scan_file(path)?;
+            // Report progress for single file scan
+            self.config.report_progress();
+            return Ok(findings);
+        }
+
+        if !path.is_dir() {
+            use tracing::debug;
+            debug!(path = %path.display(), "Path is not a directory");
+            return Err(crate::error::AuditError::NotADirectory(
+                path.display().to_string(),
+            ));
+        }
+
+        trace!(path = %path.display(), "Scanning as directory");
+        self.scan_directory(path)
+    }
+
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
         let content = self.config.read_file(path)?;
         let path_str = path.display().to_string();
         let findings = self.config.check_content(&content, &path_str);
 
-        // Report progress after scanning each file
-        self.config.report_progress();
+        // Note: Progress reporting is handled by the caller (scan_directory or scan_path)
+        // to avoid double-counting when scanning directories.
 
         Ok(findings)
     }
@@ -110,9 +144,15 @@ impl Scanner for SkillScanner {
         // Collect files from scripts directory
         let scripts_dir = dir.join("scripts");
         if scripts_dir.exists() && scripts_dir.is_dir() {
-            let walker = DirectoryWalker::new(walk_config.clone());
+            let mut walker = DirectoryWalker::new(walk_config.clone());
+            // Apply ignore filter to match count_files_to_scan() behavior
+            if let Some(ignore_filter) = self.config.ignore_filter() {
+                walker = walker.with_ignore_filter(ignore_filter.clone());
+            }
             for path in walker.walk_single(&scripts_dir) {
-                if !self.config.is_ignored(&path) {
+                // Only process text files (matching count_files_to_scan behavior)
+                // Note: ignore filter is already applied by DirectoryWalker
+                if is_text_file(&path) {
                     let canonical = path.canonicalize().unwrap_or(path.clone());
                     if !scanned_files.contains(&canonical) {
                         files_to_scan.push(path);
@@ -123,9 +163,15 @@ impl Scanner for SkillScanner {
         }
 
         // Collect other files that might contain code
-        let walker = DirectoryWalker::new(walk_config);
+        let mut walker = DirectoryWalker::new(walk_config);
+        // Apply ignore filter to match count_files_to_scan() behavior
+        if let Some(ignore_filter) = self.config.ignore_filter() {
+            walker = walker.with_ignore_filter(ignore_filter.clone());
+        }
         for path in walker.walk_single(dir) {
-            if self.should_scan_file(&path) && !self.config.is_ignored(&path) {
+            // Only process text files (matching count_files_to_scan behavior)
+            // Note: ignore filter is already applied by DirectoryWalker
+            if is_text_file(&path) {
                 let canonical = path.canonicalize().unwrap_or(path.clone());
                 if !scanned_files.contains(&canonical) {
                     files_to_scan.push(path);
@@ -138,13 +184,20 @@ impl Scanner for SkillScanner {
         let parallel_findings: Vec<Finding> = files_to_scan
             .par_iter()
             .flat_map(|path| {
-                debug!(path = %path.display(), "Scanning file");
-                let result = self.scan_file(path);
-                self.config.report_progress(); // Thread-safe progress reporting
-                result.unwrap_or_else(|e| {
-                    debug!(path = %path.display(), error = %e, "Failed to scan file");
+                // Always report progress for every file (even if not scannable)
+                // to match the file count from count_files_to_scan()
+                let findings = if self.should_scan_file(path) {
+                    debug!(path = %path.display(), "Scanning file");
+                    self.scan_file(path).unwrap_or_else(|e| {
+                        debug!(path = %path.display(), error = %e, "Failed to scan file");
+                        vec![]
+                    })
+                } else {
+                    debug!(path = %path.display(), "Skipping non-scannable file");
                     vec![]
-                })
+                };
+                self.config.report_progress(); // Thread-safe progress reporting
+                findings
             })
             .collect();
 
@@ -806,6 +859,121 @@ cat ~/.ssh/id_rsa
         assert!(
             findings.iter().any(|f| f.id == "PE-003"),
             "Should detect chmod 777"
+        );
+    }
+
+    #[test]
+    fn test_progress_callback_called_once_per_file() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let dir = TempDir::new().unwrap();
+
+        // Create SKILL.md (1 file)
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "---\nname: test\n---\n# Test Skill").unwrap();
+
+        // Create scripts directory with 5 script files (5 files)
+        let scripts_dir = dir.path().join("scripts");
+        fs::create_dir(&scripts_dir).unwrap();
+        for i in 0..5 {
+            let script_file = scripts_dir.join(format!("script_{}.sh", i));
+            fs::write(&script_file, "echo 'hello'").unwrap();
+        }
+
+        // Create 3 additional files in root directory (3 files)
+        for i in 0..3 {
+            let file = dir.path().join(format!("file_{}.sh", i));
+            fs::write(&file, "echo 'test'").unwrap();
+        }
+
+        // Total expected files: 1 (SKILL.md) + 5 (scripts/) + 3 (root) = 9 files
+        let expected_count = 9;
+
+        // Create atomic counter for progress callback
+        let progress_count = Arc::new(AtomicUsize::new(0));
+        let progress_count_clone = Arc::clone(&progress_count);
+
+        // Create progress callback that increments the counter
+        let progress_callback = Arc::new(move || {
+            progress_count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        // Create scanner with progress callback
+        let scanner = SkillScanner::new().with_progress_callback(progress_callback);
+
+        // Scan directory
+        let _findings = scanner.scan_directory(dir.path()).unwrap();
+
+        // Progress callback should be called exactly once per file
+        let actual_count = progress_count.load(Ordering::SeqCst);
+        assert_eq!(
+            actual_count, expected_count,
+            "Progress callback should be called exactly once per file. Expected: {}, Got: {}",
+            expected_count, actual_count
+        );
+    }
+
+    #[test]
+    fn test_progress_callback_respects_ignore_filter() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let dir = TempDir::new().unwrap();
+
+        // Create SKILL.md (1 file)
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "---\nname: test\n---\n# Test Skill").unwrap();
+
+        // Create scripts directory with 5 script files
+        let scripts_dir = dir.path().join("scripts");
+        fs::create_dir(&scripts_dir).unwrap();
+        for i in 0..5 {
+            let script_file = scripts_dir.join(format!("script_{}.sh", i));
+            fs::write(&script_file, "echo 'hello'").unwrap();
+        }
+
+        // Create node_modules directory with 3 files (should be ignored)
+        let node_modules_dir = dir.path().join("node_modules");
+        fs::create_dir(&node_modules_dir).unwrap();
+        for i in 0..3 {
+            let file = node_modules_dir.join(format!("module_{}.js", i));
+            fs::write(&file, "console.log('test')").unwrap();
+        }
+
+        // Total expected files WITHOUT ignore: 1 (SKILL.md) + 5 (scripts/) + 3 (node_modules) = 9
+        // Total expected files WITH ignore: 1 (SKILL.md) + 5 (scripts/) = 6
+
+        // Create ignore filter for node_modules
+        let config = crate::config::IgnoreConfig {
+            patterns: vec!["**/node_modules/**".to_string()],
+        };
+        let ignore_filter = crate::ignore::IgnoreFilter::from_config(&config);
+
+        // Create atomic counter
+        let progress_count = Arc::new(AtomicUsize::new(0));
+        let progress_count_clone = Arc::clone(&progress_count);
+
+        // Create progress callback
+        let progress_callback = Arc::new(move || {
+            progress_count_clone.fetch_add(1, Ordering::SeqCst);
+        });
+
+        // Create scanner with ignore filter and progress callback
+        let scanner = SkillScanner::new()
+            .with_ignore_filter(ignore_filter)
+            .with_progress_callback(progress_callback);
+
+        // Scan directory
+        let _findings = scanner.scan_directory(dir.path()).unwrap();
+
+        // Progress callback should only count non-ignored files
+        let actual_count = progress_count.load(Ordering::SeqCst);
+        let expected_count = 6; // 1 SKILL.md + 5 scripts (node_modules is ignored)
+        assert_eq!(
+            actual_count, expected_count,
+            "Progress callback should respect ignore filter. Expected: {}, Got: {}",
+            expected_count, actual_count
         );
     }
 }

@@ -259,7 +259,7 @@ impl Deobfuscator {
 
     /// Deep scan content - deobfuscate and return all findings
     pub fn deep_scan(&self, content: &str, file_path: &str) -> Vec<crate::rules::Finding> {
-        use crate::scanner::ScannerConfig;
+        use crate::engine::scanner::ScannerConfig;
 
         let mut findings = Vec::new();
         let config = ScannerConfig::new();

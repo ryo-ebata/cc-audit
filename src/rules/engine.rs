@@ -105,17 +105,7 @@ impl RuleEngine {
                 }
 
                 if let Some(mut finding) = Self::check_line(rule, line, file_path, line_num + 1) {
-                    // Apply heuristics for secret leak detection (unless strict_secrets is enabled)
-                    if !self.strict_secrets && rule.category == Category::SecretLeak {
-                        // Downgrade confidence for test files
-                        if FileHeuristics::is_test_file(file_path) {
-                            finding.confidence = finding.confidence.downgrade();
-                        }
-                        // Downgrade confidence for lines with dummy variable names
-                        if FileHeuristics::contains_dummy_variable(line) {
-                            finding.confidence = finding.confidence.downgrade();
-                        }
-                    }
+                    self.apply_secret_leak_heuristics(&mut finding, file_path, line);
                     findings.push(finding);
                 }
             }
@@ -132,17 +122,7 @@ impl RuleEngine {
                 if let Some(mut finding) =
                     Self::check_dynamic_line(rule, line, file_path, line_num + 1)
                 {
-                    // Apply heuristics for secret leak detection (unless strict_secrets is enabled)
-                    if !self.strict_secrets && finding.category == Category::SecretLeak {
-                        // Downgrade confidence for test files
-                        if FileHeuristics::is_test_file(file_path) {
-                            finding.confidence = finding.confidence.downgrade();
-                        }
-                        // Downgrade confidence for lines with dummy variable names
-                        if FileHeuristics::contains_dummy_variable(line) {
-                            finding.confidence = finding.confidence.downgrade();
-                        }
-                    }
+                    self.apply_secret_leak_heuristics(&mut finding, file_path, line);
                     findings.push(finding);
                 }
             }
@@ -236,6 +216,44 @@ impl RuleEngine {
                     })
             })
             .collect()
+    }
+
+    /// Apply heuristics to downgrade confidence for likely false positives.
+    ///
+    /// This function applies file-based and content-based heuristics to reduce
+    /// confidence for findings that are likely to be false positives, such as
+    /// secrets in test files or with dummy variable names.
+    ///
+    /// # Arguments
+    ///
+    /// * `finding` - Mutable reference to the finding to potentially downgrade
+    /// * `file_path` - Path to the file being scanned
+    /// * `line` - Content of the line where the finding was detected
+    ///
+    /// # Heuristics Applied
+    ///
+    /// 1. Test file heuristic: Downgrade confidence if file path indicates test/example
+    /// 2. Dummy variable heuristic: Downgrade confidence if line contains EXAMPLE_*, TEST_*, etc.
+    fn apply_secret_leak_heuristics(&self, finding: &mut Finding, file_path: &str, line: &str) {
+        // Only apply heuristics for SecretLeak category
+        if finding.category != Category::SecretLeak {
+            return;
+        }
+
+        // Skip heuristics in strict secrets mode
+        if self.strict_secrets {
+            return;
+        }
+
+        // Downgrade confidence for test files
+        if FileHeuristics::is_test_file(file_path) {
+            finding.confidence = finding.confidence.downgrade();
+        }
+
+        // Downgrade confidence for lines with dummy variable names
+        if FileHeuristics::contains_dummy_variable(line) {
+            finding.confidence = finding.confidence.downgrade();
+        }
     }
 
     fn check_line(rule: &Rule, line: &str, file_path: &str, line_num: usize) -> Option<Finding> {

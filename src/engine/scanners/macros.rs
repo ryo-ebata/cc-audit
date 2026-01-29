@@ -14,7 +14,7 @@
 /// # Example
 ///
 /// ```ignore
-/// use crate::scanner::ScannerConfig;
+/// use crate::engine::scanner::ScannerConfig;
 /// use crate::impl_scanner_builder;
 ///
 /// pub struct MyScanner {
@@ -92,7 +92,7 @@ macro_rules! impl_scanner_builder {
 /// # Example
 ///
 /// ```ignore
-/// use crate::scanner::{ContentScanner, ScannerConfig};
+/// use crate::engine::scanner::{ContentScanner, ScannerConfig};
 /// use crate::{impl_scanner_builder, impl_content_scanner};
 ///
 /// pub struct MyScanner {
@@ -105,8 +105,8 @@ macro_rules! impl_scanner_builder {
 #[macro_export]
 macro_rules! impl_content_scanner {
     ($scanner:ty) => {
-        impl $crate::scanner::ContentScanner for $scanner {
-            fn config(&self) -> &$crate::scanner::ScannerConfig {
+        impl $crate::engine::scanner::ContentScanner for $scanner {
+            fn config(&self) -> &$crate::engine::scanner::ScannerConfig {
                 &self.config
             }
         }
@@ -167,7 +167,7 @@ macro_rules! impl_simple_file_scanner {
 
 #[cfg(test)]
 mod tests {
-    use crate::scanner::ScannerConfig;
+    use crate::engine::scanner::ScannerConfig;
 
     // Test struct for macro testing
     pub struct TestScanner {
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_content_scanner_config_access() {
-        use crate::scanner::ContentScanner;
+        use crate::engine::scanner::ContentScanner;
         let scanner = TestContentScanner::new();
         let _config = scanner.config();
         // Just verify it compiles

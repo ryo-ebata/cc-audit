@@ -10,6 +10,7 @@ use tracing::warn;
 /// Filter for ignoring paths during scanning.
 ///
 /// Uses glob patterns to determine which paths to skip.
+#[derive(Clone)]
 pub struct IgnoreFilter {
     /// Compiled glob patterns for ignoring paths.
     globset: Option<GlobSet>,

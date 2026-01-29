@@ -89,6 +89,15 @@ impl Reporter for HtmlReporter {
             })
             .collect();
 
+        let duration_html = if let Some(duration) = result.duration_secs {
+            format!(
+                r#"<div class="duration">Completed in {:.2}s</div>"#,
+                duration
+            )
+        } else {
+            String::new()
+        };
+
         format!(
             r#"<!DOCTYPE html>
 <html lang="en">
@@ -353,6 +362,15 @@ impl Reporter for HtmlReporter {
         .footer a:hover {{
             text-decoration: underline;
         }}
+
+        .duration {{
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            color: #666;
+        }}
     </style>
 </head>
 <body>
@@ -394,6 +412,8 @@ impl Reporter for HtmlReporter {
 
         {}
 
+        {}
+
         <div class="findings">
             <h2>Findings</h2>
             {}
@@ -424,6 +444,7 @@ impl Reporter for HtmlReporter {
             } else {
                 findings_html
             },
+            duration_html,
             result.version
         )
     }
@@ -605,5 +626,27 @@ mod tests {
         assert!(output.contains("Supply Chain"));
         assert!(output.contains("Secret Leak"));
         assert!(output.contains("Overpermission"));
+    }
+
+    #[test]
+    fn test_html_includes_duration() {
+        let reporter = HtmlReporter::new();
+        let mut result = create_test_result(vec![]);
+        result.duration_secs = Some(2.345);
+
+        let output = reporter.report(&result);
+
+        assert!(
+            output.contains("Completed in"),
+            "HTML should contain 'Completed in'"
+        );
+        assert!(
+            output.contains("2.3") || output.contains("2.35"),
+            "HTML should contain formatted duration"
+        );
+        assert!(
+            output.contains("class=\"duration\""),
+            "HTML should contain duration CSS class"
+        );
     }
 }

@@ -12,6 +12,7 @@ use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{debug, info, warn};
 
 use super::client::{detect_client_for_path, resolve_scan_paths_from_check_args};
@@ -39,6 +40,9 @@ fn run_scan_with_check_args_internal(
     args: &CheckArgs,
     preloaded_config: Option<Config>,
 ) -> Option<ScanResult> {
+    // Start time measurement
+    let start_time = Instant::now();
+
     let mut all_findings = Vec::new();
     let mut targets = Vec::new();
 
@@ -188,6 +192,11 @@ fn run_scan_with_check_args_internal(
 
     let summary = Summary::from_findings_with_rule_severity(&filtered_findings);
     let risk_score = RiskScore::from_findings(&filtered_findings);
+
+    // Calculate elapsed time
+    let duration = start_time.elapsed();
+    let duration_secs = duration.as_secs_f64();
+
     Some(ScanResult {
         version: env!("CARGO_PKG_VERSION").to_string(),
         scanned_at: Utc::now().to_rfc3339(),
@@ -195,6 +204,7 @@ fn run_scan_with_check_args_internal(
         summary,
         findings: filtered_findings,
         risk_score: Some(risk_score),
+        duration_secs: Some(duration_secs),
     })
 }
 
@@ -1336,6 +1346,42 @@ mod tests {
             filtered_no_filter.len(),
             1,
             "Without min_rule_severity filter, warning should be included"
+        );
+    }
+
+    #[test]
+    fn test_scan_includes_duration() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            "---\nname: test\ndescription: Test skill\n---\n# Test"
+        )
+        .unwrap();
+
+        let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let result = run_scan_with_check_args(&args);
+
+        assert!(result.is_some(), "Scan should return a result");
+        let result = result.unwrap();
+
+        assert!(
+            result.duration_secs.is_some(),
+            "Scan should include duration"
+        );
+
+        let duration = result.duration_secs.unwrap();
+        assert!(
+            duration >= 0.0,
+            "Duration should be non-negative, got {}",
+            duration
+        );
+        assert!(
+            duration < 10.0,
+            "Normal scan should complete within 10 seconds, got {}",
+            duration
         );
     }
 }

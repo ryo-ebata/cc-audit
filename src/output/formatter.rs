@@ -136,6 +136,7 @@ mod tests {
             },
             findings: Vec::new(),
             risk_score: None,
+            duration_secs: None,
         }
     }
 

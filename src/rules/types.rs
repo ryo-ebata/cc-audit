@@ -414,6 +414,9 @@ pub struct ScanResult {
     pub findings: Vec<Finding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_score: Option<RiskScore>,
+    /// Scan duration in seconds (e.g., 2.345 for 2.345s)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
 }
 
 #[cfg(test)]
@@ -1165,5 +1168,79 @@ mod tests {
         let finding2 = create_test_finding("TEST-002", Severity::Medium, None);
         let finding_without_client = finding2.with_client(None);
         assert!(finding_without_client.client.is_none());
+    }
+
+    #[test]
+    fn test_scan_result_with_duration() {
+        let result = ScanResult {
+            version: "3.1.7".to_string(),
+            scanned_at: "2026-01-30T12:00:00Z".to_string(),
+            target: "./test".to_string(),
+            summary: Summary {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0,
+                passed: true,
+                errors: 0,
+                warnings: 0,
+            },
+            findings: vec![],
+            risk_score: None,
+            duration_secs: Some(2.345),
+        };
+
+        assert_eq!(result.duration_secs, Some(2.345));
+    }
+
+    #[test]
+    fn test_scan_result_duration_serialization() {
+        let result = ScanResult {
+            version: "3.1.7".to_string(),
+            scanned_at: "2026-01-30T12:00:00Z".to_string(),
+            target: "./test".to_string(),
+            summary: Summary {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0,
+                passed: true,
+                errors: 0,
+                warnings: 0,
+            },
+            findings: vec![],
+            risk_score: None,
+            duration_secs: Some(1.234),
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"duration_secs\":1.234"));
+
+        let deserialized: ScanResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.duration_secs, Some(1.234));
+    }
+
+    #[test]
+    fn test_scan_result_without_duration_serialization() {
+        let result = ScanResult {
+            version: "3.1.7".to_string(),
+            scanned_at: "2026-01-30T12:00:00Z".to_string(),
+            target: "./test".to_string(),
+            summary: Summary {
+                critical: 0,
+                high: 0,
+                medium: 0,
+                low: 0,
+                passed: true,
+                errors: 0,
+                warnings: 0,
+            },
+            findings: vec![],
+            risk_score: None,
+            duration_secs: None,
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(!json.contains("duration_secs"));
     }
 }

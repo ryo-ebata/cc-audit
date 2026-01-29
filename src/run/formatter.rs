@@ -125,6 +125,7 @@ mod tests {
             },
             findings: vec![],
             risk_score: None,
+            duration_secs: None,
         }
     }
 

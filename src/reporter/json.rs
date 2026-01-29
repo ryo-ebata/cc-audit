@@ -70,4 +70,22 @@ mod tests {
         let output = reporter.report(&result);
         assert!(output.contains("\"passed\": true"));
     }
+
+    #[test]
+    fn test_json_includes_duration() {
+        let reporter = JsonReporter::new();
+        let mut result = create_test_result(vec![]);
+        result.duration_secs = Some(2.345);
+
+        let output = reporter.report(&result);
+
+        assert!(
+            output.contains("duration_secs"),
+            "JSON output should contain duration_secs field"
+        );
+        assert!(
+            output.contains("2.345"),
+            "JSON output should contain the duration value"
+        );
+    }
 }

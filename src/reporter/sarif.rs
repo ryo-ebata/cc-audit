@@ -39,6 +39,16 @@ pub struct SarifRun {
     pub results: Vec<SarifResult>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub taxonomies: Vec<SarifTaxonomy>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invocations: Option<Vec<SarifInvocation>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SarifInvocation {
+    pub execution_successful: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_time_in_milliseconds: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -262,6 +272,14 @@ impl SarifReport {
             }]
         };
 
+        // Generate invocations with execution time if available
+        let invocations = result.duration_secs.map(|duration| {
+            vec![SarifInvocation {
+                execution_successful: true,
+                execution_time_in_milliseconds: Some(duration * 1000.0),
+            }]
+        });
+
         SarifReport {
             schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json".to_string(),
             version: "2.1.0".to_string(),
@@ -276,6 +294,7 @@ impl SarifReport {
                 },
                 results,
                 taxonomies,
+                invocations,
             }],
         }
     }
@@ -823,5 +842,32 @@ mod tests {
         assert!(cwe_ids.contains(&"CWE-78"));
         assert!(cwe_ids.contains(&"CWE-94"));
         assert!(cwe_ids.contains(&"CWE-250"));
+    }
+
+    #[test]
+    fn test_sarif_includes_duration() {
+        let reporter = SarifReporter::new();
+        let mut result = create_test_result(vec![]);
+        result.duration_secs = Some(2.345);
+
+        let output = reporter.report(&result);
+        let sarif: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+        // Check invocations field exists
+        let invocations = &sarif["runs"][0]["invocations"];
+        assert!(
+            invocations.is_array(),
+            "SARIF should contain invocations array"
+        );
+
+        let invocation = &invocations[0];
+        assert_eq!(
+            invocation["executionSuccessful"], true,
+            "Execution should be successful"
+        );
+        assert_eq!(
+            invocation["executionTimeInMilliseconds"], 2345.0,
+            "Execution time should be 2345.0 milliseconds"
+        );
     }
 }

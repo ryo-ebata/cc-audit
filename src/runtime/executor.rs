@@ -67,6 +67,7 @@ impl ScanExecutor {
             },
             findings: Vec::new(),
             risk_score: None,
+            duration_secs: None,
         })
     }
 }

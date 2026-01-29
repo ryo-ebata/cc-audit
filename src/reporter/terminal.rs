@@ -402,6 +402,11 @@ impl Reporter for TerminalReporter {
             if passed { 0 } else { 1 }
         ));
 
+        // Display scan duration if available
+        if let Some(duration) = result.duration_secs {
+            output.push_str(&format!("\nCompleted in {:.2}s\n", duration));
+        }
+
         output
     }
 }
@@ -1044,5 +1049,23 @@ mod tests {
         assert!(!trimmed.starts_with("..."));
         assert!(trimmed.ends_with("..."));
         assert!(trimmed.len() <= 103); // 100 chars + "..."
+    }
+
+    #[test]
+    fn test_report_includes_duration() {
+        let reporter = TerminalReporter::new(false, false);
+        let mut result = create_test_result(vec![]);
+        result.duration_secs = Some(2.345);
+
+        let output = reporter.report(&result);
+
+        assert!(
+            output.contains("Completed in"),
+            "Output should contain 'Completed in'"
+        );
+        assert!(
+            output.contains("2.3") || output.contains("2.35"),
+            "Output should contain formatted duration"
+        );
     }
 }

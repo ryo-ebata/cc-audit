@@ -17,6 +17,7 @@ pub mod fixtures {
             summary,
             findings,
             risk_score,
+            duration_secs: None, // Tests do not measure duration
         }
     }
 

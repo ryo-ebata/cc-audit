@@ -141,6 +141,11 @@ impl MarkdownReporter {
             output.push_str(&format!("| Warnings | {} |\n", result.summary.warnings));
         }
 
+        // Display scan duration if available
+        if let Some(duration) = result.duration_secs {
+            output.push_str(&format!("| Duration | {:.2}s |\n", duration));
+        }
+
         output.push('\n');
         output
     }
@@ -363,6 +368,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            duration_secs: None,
         }
     }
 
@@ -406,6 +412,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            duration_secs: None,
         };
         let output = reporter.report(&result);
 
@@ -449,6 +456,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            duration_secs: None,
         };
         // Calculate risk score from the findings
         let mut result = result;
@@ -538,6 +546,7 @@ mod tests {
                 warnings: 1,
             },
             risk_score: None,
+            duration_secs: None,
         };
         let output = reporter.report(&result);
 
@@ -568,5 +577,23 @@ mod tests {
         let result = create_test_result();
         let output = reporter.report(&result);
         assert!(output.contains("# Security Audit Report"));
+    }
+
+    #[test]
+    fn test_markdown_includes_duration() {
+        let reporter = MarkdownReporter::new();
+        let mut result = create_test_result();
+        result.duration_secs = Some(2.345);
+
+        let output = reporter.report(&result);
+
+        assert!(
+            output.contains("Duration"),
+            "Markdown should contain 'Duration'"
+        );
+        assert!(
+            output.contains("2.3") || output.contains("2.35"),
+            "Markdown should contain formatted duration"
+        );
     }
 }

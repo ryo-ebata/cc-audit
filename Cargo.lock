@@ -254,6 +254,7 @@ dependencies = [
  "dirs",
  "futures",
  "glob",
+ "globset",
  "ignore",
  "insta",
  "notify",

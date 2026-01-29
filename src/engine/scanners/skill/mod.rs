@@ -609,7 +609,7 @@ cat ~/.ssh/id_rsa
 
         // With ignore filter with tests pattern, should not detect
         let config = crate::config::IgnoreConfig {
-            patterns: vec!["/tests/".to_string()],
+            patterns: vec!["**/tests/**".to_string()],
         };
         let ignore_filter = crate::ignore::IgnoreFilter::from_config(&config);
         let scanner_with_filter = SkillScanner::new()
@@ -656,7 +656,7 @@ cat ~/.ssh/id_rsa
 
         // With pattern to exclude node_modules, should not detect
         let config = crate::config::IgnoreConfig {
-            patterns: vec!["node_modules".to_string()],
+            patterns: vec!["**/node_modules/**".to_string()],
         };
         let ignore_filter = crate::ignore::IgnoreFilter::from_config(&config);
         let scanner = SkillScanner::new()
@@ -681,7 +681,7 @@ cat ~/.ssh/id_rsa
 
         // With pattern to exclude vendor, should not detect
         let config = crate::config::IgnoreConfig {
-            patterns: vec!["vendor".to_string()],
+            patterns: vec!["**/vendor/**".to_string()],
         };
         let ignore_filter = crate::ignore::IgnoreFilter::from_config(&config);
         let scanner = SkillScanner::new()
@@ -702,16 +702,16 @@ cat ~/.ssh/id_rsa
         let generated_script = dir.path().join("setup.generated.sh");
         fs::write(&generated_script, "sudo apt install malware").unwrap();
 
-        // With regex pattern to ignore *.generated.sh
+        // With glob pattern to ignore *.generated.sh
         let config = crate::config::IgnoreConfig {
-            patterns: vec![r"\.generated\.sh$".to_string()],
+            patterns: vec!["**/*.generated.sh".to_string()],
         };
         let ignore_filter = crate::ignore::IgnoreFilter::from_config(&config);
         let scanner = SkillScanner::new().with_ignore_filter(ignore_filter);
         let findings = scanner.scan_path(dir.path()).unwrap();
         assert!(
             !findings.iter().any(|f| f.id == "PE-001"),
-            "With regex pattern, should NOT detect sudo in *.generated.sh"
+            "With glob pattern, should NOT detect sudo in *.generated.sh"
         );
 
         // Non-generated script should still be detected
@@ -720,7 +720,7 @@ cat ~/.ssh/id_rsa
 
         // Using same pattern - normal script should be detected
         let config2 = crate::config::IgnoreConfig {
-            patterns: vec![r"\.generated\.sh$".to_string()],
+            patterns: vec!["**/*.generated.sh".to_string()],
         };
         let ignore_filter2 = crate::ignore::IgnoreFilter::from_config(&config2);
         let scanner2 = SkillScanner::new().with_ignore_filter(ignore_filter2);

@@ -339,11 +339,32 @@ impl TextFilesConfig {
 
 /// Ignore configuration for scanning.
 ///
-/// Uses regex patterns to determine which paths to ignore during scanning.
+/// Uses glob patterns to determine which paths to ignore during scanning.
+///
+/// # Glob Pattern Syntax
+///
+/// - `*` - matches any sequence of characters except path separators
+/// - `**` - matches any sequence of characters including path separators
+/// - `?` - matches any single character
+/// - `{a,b}` - matches either `a` or `b`
+/// - `[abc]` - matches any character in the set
+/// - `[!abc]` - matches any character not in the set
+///
+/// # Examples
+///
+/// ```yaml
+/// ignore:
+///   patterns:
+///     - "**/node_modules/**"      # Ignore node_modules anywhere
+///     - "**/target/**"            # Ignore Rust build artifacts
+///     - "**/.git/**"              # Ignore git directories
+///     - "**/*.{log,tmp,bak}"      # Ignore log, tmp, and bak files
+///     - "**/test{,s}/**"          # Ignore test or tests directories
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IgnoreConfig {
-    /// Regex patterns to ignore (e.g., ["node_modules", "target/", "\\.git"]).
+    /// Glob patterns to ignore (e.g., ["**/node_modules/**", "**/target/**", "**/.git/**"]).
     /// Each pattern is matched against the full path of the file.
     pub patterns: Vec<String>,
 }

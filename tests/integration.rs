@@ -1619,7 +1619,7 @@ mod ignore_patterns {
         let config_content = r#"
 ignore:
   patterns:
-    - "vendor"
+    - "**/vendor/**"
 "#;
         fs::write(dir.path().join(".cc-audit.yaml"), config_content).unwrap();
 
@@ -1643,7 +1643,7 @@ ignore:
         let config_content = r#"
 ignore:
   patterns:
-    - "node_modules"
+    - "**/node_modules/**"
 "#;
         fs::write(dir.path().join(".cc-audit.yaml"), config_content).unwrap();
 
@@ -1671,8 +1671,8 @@ ignore:
         let config_content = r#"
 ignore:
   patterns:
-    - "vendor"
-    - "\\.test\\.md$"
+    - "**/vendor/**"
+    - "**/*.test.md"
 "#;
         fs::write(dir.path().join(".cc-audit.yaml"), config_content).unwrap();
 
@@ -1903,7 +1903,7 @@ mod config_file_application {
         let config_content = r#"
 ignore:
   patterns:
-    - 'ignored/**'
+    - '**/ignored/**'
 "#;
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, config_content).unwrap();
@@ -2220,7 +2220,7 @@ scan:
   recursive: true
 ignore:
   patterns:
-    - "/tests/"
+    - "**/tests/**"
 "#;
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, config_content).unwrap();
@@ -2434,7 +2434,7 @@ scan:
         let config_content = r#"
 ignore:
   patterns:
-    - "custom_ignore_dir"
+    - "**/custom_ignore_dir/**"
 "#;
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, config_content).unwrap();

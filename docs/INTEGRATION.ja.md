@@ -119,11 +119,11 @@ cc-audit check --skip-comments ./my-skill/
 # 一般的なディレクトリ（node_modules, .gitなど）はデフォルトパターンで除外
 # .cc-audit.yamlで無視パターンを設定
 
-# 例: カスタム無視パターンを追加
+# 例: カスタム無視パターンを追加（Glob構文）
 # ignore:
 #   patterns:
-#     - "/large_directory/"
-#     - "\\.generated\\."
+#     - "**/large_directory/**"
+#     - "**/*.generated.*"
 ```
 
 ### カスタムルールが読み込まれない

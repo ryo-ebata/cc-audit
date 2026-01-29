@@ -119,11 +119,11 @@ cc-audit check --skip-comments ./my-skill/
 # Common directories (node_modules, .git, etc.) are excluded by default patterns
 # Configure ignore patterns in .cc-audit.yaml
 
-# Example: add custom ignore patterns
+# Example: add custom ignore patterns (glob syntax)
 # ignore:
 #   patterns:
-#     - "/large_directory/"
-#     - "\\.generated\\."
+#     - "**/large_directory/**"
+#     - "**/*.generated.*"
 ```
 
 ### Custom rules not loading

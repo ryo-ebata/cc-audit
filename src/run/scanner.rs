@@ -1173,7 +1173,7 @@ mod tests {
 
         // Config with pattern to ignore node_modules
         let config = IgnoreConfig {
-            patterns: vec!["node_modules".to_string()],
+            patterns: vec!["**/node_modules/**".to_string()],
         };
         let filter = IgnoreFilter::from_config(&config);
         let findings = run_deep_scan(temp_dir.path(), &filter);

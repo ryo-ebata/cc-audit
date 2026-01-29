@@ -88,17 +88,25 @@ watch:
   debounce_ms: 300
   poll_interval_ms: 500
 
-# Ignore settings (uses regex patterns)
+# Ignore settings (uses glob patterns)
 ignore:
-  # Regex patterns to ignore
+  # Glob patterns to ignore
   # Each pattern is matched against the full path of the file
+  # Supported patterns: *, **, ?, {a,b}, [abc], [!abc]
   patterns:
-    - "/(target|dist|build|out)/"      # Build outputs
-    - "/(node_modules|\\.pnpm|\\.yarn)/" # Package managers
-    - "/(\\.git|\\.svn)/"               # Version control
-    - "/tests?/"                        # Test directories
-    - "\\.test\\.(js|ts)$"              # Test files
-    - "\\.(log|tmp|bak)$"               # Temp files
+    - "**/target/**"                    # Rust build outputs
+    - "**/dist/**"                      # JS/TS build outputs
+    - "**/build/**"                     # General build outputs
+    - "**/out/**"                       # Output directories
+    - "**/node_modules/**"              # npm packages
+    - "**/.pnpm/**"                     # pnpm store
+    - "**/.yarn/**"                     # Yarn cache
+    - "**/.git/**"                      # Git repository
+    - "**/.svn/**"                      # SVN repository
+    - "**/test/**"                      # Test directories (singular)
+    - "**/tests/**"                     # Test directories (plural)
+    - "**/*.test.{js,ts}"               # Test files
+    - "**/*.{log,tmp,bak}"              # Temp files
 
 # Rule severity configuration (v0.5.0+)
 # Controls exit codes independently of detection severity

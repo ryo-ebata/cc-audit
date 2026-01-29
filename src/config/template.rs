@@ -292,6 +292,7 @@ ignore:
     - "**/report/**"              # Report directories
     - "**/reports/**"             # Report directories
     - "**/.report/**"             # Hidden report directories
+    - "**/*report*/**"            # Any directory containing 'report' (e.g., playwright-report, test-report)
 
     # Temporary and backup files
     - "**/*.tmp"                  # Temporary files
@@ -424,6 +425,9 @@ mod tests {
         assert!(template.contains("**/report/**"));
         assert!(template.contains("**/reports/**"));
         assert!(template.contains("**/.report/**"));
+
+        // Should include wildcard report pattern (e.g., playwright-report, test-report)
+        assert!(template.contains("**/*report*/**"));
 
         // Should include log patterns
         assert!(template.contains("**/logs/**"));

@@ -146,20 +146,22 @@ malware_signatures:
 
 ## Default Ignored Patterns
 
-By default (when using `--init`), the following regex patterns are configured to ignore common directories:
+By default (when using `--init`), the following glob patterns are configured to ignore common directories and files:
 
-| Category | Pattern |
-|----------|---------|
-| Build output | `/(target\|dist\|build\|out\|_build)/` |
-| Frameworks | `/(\\.next\|\\.nuxt\|\\.svelte-kit\|\\.astro)/` |
-| Package managers | `/(node_modules\|\\.pnpm\|\\.yarn)/` |
-| Version control | `/(\\.git\|\\.svn\|\\.hg)/` |
-| IDE | `/(\\.idea\|\\.vscode)/` |
-| Cache | `/(\\.cache\|__pycache__\|\\.pytest_cache)/` |
-| Coverage | `/(coverage\|\\.nyc_output)/` |
-| Vendor | `/vendor/` |
+| Category | Examples |
+|----------|----------|
+| Build output | `**/target/**`, `**/dist/**`, `**/build/**`, `**/out/**` |
+| JS/TS frameworks | `**/.next/**`, `**/.nuxt/**`, `**/.svelte-kit/**`, `**/.astro/**` |
+| Package managers | `**/node_modules/**`, `**/.pnpm/**`, `**/.yarn/**` |
+| Version control | `**/.git/**`, `**/.svn/**`, `**/.hg/**` |
+| IDEs | `**/.idea/**`, `**/.vscode/**` |
+| Cache | `**/.cache/**`, `**/.vite/**`, `**/__pycache__/**` |
+| Coverage | `**/coverage/**`, `**/.nyc_output/**` |
+| Logs & Reports | `**/logs/**`, `**/*.log`, `**/report/**`, `**/reports/**` |
+| Temp & Backup | `**/*.tmp`, `**/*.bak`, `**/*.swp`, `**/tmp/**` |
+| OS-specific | `**/.DS_Store`, `**/Thumbs.db`, `**/desktop.ini` |
 
-**Note:** Patterns use regex syntax. Use `\\` to escape special characters like `.`
+**Note:** Patterns use glob syntax. See the glob pattern syntax section above for details.
 
 ## CLI Flag Override
 

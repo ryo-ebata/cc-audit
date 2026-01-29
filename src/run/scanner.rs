@@ -11,6 +11,7 @@ use chrono::Utc;
 use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use super::client::{detect_client_for_path, resolve_scan_paths_from_check_args};
@@ -112,14 +113,20 @@ fn run_scan_with_check_args_internal(
     // Create ignore filter from config
     let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
 
-    // Count total files for progress bar
-    let total_files = count_total_files(&scan_paths, &create_ignore_filter);
+    // Count files to scan (single pass for file count)
+    eprintln!("Collecting files to scan...");
+    let total_files = count_files_to_scan(&scan_paths, &create_ignore_filter);
 
     // Check if running in TTY (interactive terminal)
     let is_tty = std::io::stderr().is_terminal();
 
     // Create progress bar (shown only if 10+ files, TTY, and not CI mode)
-    let progress = ScanProgress::new(total_files, is_tty, effective.ci);
+    let progress = Arc::new(ScanProgress::new(total_files, is_tty, effective.ci));
+
+    // Create progress callback that increments the progress bar
+    let progress_clone = Arc::clone(&progress);
+    let progress_callback: crate::engine::scanner::ProgressCallback =
+        Arc::new(move || progress_clone.inc());
 
     for path in &scan_paths {
         // Use effective scan_type from merged config
@@ -131,6 +138,7 @@ fn run_scan_with_check_args_internal(
             effective.strict_secrets,
             effective.recursive,
             &custom_rules,
+            progress_callback.clone(),
         );
 
         match result {
@@ -165,20 +173,6 @@ fn run_scan_with_check_args_internal(
             let cve_findings = scan_path_with_cve_db(path, db, &ignore_filter);
             all_findings.extend(cve_findings);
         }
-
-        // Update progress: count files in this path
-        let files_scanned = if path.is_file() {
-            1
-        } else {
-            let ignore_filter = create_ignore_filter(path);
-            let walker =
-                DirectoryWalker::new(WalkConfig::default()).with_ignore_filter(ignore_filter);
-            walker.walk_single(path).filter(|p| is_text_file(p)).count()
-        };
-
-        for _ in 0..files_scanned {
-            progress.inc();
-        }
     }
 
     // Finish and clear progress bar
@@ -201,6 +195,7 @@ fn run_scan_with_check_args_internal(
 }
 
 /// Run the appropriate scanner based on scan type.
+#[allow(clippy::too_many_arguments)]
 fn run_scanner_for_type<F>(
     scan_type: &ScanType,
     path: &Path,
@@ -209,6 +204,7 @@ fn run_scanner_for_type<F>(
     strict_secrets: bool,
     recursive: bool,
     custom_rules: &[DynamicRule],
+    progress_callback: crate::engine::scanner::ProgressCallback,
 ) -> crate::error::Result<Vec<Finding>>
 where
     F: Fn(&Path) -> IgnoreFilter,
@@ -221,7 +217,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Hook => {
@@ -229,7 +226,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Mcp => {
@@ -237,7 +235,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Command => {
@@ -245,7 +244,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Rules => {
@@ -253,7 +253,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Docker => {
@@ -263,7 +264,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Dependency => {
@@ -271,7 +273,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Subagent => {
@@ -279,7 +282,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
         ScanType::Plugin => {
@@ -287,7 +291,8 @@ where
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
                 .with_recursive(recursive)
-                .with_dynamic_rules(custom_rules.to_vec());
+                .with_dynamic_rules(custom_rules.to_vec())
+                .with_progress_callback(progress_callback);
             scanner.scan_path(path)
         }
     }
@@ -458,7 +463,9 @@ pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Fi
 ///
 /// This function walks through all scan paths and counts files that will be
 /// scanned, respecting the ignore filter. Used to initialize progress bar.
-fn count_total_files<F>(paths: &[PathBuf], create_ignore_filter: &F) -> usize
+/// Count files to scan in a single pass.
+/// This replaces the old two-pass approach (count_total_files + actual scan).
+fn count_files_to_scan<F>(paths: &[PathBuf], create_ignore_filter: &F) -> usize
 where
     F: Fn(&Path) -> IgnoreFilter,
 {
@@ -467,10 +474,10 @@ where
         .map(|path| {
             let ignore_filter = create_ignore_filter(path);
             if path.is_file() {
-                if ignore_filter.is_ignored(path) || !is_text_file(path) {
-                    0
-                } else {
+                if !ignore_filter.is_ignored(path) && is_text_file(path) {
                     1
+                } else {
+                    0
                 }
             } else {
                 let walker =
@@ -493,6 +500,11 @@ mod tests {
             scan_type: ScanType::Skill,
             ..Default::default()
         }
+    }
+
+    // Create a no-op progress callback for testing
+    fn create_noop_progress_callback() -> crate::engine::scanner::ProgressCallback {
+        Arc::new(|| {})
     }
 
     #[test]
@@ -592,6 +604,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign hooks should not trigger any findings
@@ -638,6 +651,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious hooks should be detected
@@ -682,6 +696,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign MCP config should not trigger any findings
@@ -725,6 +740,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious MCP server should be detected
@@ -764,6 +780,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign command should not trigger any findings
@@ -793,6 +810,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious command should be detected
@@ -836,6 +854,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign Dockerfile should not trigger any findings
@@ -872,6 +891,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious Dockerfile should be detected
@@ -919,6 +939,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign dependencies should not trigger any findings
@@ -960,6 +981,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious dependency URL should be detected
@@ -998,6 +1020,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign subagent should not trigger any findings
@@ -1031,6 +1054,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious subagent should be detected
@@ -1076,6 +1100,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Benign plugin should not trigger any findings
@@ -1113,6 +1138,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
 
         // Malicious plugin should be detected
@@ -1151,6 +1177,7 @@ mod tests {
             false,
             false,
             &[],
+            create_noop_progress_callback(),
         );
         assert!(result.is_ok());
     }

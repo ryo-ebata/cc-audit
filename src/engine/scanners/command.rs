@@ -2,6 +2,7 @@ use super::walker::{DirectoryWalker, WalkConfig};
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::rules::Finding;
+use rayon::prelude::*;
 use std::path::Path;
 use tracing::debug;
 
@@ -20,19 +21,27 @@ impl Scanner for CommandScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
-
         // Use DirectoryWalker for both .claude/commands/ and commands/ directories
         let walker_config =
             WalkConfig::new([".claude/commands", "commands"]).with_extensions(&["md"]);
         let walker = DirectoryWalker::new(walker_config);
 
-        for path in walker.walk(dir) {
-            debug!(path = %path.display(), "Scanning command file");
-            if let Ok(file_findings) = self.scan_file(&path) {
-                findings.extend(file_findings);
-            }
-        }
+        // Collect files to scan
+        let files: Vec<_> = walker.walk(dir).collect();
+
+        // Parallel scan of collected files
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                debug!(path = %path.display(), "Scanning command file");
+                let result = self.scan_file(path);
+                self.config.report_progress(); // Thread-safe progress reporting
+                result.unwrap_or_else(|e| {
+                    debug!(path = %path.display(), error = %e, "Failed to scan file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

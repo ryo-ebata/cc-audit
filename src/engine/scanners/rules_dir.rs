@@ -1,7 +1,8 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::rules::Finding;
-use std::path::Path;
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 pub struct RulesDirScanner {
@@ -19,38 +20,49 @@ impl Scanner for RulesDirScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
+        // Collect all rule files to scan
+        let mut files: Vec<PathBuf> = Vec::new();
 
-        // Check for .claude/rules/ directory
+        // Collect files from .claude/rules/ directory
         let rules_dir = dir.join(".claude").join("rules");
         if rules_dir.exists() && rules_dir.is_dir() {
-            for entry in WalkDir::new(&rules_dir).into_iter().filter_map(|e| e.ok()) {
-                let path = entry.path();
-                if path.is_file()
-                    && path.extension().is_some_and(|ext| ext == "md")
-                    && let Ok(file_findings) = self.scan_file(path)
-                {
-                    findings.extend(file_findings);
-                }
-            }
+            files.extend(
+                WalkDir::new(&rules_dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "md")
+                    })
+                    .map(|e| e.path().to_path_buf()),
+            );
         }
 
-        // Also check for rules/ directory at root (alternative location)
+        // Collect files from rules/ directory at root
         let alt_rules_dir = dir.join("rules");
         if alt_rules_dir.exists() && alt_rules_dir.is_dir() {
-            for entry in WalkDir::new(&alt_rules_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let path = entry.path();
-                if path.is_file()
-                    && path.extension().is_some_and(|ext| ext == "md")
-                    && let Ok(file_findings) = self.scan_file(path)
-                {
-                    findings.extend(file_findings);
-                }
-            }
+            files.extend(
+                WalkDir::new(&alt_rules_dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path().is_file() && e.path().extension().is_some_and(|ext| ext == "md")
+                    })
+                    .map(|e| e.path().to_path_buf()),
+            );
         }
+
+        // Parallel scan of collected files
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                let result = self.scan_file(path);
+                self.config.report_progress(); // Thread-safe progress reporting
+                result.unwrap_or_else(|e| {
+                    tracing::debug!(path = %path.display(), error = %e, "Failed to scan file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

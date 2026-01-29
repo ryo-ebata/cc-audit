@@ -1,7 +1,8 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::rules::Finding;
-use std::path::Path;
+use rayon::prelude::*;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 const DEPENDENCY_FILES: &[&str] = &[
@@ -48,20 +49,27 @@ impl Scanner for DependencyScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
-        let mut findings = Vec::new();
-
-        for entry in WalkDir::new(dir)
+        // Collect dependency files to scan
+        let files: Vec<PathBuf> = WalkDir::new(dir)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.path().is_file())
-        {
-            let path = entry.path();
-            if Self::is_dependency_file(path)
-                && let Ok(file_findings) = self.scan_file(path)
-            {
-                findings.extend(file_findings);
-            }
-        }
+            .map(|e| e.path().to_path_buf())
+            .filter(|path| Self::is_dependency_file(path))
+            .collect();
+
+        // Parallel scan of collected files
+        let findings: Vec<Finding> = files
+            .par_iter()
+            .flat_map(|path| {
+                let result = self.scan_file(path);
+                self.config.report_progress(); // Thread-safe progress reporting
+                result.unwrap_or_else(|e| {
+                    tracing::debug!(path = %path.display(), error = %e, "Failed to scan file");
+                    vec![]
+                })
+            })
+            .collect();
 
         Ok(findings)
     }

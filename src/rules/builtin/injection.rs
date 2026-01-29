@@ -154,7 +154,8 @@ fn pi_003() -> Rule {
             Regex::new(r"[\u202A-\u202E\u2066-\u2069]").expect("PI-003: invalid regex"),
             // Homoglyph attacks using confusable whitespace characters
             // Note: \u00A0 (non-breaking space) removed from main pattern as it's commonly legitimate
-            Regex::new(r"[\u1680\u2000-\u200A\u202F\u205F\u3000]").expect("PI-003: invalid regex"),
+            // Note: \u3000 (ideographic space) removed as it's commonly used in CJK languages
+            Regex::new(r"[\u1680\u2000-\u200A\u202F\u205F]").expect("PI-003: invalid regex"),
         ],
         exclusions: vec![
             // Documentation and markdown files often have legitimate Unicode
@@ -370,6 +371,9 @@ mod tests {
             ("word\u{00A0}word", false),
             // Other suspicious whitespace (en quad, em quad, etc.)
             ("word\u{2000}word", true),
+            // Ideographic space (U+3000) - commonly used in Japanese text, should NOT be detected
+            ("word\u{3000}word", false),
+            ("日本語の　文章", false), // Japanese text with ideographic space
             // Normal text
             ("Hello World", false),
             ("Normal text with spaces", false),

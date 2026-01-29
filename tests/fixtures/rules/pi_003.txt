@@ -9,3 +9,5 @@ normal‮text
 # === Cases that should NOT be detected ===
 Hello World
 Normal text with spaces
+日本語の　文章
+これは　全角スペースを　含む　テキストです

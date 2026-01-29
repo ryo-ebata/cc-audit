@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "cc-audit": {
+      "command": "./target/release/cc-audit",
+      "args": ["serve"],
+      "description": "Security audit tool for Claude Code skills, hooks, and MCP servers"
+    }
+  }
+}

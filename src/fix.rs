@@ -1,6 +1,6 @@
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fs;
 use std::path::Path;
 
@@ -285,7 +285,7 @@ impl AutoFixer {
         };
 
         // Group fixes by file
-        let mut fixes_by_file: HashMap<String, Vec<&Fix>> = HashMap::new();
+        let mut fixes_by_file: FxHashMap<String, Vec<&Fix>> = FxHashMap::default();
         for fix in fixes {
             fixes_by_file
                 .entry(fix.file_path.clone())

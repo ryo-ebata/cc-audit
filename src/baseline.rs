@@ -1,7 +1,7 @@
 use crate::error::{AuditError, Result};
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -15,7 +15,7 @@ pub struct Baseline {
     /// When the baseline was created
     pub created_at: String,
     /// Hash of each scanned file
-    pub file_hashes: HashMap<String, FileHash>,
+    pub file_hashes: FxHashMap<String, FileHash>,
     /// Total number of files
     pub file_count: usize,
 }
@@ -49,7 +49,7 @@ pub struct DriftEntry {
 impl Baseline {
     /// Create a new baseline from a directory
     pub fn from_directory(dir: &Path) -> Result<Self> {
-        let mut file_hashes = HashMap::new();
+        let mut file_hashes = FxHashMap::default();
 
         if dir.is_file() {
             // Single file
@@ -553,7 +553,7 @@ mod tests {
         let baseline = Baseline {
             version: "0.1.0".to_string(),
             created_at: "2024-01-01".to_string(),
-            file_hashes: HashMap::new(),
+            file_hashes: FxHashMap::default(),
             file_count: 0,
         };
 
@@ -567,7 +567,7 @@ mod tests {
         let baseline = Baseline {
             version: "0.1.0".to_string(),
             created_at: "2024-01-01".to_string(),
-            file_hashes: HashMap::new(),
+            file_hashes: FxHashMap::default(),
             file_count: 0,
         };
 
@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_baseline_serialization() {
-        let mut file_hashes = HashMap::new();
+        let mut file_hashes = FxHashMap::default();
         file_hashes.insert(
             "test.md".to_string(),
             FileHash {
@@ -726,7 +726,7 @@ mod tests {
         let baseline = Baseline {
             version: "0.1.0".to_string(),
             created_at: "2024-01-01".to_string(),
-            file_hashes: HashMap::new(),
+            file_hashes: FxHashMap::default(),
             file_count: 0,
         };
 

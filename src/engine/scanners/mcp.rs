@@ -2,8 +2,8 @@ use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
 use rayon::prelude::*;
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -11,7 +11,7 @@ use tracing::debug;
 #[serde(rename_all = "camelCase")]
 pub struct McpConfig {
     #[serde(default)]
-    pub mcp_servers: HashMap<String, McpServer>,
+    pub mcp_servers: FxHashMap<String, McpServer>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -21,7 +21,7 @@ pub struct McpServer {
     #[serde(default)]
     pub args: Option<Vec<String>>,
     #[serde(default)]
-    pub env: Option<HashMap<String, String>>,
+    pub env: Option<FxHashMap<String, String>>,
     #[serde(default)]
     pub url: Option<String>,
 }

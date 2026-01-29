@@ -3,13 +3,13 @@ use crate::rules::custom::DynamicRule;
 use crate::rules::heuristics::FileHeuristics;
 use crate::rules::types::{Category, Finding, Location, Rule};
 use crate::suppression::{SuppressionType, parse_inline_suppression, parse_next_line_suppression};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use tracing::trace;
 
 pub struct RuleEngine {
     rules: &'static [Rule],
-    /// HashMap for O(1) rule ID lookup
-    rule_map: HashMap<&'static str, &'static Rule>,
+    /// FxHashMap for O(1) rule ID lookup (faster than std HashMap)
+    rule_map: FxHashMap<&'static str, &'static Rule>,
     dynamic_rules: Vec<DynamicRule>,
     skip_comments: bool,
     /// When true, disable heuristics that downgrade confidence for test files

@@ -1,15 +1,15 @@
 //! Finding collector for aggregating scan results.
 
 use crate::rules::{Finding, Severity};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 /// Collects and aggregates findings from multiple scans.
 #[derive(Debug, Default)]
 pub struct FindingCollector {
     findings: Vec<Finding>,
-    by_file: HashMap<String, Vec<Finding>>,
-    by_severity: HashMap<Severity, Vec<Finding>>,
-    by_rule: HashMap<String, Vec<Finding>>,
+    by_file: FxHashMap<String, Vec<Finding>>,
+    by_severity: FxHashMap<Severity, Vec<Finding>>,
+    by_rule: FxHashMap<String, Vec<Finding>>,
 }
 
 impl FindingCollector {

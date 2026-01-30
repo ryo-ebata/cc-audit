@@ -38,19 +38,19 @@ jobs:
           SCAN_TYPE="skill"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary
@@ -96,19 +96,19 @@ jobs:
           SCAN_TYPE="hook"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary
@@ -154,19 +154,19 @@ jobs:
           SCAN_TYPE="mcp"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary
@@ -212,19 +212,19 @@ jobs:
           SCAN_TYPE="command"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary
@@ -270,19 +270,19 @@ jobs:
           SCAN_TYPE="docker"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary
@@ -328,19 +328,19 @@ jobs:
           SCAN_TYPE="dependency"
 
           # Generate Terminal output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} . \
             > .cc-audit-reports/${SCAN_TYPE}/terminal.txt 2>&1 || SCAN_EXIT_CODE=$?
 
           # Generate JSON output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format json . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format json . \
             > .cc-audit-reports/${SCAN_TYPE}/report.json 2>&1 || true
 
           # Generate SARIF output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format sarif . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format sarif . \
             > .cc-audit-reports/${SCAN_TYPE}/report.sarif 2>&1 || true
 
           # Generate Markdown output
-          ./target/release/cc-audit check --type ${SCAN_TYPE} --format markdown . \
+          ./target/release/cc-audit check --ci --type ${SCAN_TYPE} --format markdown . \
             > .cc-audit-reports/${SCAN_TYPE}/report.md 2>&1 || true
 
           # Extract metrics from JSON for summary

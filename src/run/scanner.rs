@@ -216,12 +216,15 @@ fn run_scan_with_check_args_internal(
     // Create ignore filter from config
     let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
 
-    // Count files to scan (single pass for file count)
-    eprintln!("Collecting files to scan...");
-    let total_files = count_files_to_scan(&scan_paths, &create_ignore_filter);
-
     // Check if running in TTY (interactive terminal)
     let is_tty = std::io::stderr().is_terminal();
+
+    // Count files to scan (single pass for file count)
+    // Only show progress message in interactive mode (not CI)
+    if is_tty && !effective.ci {
+        eprintln!("Collecting files to scan...");
+    }
+    let total_files = count_files_to_scan(&scan_paths, &create_ignore_filter);
 
     // Create progress bar (shown only if 10+ files, TTY, and not CI mode)
     let progress = Arc::new(ScanProgress::new(total_files, is_tty, effective.ci));

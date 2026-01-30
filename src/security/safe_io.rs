@@ -10,6 +10,10 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use thiserror::Error;
 
+// File is only used on non-Unix platforms (Windows)
+#[cfg(not(unix))]
+use std::fs::File;
+
 /// Errors that can occur during safe file I/O operations
 #[derive(Debug, Error)]
 pub enum SafeIoError {

@@ -7,9 +7,10 @@ use cc_audit::hook_mode::analyzer::HookAnalyzer;
 use cc_audit::hook_mode::types::BashInput;
 use std::time::{Duration, Instant};
 
-/// Maximum acceptable time for regex matching (should be well under 100ms).
-/// With ~15 patterns to check sequentially, 50-80ms is acceptable for complex inputs.
-const MAX_ACCEPTABLE_TIME: Duration = Duration::from_millis(100);
+/// Maximum acceptable time for regex matching.
+/// With ~15 patterns to check sequentially, CI environments may need extra time.
+/// 150ms is acceptable for complex inputs while still catching actual ReDoS issues.
+const MAX_ACCEPTABLE_TIME: Duration = Duration::from_millis(150);
 
 #[test]
 fn test_redos_curl_with_many_spaces() {

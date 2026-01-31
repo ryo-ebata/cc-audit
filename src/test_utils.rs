@@ -17,6 +17,7 @@ pub mod fixtures {
             summary,
             findings,
             risk_score,
+            elapsed_ms: 0,
         }
     }
 

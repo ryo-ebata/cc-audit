@@ -401,6 +401,7 @@ impl Reporter for TerminalReporter {
             result_text,
             if passed { 0 } else { 1 }
         ));
+        output.push_str(&format!("Elapsed: {}ms\n", result.elapsed_ms));
 
         output
     }

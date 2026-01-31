@@ -363,6 +363,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            elapsed_ms: 0,
         }
     }
 
@@ -406,6 +407,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            elapsed_ms: 0,
         };
         let output = reporter.report(&result);
 
@@ -449,6 +451,7 @@ mod tests {
                 warnings: 0,
             },
             risk_score: None,
+            elapsed_ms: 0,
         };
         // Calculate risk score from the findings
         let mut result = result;
@@ -538,6 +541,7 @@ mod tests {
                 warnings: 1,
             },
             risk_score: None,
+            elapsed_ms: 0,
         };
         let output = reporter.report(&result);
 

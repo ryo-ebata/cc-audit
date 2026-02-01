@@ -386,17 +386,14 @@ impl McpServer {
             })?;
 
         // Check if rule exists
-        let rule = self.rule_engine.get_rule(rule_id);
-        if rule.is_none() {
+        let Some(rule) = self.rule_engine.get_rule(rule_id) else {
             return Ok(json!({
                 "content": [{
                     "type": "text",
                     "text": format!("Rule '{}' not found", rule_id)
                 }]
             }));
-        }
-
-        let rule = rule.unwrap();
+        };
 
         // Check if any pattern matches
         let mut matches = false;
@@ -483,17 +480,14 @@ impl McpServer {
             })?;
 
         // Create a mock finding for the fixer
-        let rule = self.rule_engine.get_rule(finding_id);
-        if rule.is_none() {
+        let Some(rule) = self.rule_engine.get_rule(finding_id) else {
             return Ok(json!({
                 "content": [{
                     "type": "text",
                     "text": format!("No fix suggestion available for rule '{}'", finding_id)
                 }]
             }));
-        }
-
-        let rule = rule.unwrap();
+        };
         let finding = Finding {
             id: finding_id.to_string(),
             severity: rule.severity,

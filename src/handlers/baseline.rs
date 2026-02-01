@@ -211,3 +211,131 @@ pub fn filter_against_baseline(mut result: ScanResult, baseline_path: &Path) -> 
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::types::{Category, Location};
+    use crate::{Finding, Summary};
+    use tempfile::TempDir;
+
+    fn create_test_finding(id: &str, file: &str, line: usize) -> Finding {
+        Finding {
+            id: id.to_string(),
+            name: id.to_string(),
+            message: format!("テスト finding: {}", id),
+            severity: crate::rules::Severity::High,
+            category: Category::Exfiltration,
+            confidence: crate::rules::Confidence::Firm,
+            location: Location {
+                file: file.to_string(),
+                line,
+                column: None,
+            },
+            code: String::new(),
+            recommendation: String::new(),
+            fix_hint: None,
+            cwe_ids: vec![],
+            rule_severity: None,
+            client: None,
+            context: None,
+        }
+    }
+
+    fn create_test_scan_result(findings: Vec<Finding>) -> ScanResult {
+        ScanResult {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            scanned_at: String::new(),
+            target: String::new(),
+            summary: Summary::from_findings(&findings),
+            findings,
+            risk_score: None,
+            elapsed_ms: 0,
+        }
+    }
+
+    #[test]
+    fn test_handle_save_baseline_single_path() {
+        let tmp = TempDir::new().unwrap();
+        let scan_dir = tmp.path().join("scan");
+        fs::create_dir_all(&scan_dir).unwrap();
+        fs::write(scan_dir.join("file1.md"), "# Test").unwrap();
+        fs::write(scan_dir.join("file2.md"), "# Test 2").unwrap();
+
+        let baseline_path = tmp.path().join("baseline.json");
+        let result = handle_save_baseline(&[scan_dir], &baseline_path);
+        assert_eq!(result, ExitCode::SUCCESS);
+        assert!(baseline_path.exists());
+
+        let content = fs::read_to_string(&baseline_path).unwrap();
+        let baseline: Baseline = serde_json::from_str(&content).unwrap();
+        assert_eq!(baseline.file_count, 2);
+    }
+
+    #[test]
+    fn test_handle_save_baseline_multiple_paths() {
+        let tmp = TempDir::new().unwrap();
+        let dir1 = tmp.path().join("dir1");
+        let dir2 = tmp.path().join("dir2");
+        fs::create_dir_all(&dir1).unwrap();
+        fs::create_dir_all(&dir2).unwrap();
+        fs::write(dir1.join("a.md"), "A").unwrap();
+        fs::write(dir2.join("b.md"), "B").unwrap();
+
+        let baseline_path = tmp.path().join("baseline.json");
+        let result = handle_save_baseline(&[dir1, dir2], &baseline_path);
+        assert_eq!(result, ExitCode::SUCCESS);
+
+        let content = fs::read_to_string(&baseline_path).unwrap();
+        let baseline: Baseline = serde_json::from_str(&content).unwrap();
+        assert_eq!(baseline.file_count, 2);
+    }
+
+    #[test]
+    fn test_handle_check_drift_no_baseline() {
+        let tmp = TempDir::new().unwrap();
+        let args = CheckArgs {
+            paths: vec![tmp.path().to_path_buf()],
+            ..Default::default()
+        };
+        let result = handle_check_drift(&args);
+        assert_eq!(result, ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_filter_against_baseline_removes_known() {
+        let tmp = TempDir::new().unwrap();
+        let baseline_path = tmp.path().join("baseline.json");
+
+        // ベースラインに1つの finding を保存
+        let baseline_result =
+            create_test_scan_result(vec![create_test_finding("RULE-001", "file.md", 10)]);
+        fs::write(
+            &baseline_path,
+            serde_json::to_string(&baseline_result).unwrap(),
+        )
+        .unwrap();
+
+        // 新しい結果にはベースラインの finding + 新しい finding
+        let result = create_test_scan_result(vec![
+            create_test_finding("RULE-001", "file.md", 10),
+            create_test_finding("RULE-002", "file.md", 20),
+        ]);
+
+        let filtered = filter_against_baseline(result, &baseline_path);
+        assert_eq!(filtered.findings.len(), 1);
+        assert_eq!(filtered.findings[0].id, "RULE-002");
+    }
+
+    #[test]
+    fn test_filter_against_baseline_invalid_file() {
+        let tmp = TempDir::new().unwrap();
+        let baseline_path = tmp.path().join("nonexistent.json");
+
+        let result = create_test_scan_result(vec![create_test_finding("RULE-001", "file.md", 10)]);
+
+        // 無効なファイルの場合は元の結果がそのまま返る
+        let filtered = filter_against_baseline(result, &baseline_path);
+        assert_eq!(filtered.findings.len(), 1);
+    }
+}

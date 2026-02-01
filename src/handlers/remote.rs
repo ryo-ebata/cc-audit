@@ -444,3 +444,62 @@ fn create_scan_check_args_batch(
         hook_mode: false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_remote_scan_missing_url() {
+        let args = CheckArgs {
+            remote: None,
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_missing_path() {
+        let args = CheckArgs {
+            remote_list: None,
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_nonexistent_file() {
+        let args = CheckArgs {
+            remote_list: Some(PathBuf::from("/nonexistent/urls.txt")),
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_empty_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("urls.txt");
+        std::fs::write(&file_path, "").unwrap();
+
+        let args = CheckArgs {
+            remote_list: Some(file_path),
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_comments_and_blanks() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("urls.txt");
+        std::fs::write(&file_path, "# コメント行\n\n  \n# 別のコメント\n").unwrap();
+
+        let args = CheckArgs {
+            remote_list: Some(file_path),
+            ..Default::default()
+        };
+        // コメントと空行だけなので "No URLs found" → ExitCode(2)
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+}

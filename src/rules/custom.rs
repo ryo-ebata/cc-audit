@@ -86,7 +86,7 @@ fn default_confidence() -> String {
 #[derive(Debug)]
 pub enum CustomRuleError {
     IoError(std::io::Error),
-    ParseError(serde_yaml::Error),
+    ParseError(serde_yml::Error),
     InvalidPattern {
         rule_id: String,
         pattern: String,
@@ -162,7 +162,7 @@ impl CustomRuleLoader {
     /// Load rules from a YAML string.
     pub fn load_from_string(content: &str) -> Result<Vec<DynamicRule>, CustomRuleError> {
         let config: CustomRulesConfig =
-            serde_yaml::from_str(content).map_err(CustomRuleError::ParseError)?;
+            serde_yml::from_str(content).map_err(CustomRuleError::ParseError)?;
 
         let mut rules = Vec::new();
         for yaml_rule in config.rules {
@@ -603,7 +603,7 @@ rules:
     #[test]
     fn test_parse_error_display() {
         let invalid_yaml = "invalid: yaml: [";
-        let result: Result<CustomRulesConfig, _> = serde_yaml::from_str(invalid_yaml);
+        let result: Result<CustomRulesConfig, _> = serde_yml::from_str(invalid_yaml);
         let yaml_err = result.unwrap_err();
         let err = CustomRuleError::ParseError(yaml_err);
         assert!(err.to_string().contains("Failed to parse"));

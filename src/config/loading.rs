@@ -31,7 +31,7 @@ impl Config {
             .to_lowercase();
 
         match ext.as_str() {
-            "yaml" | "yml" => serde_yaml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
+            "yaml" | "yml" => serde_yml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
                 path: path.display().to_string(),
                 source: e,
             }),

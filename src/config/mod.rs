@@ -565,7 +565,7 @@ scan:
     fn test_generate_template_is_valid_yaml() {
         let template = Config::generate_template();
         // The template should be parseable as YAML (comments are ignored)
-        let result: Result<Config, _> = serde_yaml::from_str(&template);
+        let result: Result<Config, _> = serde_yml::from_str(&template);
         assert!(result.is_ok(), "Template should be valid YAML");
     }
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.9](https://github.com/ryo-ebata/cc-audit/compare/v3.2.8...v3.2.9) (2026-02-01)
+
+
+### Bug Fixes
+
+* **lint:** add clippy config and fix non-idiomatic patterns ([#73](https://github.com/ryo-ebata/cc-audit/issues/73)) ([5e6f8ba](https://github.com/ryo-ebata/cc-audit/commit/5e6f8ba412f122052b2bcadf55defd9111fa13d5))
+
 ## [3.2.8](https://github.com/ryo-ebata/cc-audit/compare/v3.2.7...v3.2.8) (2026-02-01)
 
 

@@ -56,3 +56,13 @@ harness = false
 # Coverage configuration
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+
+[lints.clippy]
+# プロダクションコードでの unwrap/expect/panic を段階的に排除するための lint 設定
+# 既存コードの修正が完了次第 "warn" に昇格予定
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+todo = "warn"
+dbg_macro = "warn"
+print_stderr = "allow"  # CLI のエラー出力で必要

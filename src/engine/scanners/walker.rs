@@ -100,7 +100,13 @@ impl DirectoryWalker {
 
             walker
                 .into_iter()
-                .filter_map(|e| e.ok())
+                .filter_map(|entry| match entry {
+                    Ok(e) => Some(e),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "ディレクトリエントリの読み取りに失敗。スキップします");
+                        None
+                    }
+                })
                 .filter(|e| e.file_type().is_file())
                 .filter(|e| self.matches_extension(e.path()))
                 .filter(|e| !self.is_ignored(e.path()))
@@ -119,7 +125,13 @@ impl DirectoryWalker {
 
         walker
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(|entry| match entry {
+                Ok(e) => Some(e),
+                Err(e) => {
+                    tracing::warn!(error = %e, "ディレクトリエントリの読み取りに失敗。スキップします");
+                    None
+                }
+            })
             .filter(|e| e.file_type().is_file())
             .filter(|e| self.matches_extension(e.path()))
             .filter(|e| !self.is_ignored(e.path()))

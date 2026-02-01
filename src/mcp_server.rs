@@ -307,6 +307,7 @@ impl McpServer {
                     summary,
                     findings,
                     risk_score: Some(risk_score),
+                    elapsed_ms: 0,
                 };
                 Ok(json!({
                     "content": [{

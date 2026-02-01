@@ -414,6 +414,7 @@ pub struct ScanResult {
     pub findings: Vec<Finding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub risk_score: Option<RiskScore>,
+    pub elapsed_ms: u64,
 }
 
 #[cfg(test)]

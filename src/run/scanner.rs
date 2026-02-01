@@ -39,6 +39,7 @@ fn run_scan_with_check_args_internal(
     args: &CheckArgs,
     preloaded_config: Option<Config>,
 ) -> Option<ScanResult> {
+    let start = std::time::Instant::now();
     let mut all_findings = Vec::new();
     let mut targets = Vec::new();
 
@@ -195,6 +196,7 @@ fn run_scan_with_check_args_internal(
         summary,
         findings: filtered_findings,
         risk_score: Some(risk_score),
+        elapsed_ms: start.elapsed().as_millis() as u64,
     })
 }
 

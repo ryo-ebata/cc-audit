@@ -104,10 +104,7 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
         match cloner.clone(url, &effective.git_ref) {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                let scan_args = args.for_batch_scan(
-                    vec![cloned.path().to_path_buf()],
-                    &effective,
-                );
+                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
 
                 if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
@@ -218,10 +215,7 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
         match cloner.clone(url, "HEAD") {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                let scan_args = args.for_batch_scan(
-                    vec![cloned.path().to_path_buf()],
-                    &effective,
-                );
+                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
 
                 if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
@@ -307,4 +301,3 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
         ExitCode::SUCCESS
     }
 }
-

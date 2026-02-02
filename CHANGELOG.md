@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.13](https://github.com/ryo-ebata/cc-audit/compare/v3.2.12...v3.2.13) (2026-02-02)
+
+
+### Bug Fixes
+
+* **deprecation:** correct since version on scanner module ([#76](https://github.com/ryo-ebata/cc-audit/issues/76)) ([a8bb6fc](https://github.com/ryo-ebata/cc-audit/commit/a8bb6fc3df714519e0af5aa2e1c505470bf8a4d5)), closes [#6](https://github.com/ryo-ebata/cc-audit/issues/6)
+
 ## [3.2.12](https://github.com/ryo-ebata/cc-audit/compare/v3.2.11...v3.2.12) (2026-02-01)
 
 

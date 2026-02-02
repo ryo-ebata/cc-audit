@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.14](https://github.com/ryo-ebata/cc-audit/compare/v3.2.13...v3.2.14) (2026-02-02)
+
+
+### Bug Fixes
+
+* **robustness:** log WalkDir errors instead of silently swallowing ([#79](https://github.com/ryo-ebata/cc-audit/issues/79)) ([5152b0a](https://github.com/ryo-ebata/cc-audit/commit/5152b0a8c530fecdf78a291f59649b569ad79462)), closes [#9](https://github.com/ryo-ebata/cc-audit/issues/9)
+
 ## [3.2.13](https://github.com/ryo-ebata/cc-audit/compare/v3.2.12...v3.2.13) (2026-02-02)
 
 

@@ -28,71 +28,8 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
     let config = Config::load(project_root);
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
-    // Create CheckArgs for scanning with same options but different paths
-    let create_scan_args = |path: PathBuf| -> CheckArgs {
-        CheckArgs {
-            paths: vec![path],
-            config: args.config.clone(),
-            remote: None,
-            git_ref: effective.git_ref.clone(),
-            remote_auth: effective.remote_auth.clone(),
-            remote_list: None,
-            awesome_claude_code: false,
-            parallel_clones: effective.parallel_clones,
-            badge: effective.badge,
-            badge_format: effective.badge_format,
-            summary: false,
-            format: effective.format,
-            strict: effective.strict,
-            warn_only: effective.warn_only,
-            min_severity: effective.min_severity,
-            min_rule_severity: effective.min_rule_severity,
-            scan_type: effective.scan_type,
-            no_recursive: !effective.recursive,
-            ci: effective.ci,
-            min_confidence: Some(effective.min_confidence),
-            watch: false,
-            skip_comments: effective.skip_comments,
-            strict_secrets: effective.strict_secrets,
-            fix_hint: effective.fix_hint,
-            compact: effective.compact,
-            no_malware_scan: effective.no_malware_scan,
-            cve_db: effective.cve_db.as_ref().map(PathBuf::from),
-            no_cve_scan: effective.no_cve_scan,
-            malware_db: effective.malware_db.as_ref().map(PathBuf::from),
-            custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
-            baseline: false,
-            check_drift: false,
-            output: None,
-            save_baseline: None,
-            baseline_file: None,
-            compare: None,
-            fix: false,
-            fix_dry_run: false,
-            pin: false,
-            pin_verify: false,
-            pin_update: false,
-            pin_force: false,
-            ignore_pin: false,
-            deep_scan: effective.deep_scan,
-            profile: args.profile.clone(),
-            save_profile: None,
-            all_clients: false,
-            client: None,
-            report_fp: false,
-            report_fp_dry_run: false,
-            report_fp_endpoint: None,
-            no_telemetry: args.no_telemetry,
-            sbom: false,
-            sbom_format: None,
-            sbom_npm: false,
-            sbom_cargo: false,
-            hook_mode: false,
-        }
-    };
-
     // Scan both paths
-    let args1 = create_scan_args(path1.clone());
+    let args1 = args.for_scan(vec![path1.clone()], &effective);
     let result1 = match run_scan_with_check_args(&args1) {
         Some(r) => r,
         None => {
@@ -101,7 +38,7 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
         }
     };
 
-    let args2 = create_scan_args(path2.clone());
+    let args2 = args.for_scan(vec![path2.clone()], &effective);
     let result2 = match run_scan_with_check_args(&args2) {
         Some(r) => r,
         None => {

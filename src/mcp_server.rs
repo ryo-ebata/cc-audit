@@ -57,6 +57,15 @@ impl McpServer {
         }
     }
 
+    /// serde_json::to_string_pretty のエラーを JsonRpcError に変換するヘルパー
+    fn json_pretty(value: &impl serde::Serialize) -> std::result::Result<String, JsonRpcError> {
+        serde_json::to_string_pretty(value).map_err(|e| JsonRpcError {
+            code: -32603,
+            message: format!("Internal serialization error: {}", e),
+            data: None,
+        })
+    }
+
     /// Run the MCP server (JSON-RPC over stdio)
     pub fn run(&self) -> Result<()> {
         let stdin = std::io::stdin();
@@ -312,7 +321,7 @@ impl McpServer {
                 Ok(json!({
                     "content": [{
                         "type": "text",
-                        "text": serde_json::to_string_pretty(&result).unwrap()
+                        "text": Self::json_pretty(&result)?
                     }]
                 }))
             }
@@ -348,11 +357,11 @@ impl McpServer {
         Ok(json!({
             "content": [{
                 "type": "text",
-                "text": serde_json::to_string_pretty(&json!({
+                "text": Self::json_pretty(&json!({
                     "findings": findings,
                     "summary": summary,
                     "risk_score": risk_score
-                })).unwrap()
+                }))?
             }]
         }))
     }
@@ -377,17 +386,14 @@ impl McpServer {
             })?;
 
         // Check if rule exists
-        let rule = self.rule_engine.get_rule(rule_id);
-        if rule.is_none() {
+        let Some(rule) = self.rule_engine.get_rule(rule_id) else {
             return Ok(json!({
                 "content": [{
                     "type": "text",
                     "text": format!("Rule '{}' not found", rule_id)
                 }]
             }));
-        }
-
-        let rule = rule.unwrap();
+        };
 
         // Check if any pattern matches
         let mut matches = false;
@@ -401,7 +407,7 @@ impl McpServer {
         Ok(json!({
             "content": [{
                 "type": "text",
-                "text": serde_json::to_string_pretty(&json!({
+                "text": Self::json_pretty(&json!({
                     "rule_id": rule_id,
                     "rule_name": rule.name,
                     "severity": format!("{:?}", rule.severity),
@@ -411,7 +417,7 @@ impl McpServer {
                     } else {
                         "No match found".to_string()
                     }
-                })).unwrap()
+                }))?
             }]
         }))
     }
@@ -446,10 +452,10 @@ impl McpServer {
         Ok(json!({
             "content": [{
                 "type": "text",
-                "text": serde_json::to_string_pretty(&json!({
+                "text": Self::json_pretty(&json!({
                     "total": filtered.len(),
                     "rules": filtered
-                })).unwrap()
+                }))?
             }]
         }))
     }
@@ -474,17 +480,14 @@ impl McpServer {
             })?;
 
         // Create a mock finding for the fixer
-        let rule = self.rule_engine.get_rule(finding_id);
-        if rule.is_none() {
+        let Some(rule) = self.rule_engine.get_rule(finding_id) else {
             return Ok(json!({
                 "content": [{
                     "type": "text",
                     "text": format!("No fix suggestion available for rule '{}'", finding_id)
                 }]
             }));
-        }
-
-        let rule = rule.unwrap();
+        };
         let finding = Finding {
             id: finding_id.to_string(),
             severity: rule.severity,
@@ -521,12 +524,12 @@ impl McpServer {
             Ok(json!({
                 "content": [{
                     "type": "text",
-                    "text": serde_json::to_string_pretty(&json!({
+                    "text": Self::json_pretty(&json!({
                         "has_fix": true,
                         "description": fix.description,
                         "original": fix.original,
                         "replacement": fix.replacement
-                    })).unwrap()
+                    }))?
                 }]
             }))
         }

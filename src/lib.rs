@@ -81,7 +81,7 @@ pub mod hook_mode;
 pub mod run;
 
 #[deprecated(
-    since = "3.3.0",
+    since = "3.2.0",
     note = "Use `crate::engine` instead. This module will be removed in v4.0.0. \
             See migration guide in `src/scanner/mod.rs`."
 )]

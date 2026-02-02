@@ -14,12 +14,12 @@ impl YamlParser {
 
     /// Parse YAML content to a serde_json::Value.
     pub fn parse_value(content: &str) -> Option<serde_json::Value> {
-        serde_yaml::from_str(content).ok()
+        serde_yml::from_str(content).ok()
     }
 
-    /// Parse YAML content to a serde_yaml::Value.
-    pub fn parse_yaml_value(content: &str) -> Option<serde_yaml::Value> {
-        serde_yaml::from_str(content).ok()
+    /// Parse YAML content to a serde_yml::Value.
+    pub fn parse_yaml_value(content: &str) -> Option<serde_yml::Value> {
+        serde_yml::from_str(content).ok()
     }
 }
 

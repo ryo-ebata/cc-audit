@@ -26,7 +26,7 @@ pub enum ScanError {
     YamlParseError {
         path: PathBuf,
         #[source]
-        source: serde_yaml::Error,
+        source: serde_yml::Error,
     },
 
     #[error("Failed to parse JSON in {path}")]
@@ -63,7 +63,7 @@ impl ScanError {
     }
 
     /// Create a YamlParseError from a path and YAML error.
-    pub fn yaml_error(path: impl Into<PathBuf>, source: serde_yaml::Error) -> Self {
+    pub fn yaml_error(path: impl Into<PathBuf>, source: serde_yml::Error) -> Self {
         Self::YamlParseError {
             path: path.into(),
             source,
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn test_yaml_error() {
         let yaml_str = "invalid: yaml: content";
-        let yaml_err = serde_yaml::from_str::<serde_yaml::Value>(yaml_str).unwrap_err();
+        let yaml_err = serde_yml::from_str::<serde_yml::Value>(yaml_str).unwrap_err();
         let err = ScanError::yaml_error("/path/to/file.yaml", yaml_err);
         assert!(err.to_string().contains("/path/to/file.yaml"));
     }
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn test_conversion_yaml_error_to_audit_error() {
         let yaml_str = "invalid: yaml: content";
-        let yaml_err = serde_yaml::from_str::<serde_yaml::Value>(yaml_str).unwrap_err();
+        let yaml_err = serde_yml::from_str::<serde_yml::Value>(yaml_str).unwrap_err();
         let scan_err = ScanError::yaml_error("/test.yaml", yaml_err);
         let audit_err: crate::error::AuditError = scan_err.into();
         assert!(audit_err.to_string().contains("/test.yaml"));

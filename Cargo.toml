@@ -3,7 +3,7 @@ members = [".", "xtask"]
 
 [package]
 name = "cc-audit"
-version = "3.2.8"
+version = "3.2.13"
 edition = "2024"
 license = "MIT"
 description = "Security auditor for Claude Code skills, hooks, and MCP servers"
@@ -14,7 +14,7 @@ categories = ["command-line-utilities", "development-tools"]
 [dependencies]
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = "1", features = ["derive"] }
-serde_yaml = "0.9"
+serde_yml = "0.0.12"
 serde_json = "1"
 regex = "1"
 rustc-hash = "2.0"
@@ -56,3 +56,13 @@ harness = false
 # Coverage configuration
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
+
+[lints.clippy]
+# プロダクションコードでの unwrap/expect/panic を段階的に排除するための lint 設定
+# 既存コードの修正が完了次第 "warn" に昇格予定
+unwrap_used = "allow"
+expect_used = "allow"
+panic = "allow"
+todo = "warn"
+dbg_macro = "warn"
+print_stderr = "allow"  # CLI のエラー出力で必要

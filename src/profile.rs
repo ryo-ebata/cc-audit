@@ -144,7 +144,7 @@ impl Profile {
             source: e,
         })?;
 
-        serde_yaml::from_str(&content).map_err(|e| AuditError::ParseError {
+        serde_yml::from_str(&content).map_err(|e| AuditError::ParseError {
             path: profile_path.display().to_string(),
             message: e.to_string(),
         })
@@ -160,7 +160,7 @@ impl Profile {
 
         let profile_path = profiles_dir.join(format!("{}.yaml", self.name));
 
-        let content = serde_yaml::to_string(self).map_err(|e| AuditError::ParseError {
+        let content = serde_yml::to_string(self).map_err(|e| AuditError::ParseError {
             path: profile_path.display().to_string(),
             message: e.to_string(),
         })?;
@@ -330,8 +330,8 @@ mod tests {
     #[test]
     fn test_profile_serialize_deserialize() {
         let profile = Profile::strict_profile();
-        let yaml = serde_yaml::to_string(&profile).unwrap();
-        let parsed: Profile = serde_yaml::from_str(&yaml).unwrap();
+        let yaml = serde_yml::to_string(&profile).unwrap();
+        let parsed: Profile = serde_yml::from_str(&yaml).unwrap();
         assert_eq!(profile.name, parsed.name);
         assert_eq!(profile.strict, parsed.strict);
     }

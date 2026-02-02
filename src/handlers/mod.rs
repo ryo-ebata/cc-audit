@@ -648,7 +648,7 @@ mod tests {
         };
 
         let profile_path = profile_dir.join("test_profile_with_options.yaml");
-        let yaml = serde_yaml::to_string(&profile).unwrap();
+        let yaml = serde_yml::to_string(&profile).unwrap();
         fs::write(&profile_path, &yaml).unwrap();
 
         // Note: This won't find the profile because Profile::load looks in specific dirs

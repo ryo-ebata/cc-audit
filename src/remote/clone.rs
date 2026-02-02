@@ -2,8 +2,17 @@ use super::error::RemoteError;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
+
+static TOKEN_URL_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"https://[^@\s]+@").expect("TOKEN_URL_PATTERN is a valid regex literal")
+});
+
+static BEARER_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r"Bearer\s+\S+").expect("BEARER_PATTERN is a valid regex literal")
+});
 
 /// Result of a successful clone operation
 pub struct ClonedRepo {
@@ -181,16 +190,12 @@ impl GitCloner {
 
         // Remove patterns that look like tokens embedded in URLs
         // Pattern: https://TOKEN@github.com or similar
-        let token_pattern = regex::Regex::new(r"https://[^@\s]+@")
-            .unwrap_or_else(|_| regex::Regex::new("^$").unwrap());
-        sanitized = token_pattern
+        sanitized = TOKEN_URL_PATTERN
             .replace_all(&sanitized, "https://[REDACTED]@")
             .to_string();
 
         // Also redact Bearer tokens
-        let bearer_pattern =
-            regex::Regex::new(r"Bearer\s+\S+").unwrap_or_else(|_| regex::Regex::new("^$").unwrap());
-        sanitized = bearer_pattern
+        sanitized = BEARER_PATTERN
             .replace_all(&sanitized, "Bearer [REDACTED]")
             .to_string();
 

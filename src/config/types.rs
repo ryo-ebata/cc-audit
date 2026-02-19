@@ -337,6 +337,106 @@ impl TextFilesConfig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::RuleSeverity;
+
+    #[test]
+    fn test_effective_disabled_rules_merges() {
+        let mut config = Config::default();
+        config.disabled_rules.insert("RULE-001".to_string());
+        config.disabled_rules.insert("RULE-002".to_string());
+        config.severity.ignore.insert("RULE-003".to_string());
+        config.severity.ignore.insert("RULE-001".to_string()); // 重複
+
+        let disabled = config.effective_disabled_rules();
+        assert!(disabled.contains("RULE-001"));
+        assert!(disabled.contains("RULE-002"));
+        assert!(disabled.contains("RULE-003"));
+        assert_eq!(disabled.len(), 3); // 重複を除く
+    }
+
+    #[test]
+    fn test_is_rule_disabled() {
+        let mut config = Config::default();
+        config.disabled_rules.insert("RULE-001".to_string());
+        config.severity.ignore.insert("RULE-002".to_string());
+
+        assert!(config.is_rule_disabled("RULE-001"));
+        assert!(config.is_rule_disabled("RULE-002"));
+        assert!(!config.is_rule_disabled("RULE-003"));
+    }
+
+    #[test]
+    fn test_get_rule_severity() {
+        let mut config = Config::default();
+        config.disabled_rules.insert("RULE-001".to_string());
+        config.severity.warn.insert("RULE-002".to_string());
+
+        // disabled_rules に含まれるルールは None
+        assert_eq!(config.get_rule_severity("RULE-001"), None);
+        // warn に含まれるルールは Warn
+        assert_eq!(
+            config.get_rule_severity("RULE-002"),
+            Some(RuleSeverity::Warn)
+        );
+        // それ以外はデフォルト (Error)
+        assert_eq!(
+            config.get_rule_severity("RULE-003"),
+            Some(RuleSeverity::Error)
+        );
+    }
+
+    #[test]
+    fn test_text_files_config_extensions() {
+        let config = TextFilesConfig::default();
+        let path = std::path::Path::new("test.rs");
+        assert!(config.is_text_file(path));
+
+        let path = std::path::Path::new("test.py");
+        assert!(config.is_text_file(path));
+
+        let path = std::path::Path::new("image.png");
+        assert!(!config.is_text_file(path));
+
+        // 大文字小文字を区別しない
+        let path = std::path::Path::new("test.RS");
+        assert!(config.is_text_file(path));
+    }
+
+    #[test]
+    fn test_text_files_config_special_names() {
+        let config = TextFilesConfig::default();
+
+        let path = std::path::Path::new("Dockerfile");
+        assert!(config.is_text_file(path));
+
+        let path = std::path::Path::new("Makefile");
+        assert!(config.is_text_file(path));
+
+        let path = std::path::Path::new("LICENSE");
+        assert!(config.is_text_file(path));
+
+        // 大文字小文字を区別しない
+        let path = std::path::Path::new("dockerfile");
+        assert!(config.is_text_file(path));
+
+        let path = std::path::Path::new("unknown_special_file");
+        assert!(!config.is_text_file(path));
+    }
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert!(config.disabled_rules.is_empty());
+        assert!(config.rules.is_empty());
+        assert!(config.malware_signatures.is_empty());
+        assert!(!config.scan.strict);
+        assert!(!config.scan.ci);
+    }
+}
+
 /// Ignore configuration for scanning.
 ///
 /// Uses glob patterns to determine which paths to ignore during scanning.

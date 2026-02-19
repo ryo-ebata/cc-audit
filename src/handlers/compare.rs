@@ -117,3 +117,43 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
 
     ExitCode::from(1)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_handle_compare_wrong_path_count_zero() {
+        let args = CheckArgs::default();
+        let paths: Vec<PathBuf> = vec![];
+        assert_eq!(handle_compare(&args, &paths), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_compare_wrong_path_count_one() {
+        let args = CheckArgs::default();
+        let paths = vec![PathBuf::from("/tmp/path1")];
+        assert_eq!(handle_compare(&args, &paths), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_compare_wrong_path_count_three() {
+        let args = CheckArgs::default();
+        let paths = vec![
+            PathBuf::from("/tmp/a"),
+            PathBuf::from("/tmp/b"),
+            PathBuf::from("/tmp/c"),
+        ];
+        assert_eq!(handle_compare(&args, &paths), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_compare_identical_dirs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().to_path_buf();
+        // 空ディレクトリ同士の比較は finding が無いため差分なし
+        let args = CheckArgs::default();
+        let result = handle_compare(&args, &[dir.clone(), dir]);
+        assert_eq!(result, ExitCode::SUCCESS);
+    }
+}

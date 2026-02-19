@@ -301,3 +301,63 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
         ExitCode::SUCCESS
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_handle_remote_scan_missing_url() {
+        let args = CheckArgs {
+            remote: None,
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_missing_path() {
+        let args = CheckArgs {
+            remote_list: None,
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_nonexistent_file() {
+        let args = CheckArgs {
+            remote_list: Some(PathBuf::from("/nonexistent/urls.txt")),
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_empty_file() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("urls.txt");
+        std::fs::write(&file_path, "").unwrap();
+
+        let args = CheckArgs {
+            remote_list: Some(file_path),
+            ..Default::default()
+        };
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_handle_remote_list_comments_and_blanks() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let file_path = tmp.path().join("urls.txt");
+        std::fs::write(&file_path, "# comment line\n\n  \n# another comment\n").unwrap();
+
+        let args = CheckArgs {
+            remote_list: Some(file_path),
+            ..Default::default()
+        };
+        // Only comments and blanks → "No URLs found" → ExitCode(2)
+        assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
+    }
+}

@@ -1,5 +1,6 @@
 use crate::client::ClientType;
 use crate::rules::{Confidence, ParseEnumError, RuleSeverity, Severity};
+use crate::run::EffectiveConfig;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -469,6 +470,86 @@ impl Default for CheckArgs {
             sbom_npm: false,
             sbom_cargo: false,
         }
+    }
+}
+
+impl CheckArgs {
+    /// サブスキャン用の CheckArgs を作成。self と EffectiveConfig から設定を継承する。
+    /// remote/compare/baseline 等のサブスキャン不要なフィールドはリセットされる。
+    pub fn for_scan(&self, paths: Vec<PathBuf>, effective: &EffectiveConfig) -> Self {
+        Self {
+            paths,
+            config: self.config.clone(),
+            remote: None,
+            git_ref: effective.git_ref.clone(),
+            remote_auth: effective.remote_auth.clone(),
+            remote_list: None,
+            awesome_claude_code: false,
+            parallel_clones: effective.parallel_clones,
+            badge: effective.badge,
+            badge_format: effective.badge_format,
+            summary: effective.summary,
+            format: effective.format,
+            strict: effective.strict,
+            warn_only: effective.warn_only,
+            min_severity: effective.min_severity,
+            min_rule_severity: effective.min_rule_severity,
+            scan_type: effective.scan_type,
+            no_recursive: false,
+            ci: effective.ci,
+            min_confidence: Some(effective.min_confidence),
+            watch: false,
+            skip_comments: effective.skip_comments,
+            strict_secrets: effective.strict_secrets,
+            fix_hint: effective.fix_hint,
+            compact: effective.compact,
+            no_malware_scan: effective.no_malware_scan,
+            cve_db: effective.cve_db.as_ref().map(PathBuf::from),
+            no_cve_scan: effective.no_cve_scan,
+            malware_db: effective.malware_db.as_ref().map(PathBuf::from),
+            custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
+            baseline: false,
+            check_drift: false,
+            output: effective.output.as_ref().map(PathBuf::from),
+            save_baseline: None,
+            baseline_file: self.baseline_file.clone(),
+            compare: None,
+            fix: false,
+            fix_dry_run: false,
+            pin: false,
+            pin_verify: false,
+            pin_update: false,
+            pin_force: false,
+            ignore_pin: false,
+            deep_scan: effective.deep_scan,
+            profile: self.profile.clone(),
+            save_profile: None,
+            all_clients: false,
+            client: None,
+            report_fp: false,
+            report_fp_dry_run: false,
+            report_fp_endpoint: None,
+            no_telemetry: self.no_telemetry,
+            sbom: false,
+            sbom_format: None,
+            sbom_npm: false,
+            sbom_cargo: false,
+            hook_mode: false,
+        }
+    }
+
+    /// バッチスキャン用の CheckArgs を作成。badge/summary を無効化し、Terminal 形式にする。
+    pub fn for_batch_scan(&self, paths: Vec<PathBuf>, effective: &EffectiveConfig) -> Self {
+        let mut args = self.for_scan(paths, effective);
+        args.badge = false;
+        args.badge_format = BadgeFormat::Markdown;
+        args.summary = false;
+        args.format = OutputFormat::Terminal;
+        args.ci = false;
+        args.fix_hint = false;
+        args.output = None;
+        args.baseline_file = None;
+        args
     }
 }
 

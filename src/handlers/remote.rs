@@ -2,11 +2,10 @@
 
 use crate::remote::{AWESOME_CLAUDE_CODE_URL, GitCloner};
 use crate::run::EffectiveConfig;
-use crate::{BadgeFormat, CheckArgs, ClonedRepo, Config, OutputFormat, run_scan_with_check_args};
+use crate::{CheckArgs, ClonedRepo, Config, run_scan_with_check_args};
 use colored::Colorize;
 use std::fs;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use super::run_normal_check_mode;
@@ -46,7 +45,7 @@ pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
     println!("Scanning: {}", cloned.path().display());
 
     // Create CheckArgs for scanning the cloned repo
-    let scan_args = create_scan_check_args(vec![cloned.path().to_path_buf()], args, &effective);
+    let scan_args = args.for_scan(vec![cloned.path().to_path_buf()], &effective);
 
     // Run the scan
     run_normal_check_mode(&scan_args)
@@ -105,11 +104,7 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
         match cloner.clone(url, &effective.git_ref) {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                let scan_args = create_scan_check_args_batch(
-                    vec![cloned.path().to_path_buf()],
-                    args,
-                    &effective,
-                );
+                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
 
                 if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
@@ -220,11 +215,7 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
         match cloner.clone(url, "HEAD") {
             Ok(cloned) => {
                 let cloned: ClonedRepo = cloned;
-                let scan_args = create_scan_check_args_batch(
-                    vec![cloned.path().to_path_buf()],
-                    args,
-                    &effective,
-                );
+                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
 
                 if let Some(result) = run_scan_with_check_args(&scan_args) {
                     let count = result.summary.critical
@@ -311,143 +302,10 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
     }
 }
 
-/// Create CheckArgs for scanning with all settings inherited from original args.
-fn create_scan_check_args(
-    paths: Vec<PathBuf>,
-    args: &CheckArgs,
-    effective: &EffectiveConfig,
-) -> CheckArgs {
-    CheckArgs {
-        paths,
-        config: args.config.clone(),
-        remote: None, // Don't recurse into remote
-        git_ref: effective.git_ref.clone(),
-        remote_auth: effective.remote_auth.clone(),
-        remote_list: None,
-        awesome_claude_code: false,
-        parallel_clones: effective.parallel_clones,
-        badge: effective.badge,
-        badge_format: effective.badge_format,
-        summary: effective.summary,
-        format: effective.format,
-        strict: effective.strict,
-        warn_only: effective.warn_only,
-        min_severity: effective.min_severity,
-        min_rule_severity: effective.min_rule_severity,
-        scan_type: effective.scan_type,
-        no_recursive: false, // Always recursive for remote repos
-        ci: effective.ci,
-        min_confidence: Some(effective.min_confidence),
-        watch: false,
-        skip_comments: effective.skip_comments,
-        strict_secrets: effective.strict_secrets,
-        fix_hint: effective.fix_hint,
-        compact: effective.compact,
-        no_malware_scan: effective.no_malware_scan,
-        cve_db: effective.cve_db.as_ref().map(PathBuf::from),
-        no_cve_scan: effective.no_cve_scan,
-        malware_db: effective.malware_db.as_ref().map(PathBuf::from),
-        custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
-        baseline: false,
-        check_drift: false,
-        output: effective.output.as_ref().map(PathBuf::from),
-        save_baseline: None,
-        baseline_file: args.baseline_file.clone(),
-        compare: None,
-        fix: false,
-        fix_dry_run: false,
-        pin: false,
-        pin_verify: false,
-        pin_update: false,
-        pin_force: false,
-        ignore_pin: false,
-        deep_scan: effective.deep_scan,
-        profile: args.profile.clone(),
-        save_profile: None,
-        all_clients: false,
-        client: None,
-        report_fp: false,
-        report_fp_dry_run: false,
-        report_fp_endpoint: None,
-        no_telemetry: args.no_telemetry,
-        sbom: false,
-        sbom_format: None,
-        sbom_npm: false,
-        sbom_cargo: false,
-        hook_mode: false,
-    }
-}
-
-/// Create CheckArgs for batch scanning (simplified settings).
-fn create_scan_check_args_batch(
-    paths: Vec<PathBuf>,
-    args: &CheckArgs,
-    effective: &EffectiveConfig,
-) -> CheckArgs {
-    CheckArgs {
-        paths,
-        config: args.config.clone(),
-        remote: None,
-        git_ref: effective.git_ref.clone(),
-        remote_auth: effective.remote_auth.clone(),
-        remote_list: None,
-        awesome_claude_code: false,
-        parallel_clones: effective.parallel_clones,
-        badge: false, // No badge for batch
-        badge_format: BadgeFormat::Markdown,
-        summary: false,                 // No summary in batch items
-        format: OutputFormat::Terminal, // Always terminal for batch
-        strict: effective.strict,
-        warn_only: effective.warn_only,
-        min_severity: effective.min_severity,
-        min_rule_severity: effective.min_rule_severity,
-        scan_type: effective.scan_type,
-        no_recursive: false, // Always recursive
-        ci: false,           // No CI mode in batch
-        min_confidence: Some(effective.min_confidence),
-        watch: false,
-        skip_comments: effective.skip_comments,
-        strict_secrets: effective.strict_secrets,
-        fix_hint: false, // No fix hints in batch
-        compact: effective.compact,
-        no_malware_scan: effective.no_malware_scan,
-        cve_db: effective.cve_db.as_ref().map(PathBuf::from),
-        no_cve_scan: effective.no_cve_scan,
-        malware_db: effective.malware_db.as_ref().map(PathBuf::from),
-        custom_rules: effective.custom_rules.as_ref().map(PathBuf::from),
-        baseline: false,
-        check_drift: false,
-        output: None,
-        save_baseline: None,
-        baseline_file: None,
-        compare: None,
-        fix: false,
-        fix_dry_run: false,
-        pin: false,
-        pin_verify: false,
-        pin_update: false,
-        pin_force: false,
-        ignore_pin: false,
-        deep_scan: effective.deep_scan,
-        profile: args.profile.clone(),
-        save_profile: None,
-        all_clients: false,
-        client: None,
-        report_fp: false,
-        report_fp_dry_run: false,
-        report_fp_endpoint: None,
-        no_telemetry: args.no_telemetry,
-        sbom: false,
-        sbom_format: None,
-        sbom_npm: false,
-        sbom_cargo: false,
-        hook_mode: false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn test_handle_remote_scan_missing_url() {
@@ -493,13 +351,13 @@ mod tests {
     fn test_handle_remote_list_comments_and_blanks() {
         let tmp = tempfile::TempDir::new().unwrap();
         let file_path = tmp.path().join("urls.txt");
-        std::fs::write(&file_path, "# コメント行\n\n  \n# 別のコメント\n").unwrap();
+        std::fs::write(&file_path, "# comment line\n\n  \n# another comment\n").unwrap();
 
         let args = CheckArgs {
             remote_list: Some(file_path),
             ..Default::default()
         };
-        // コメントと空行だけなので "No URLs found" → ExitCode(2)
+        // Only comments and blanks → "No URLs found" → ExitCode(2)
         assert_eq!(handle_remote_list_scan(&args), ExitCode::from(2));
     }
 }

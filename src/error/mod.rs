@@ -34,7 +34,7 @@ pub enum AuditError {
     YamlParseError {
         path: String,
         #[source]
-        source: serde_yaml::Error,
+        source: serde_yml::Error,
     },
 
     #[error("Invalid SKILL.md format: {0}")]

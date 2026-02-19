@@ -17,7 +17,7 @@ pub fn handle_pin(args: &CheckArgs, verbose: bool) -> ExitCode {
     // Find MCP config file
     let mcp_path = find_mcp_config(&target_path);
 
-    if mcp_path.is_none() {
+    let Some(mcp_path) = mcp_path else {
         eprintln!(
             "{} No MCP configuration file found in {}",
             "Error:".red().bold(),
@@ -28,9 +28,7 @@ pub fn handle_pin(args: &CheckArgs, verbose: bool) -> ExitCode {
             "Looked for: mcp.json, .mcp.json, settings.json".dimmed()
         );
         return ExitCode::from(2);
-    }
-
-    let mcp_path = mcp_path.unwrap();
+    };
 
     // Check if we're updating existing pins
     if args.pin_update {
@@ -103,16 +101,14 @@ pub fn handle_pin_verify(args: &CheckArgs) -> ExitCode {
     // Find MCP config file
     let mcp_path = find_mcp_config(&target_path);
 
-    if mcp_path.is_none() {
+    let Some(mcp_path) = mcp_path else {
         eprintln!(
             "{} No MCP configuration file found in {}",
             "Error:".red().bold(),
             target_path.display()
         );
         return ExitCode::from(2);
-    }
-
-    let mcp_path = mcp_path.unwrap();
+    };
 
     // Verify pins against current config
     match pins.verify(&mcp_path) {

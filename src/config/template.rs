@@ -388,7 +388,7 @@ mod tests {
         let template = Config::generate_template();
 
         // Should parse as valid YAML
-        let result: Result<serde_yaml::Value, _> = serde_yaml::from_str(&template);
+        let result: Result<serde_yml::Value, _> = serde_yml::from_str(&template);
         assert!(
             result.is_ok(),
             "Template should be valid YAML: {:?}",

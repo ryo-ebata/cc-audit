@@ -27,8 +27,8 @@ impl FrontmatterParser {
     /// Parse frontmatter as a YAML value.
     ///
     /// Returns None if no frontmatter exists or parsing fails.
-    pub fn parse_yaml(content: &str) -> Option<serde_yaml::Value> {
-        Self::extract(content).and_then(|fm| serde_yaml::from_str(fm.trim()).ok())
+    pub fn parse_yaml(content: &str) -> Option<serde_yml::Value> {
+        Self::extract(content).and_then(|fm| serde_yml::from_str(fm.trim()).ok())
     }
 
     /// Parse frontmatter as a JSON value.
@@ -36,7 +36,7 @@ impl FrontmatterParser {
     /// Returns None if no frontmatter exists or parsing fails.
     pub fn parse_json(content: &str) -> Option<serde_json::Value> {
         Self::extract(content)
-            .and_then(|fm| serde_yaml::from_str::<serde_json::Value>(fm.trim()).ok())
+            .and_then(|fm| serde_yml::from_str::<serde_json::Value>(fm.trim()).ok())
     }
 }
 

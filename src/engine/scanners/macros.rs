@@ -26,9 +26,9 @@
 #[macro_export]
 macro_rules! impl_scanner_builder {
     ($scanner:ty) => {
+        #[allow(dead_code)]
         impl $scanner {
             /// Creates a new scanner with default configuration.
-            #[allow(dead_code)]
             pub fn new() -> Self {
                 Self {
                     config: $crate::scanner::ScannerConfig::new(),
@@ -36,14 +36,12 @@ macro_rules! impl_scanner_builder {
             }
 
             /// Enables or disables comment skipping during scanning.
-            #[allow(dead_code)]
             pub fn with_skip_comments(mut self, skip: bool) -> Self {
                 self.config = self.config.with_skip_comments(skip);
                 self
             }
 
             /// Adds dynamic rules loaded from custom YAML files.
-            #[allow(dead_code)]
             pub fn with_dynamic_rules(mut self, rules: Vec<$crate::rules::DynamicRule>) -> Self {
                 self.config = self.config.with_dynamic_rules(rules);
                 self
@@ -51,7 +49,6 @@ macro_rules! impl_scanner_builder {
 
             /// Enables or disables strict secrets mode.
             /// When enabled, dummy key heuristics are disabled for test files.
-            #[allow(dead_code)]
             pub fn with_strict_secrets(mut self, strict: bool) -> Self {
                 self.config = self.config.with_strict_secrets(strict);
                 self
@@ -59,14 +56,12 @@ macro_rules! impl_scanner_builder {
 
             /// Enables or disables recursive scanning.
             /// When disabled, only scans the immediate directory (max_depth = 1).
-            #[allow(dead_code)]
             pub fn with_recursive(mut self, recursive: bool) -> Self {
                 self.config = self.config.with_recursive(recursive);
                 self
             }
 
             /// Sets a progress callback that will be called for each scanned file.
-            #[allow(dead_code)]
             pub fn with_progress_callback(
                 mut self,
                 callback: $crate::engine::scanner::ProgressCallback,

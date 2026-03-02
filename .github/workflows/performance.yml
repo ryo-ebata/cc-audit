@@ -46,7 +46,7 @@ jobs:
         run: cargo bench --bench scan_benchmark -- --noplot --save-baseline pr
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: target/criterion/
@@ -108,7 +108,7 @@ jobs:
           echo "| cc-audit | ${{ steps.size.outputs.size_mb }}MB |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload size data
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: binary-size
           path: target/release/cc-audit

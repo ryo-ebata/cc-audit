@@ -14,7 +14,7 @@ pub enum ConfigError {
     ParseYaml {
         path: String,
         #[source]
-        source: serde_yml::Error,
+        source: serde_norway::Error,
     },
 
     #[error("Failed to parse JSON config {path}: {source}")]

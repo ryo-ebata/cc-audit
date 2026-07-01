@@ -44,13 +44,13 @@ impl Config {
             "yaml" | "yml" => {
                 // An empty or comment-only YAML document means "use defaults".
                 // Handle it explicitly so config loading does not depend on the
-                // YAML backend's null coercion: serde_yml 0.0.13 (noyalib) errors
-                // on such documents with "expected mapping, found other", whereas
-                // 0.0.12 deserialized them to the `#[serde(default)]` struct.
+                // YAML backend's null coercion, which varies between crates and
+                // versions (some backends reject an empty document with
+                // "expected mapping, found other" instead of yielding null).
                 if is_effectively_empty(&content) {
                     return Ok(Self::default());
                 }
-                serde_yml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
+                serde_norway::from_str(&content).map_err(|e| ConfigError::ParseYaml {
                     path: path.display().to_string(),
                     source: e,
                 })
@@ -282,9 +282,9 @@ mod tests {
     #[test]
     fn test_from_file_empty_yaml_returns_default() {
         // An empty `.cc-audit.yaml` must be treated as "use defaults", not as a
-        // parse error. This must not depend on the YAML backend's null handling:
-        // serde_yml 0.0.13 (noyalib) rejects empty/comment-only documents with
-        // "type mismatch: expected mapping, found other".
+        // parse error. This must not depend on the YAML backend's null handling,
+        // which differs across YAML crates (some reject an empty/comment-only
+        // document instead of yielding null).
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join(".cc-audit.yaml");
         fs::write(&config_path, "").unwrap();

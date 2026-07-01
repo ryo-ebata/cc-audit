@@ -12,6 +12,7 @@ pub fn rules() -> Vec<Rule> {
         pe_007(),
         pe_008(),
         pe_009(),
+        pe_010(),
     ]
 }
 
@@ -279,6 +280,39 @@ fn pe_009() -> Rule {
     }
 }
 
+fn pe_010() -> Rule {
+    Rule {
+        id: "PE-010",
+        name: "PATH hijacking",
+        description: "Detects inline PATH assignments that prepend the current directory or a world-writable/temp directory, letting a planted binary shadow a real command (MITRE T1574.007)",
+        severity: Severity::High,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Value starts with the current directory: PATH=.:...
+            Regex::new(r"PATH\s*=\s*\.:").expect("PE-010: invalid regex"),
+            // Value starts with an empty element (also the current directory): PATH=:...
+            Regex::new(r"PATH\s*=\s*:").expect("PE-010: invalid regex"),
+            // Current directory as a middle element: PATH=...:.:...
+            Regex::new(r"PATH\s*=[^\n=]*:\.:").expect("PE-010: invalid regex"),
+            // Current directory as the trailing element: PATH=...:.
+            Regex::new(r"PATH\s*=[^\n=]*:\.(\s|$)").expect("PE-010: invalid regex"),
+            // World-writable/temp directory prepended
+            Regex::new(r"PATH\s*=\s*/(tmp|dev/shm|var/tmp)[:/\s]").expect("PE-010: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PE-010: invalid regex"),
+        ],
+        message: "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+        recommendation: "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke.",
+        fix_hint: Some(
+            "Remove '.'/empty/temp entries from PATH; keep only trusted absolute directories.",
+        ),
+        cwe_ids: &["CWE-426", "CWE-427"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,5 +520,38 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/pe_009.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("pe_009", findings);
+    }
+
+    #[test]
+    fn test_pe_010_detects_path_hijacking() {
+        let rule = pe_010();
+        let test_cases = vec![
+            // Malicious: cwd/empty/temp entries on PATH
+            ("export PATH=.:$PATH", true),
+            ("export PATH=:/usr/bin", true),
+            ("PATH=/tmp/bin:$PATH sh -c id", true),
+            ("PATH=$PATH:. ./run", true),
+            ("PATH=/dev/shm:$PATH ./payload", true),
+            // Benign: trusted absolute directories
+            ("export PATH=$HOME/bin:$PATH", false),
+            ("export PATH=/usr/local/bin:$PATH", false),
+            ("PATH=$PATH:/opt/tool/bin", false),
+            ("echo $PATH", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PE-010: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_pe_010() {
+        let rule = pe_010();
+        let content = include_str!("../../../tests/fixtures/rules/pe_010.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_010", findings);
     }
 }

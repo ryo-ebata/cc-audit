@@ -1,0 +1,18 @@
+# PE-010: PATH hijacking
+# Test cases for snapshot testing
+# Detects inline PATH assignments that prepend the current directory or a
+# world-writable/temp directory, so a planted binary shadows a real command
+# (MITRE T1574.007).
+
+# === Cases that SHOULD be detected ===
+export PATH=.:$PATH
+export PATH=:/usr/bin
+PATH=/tmp/bin:$PATH sh -c id
+PATH=$PATH:. ./run
+PATH=/dev/shm:$PATH ./payload
+
+# === Cases that should NOT be detected (benign) ===
+export PATH=$HOME/bin:$PATH
+export PATH=/usr/local/bin:$PATH
+PATH=$PATH:/opt/tool/bin
+echo $PATH

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0](https://github.com/ryo-ebata/cc-audit/compare/v3.2.14...v3.3.0) (2026-07-01)
+
+
+### Features
+
+* **rules:** add PS-010, PS-011, EX-015 detection rules ([b802cfe](https://github.com/ryo-ebata/cc-audit/commit/b802cfef05a2df401de55ee5bc337dde45c44b47))
+
+
+### Bug Fixes
+
+* **xtask:** support multi-line rules() vec in new-rule ([780be7e](https://github.com/ryo-ebata/cc-audit/commit/780be7e7230e3cf0adc3cb1bcec0018489e668b0))
+
 ## [3.2.14](https://github.com/ryo-ebata/cc-audit/compare/v3.2.13...v3.2.14) (2026-02-02)
 
 

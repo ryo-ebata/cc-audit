@@ -1,0 +1,18 @@
+# PE-008: Sudoers NOPASSWD injection
+# Test cases for snapshot testing
+# Detects writes that grant passwordless root by editing /etc/sudoers or
+# dropping a file into /etc/sudoers.d/ (MITRE T1548.003).
+
+# === Cases that SHOULD be detected ===
+echo 'attacker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+echo "claude ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/claude
+printf '%s\n' 'x ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/backdoor
+tee -a /etc/sudoers < payload.txt
+cat evil >> /etc/sudoers.d/00-backdoor
+
+# === Cases that should NOT be detected (benign) ===
+sudo apt-get update
+cat /etc/sudoers
+grep NOPASSWD /etc/sudoers
+visudo -c
+ls -l /etc/sudoers.d/

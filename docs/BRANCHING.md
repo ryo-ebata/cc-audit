@@ -117,6 +117,16 @@ Examples:
 - `v0.2.0` - New feature added
 - `v1.0.0` - Stable release / Breaking change
 
+### Versioning Policy
+
+As a rule, **we do not bump the major version.** Backward compatibility is a
+priority, so changes are expected to land as MINOR (`feat:`) or PATCH (`fix:`)
+releases. Avoid breaking changes; do not use `feat!:` / `fix!:` or a
+`BREAKING CHANGE:` footer (which release-please turns into a major bump) unless
+a major release has been explicitly agreed upon beforehand. When a change seems
+to require breaking behavior, prefer a backward-compatible path (deprecate, add
+an opt-in flag, or keep the old behavior as default) instead.
+
 ### Pre-release Tags
 
 ```

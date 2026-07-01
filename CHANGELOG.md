@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0](https://github.com/ryo-ebata/cc-audit/compare/v3.5.0...v3.6.0) (2026-07-01)
+
+
+### Features
+
+* **rules:** add EX-018 cloud metadata + PE-009 linker hijacking ([50c1ce2](https://github.com/ryo-ebata/cc-audit/commit/50c1ce25dbf9a9527937414458cef05f20cab958))
+* **rules:** add PE-010 PATH hijacking + OB-009 IFS obfuscation ([c922dfe](https://github.com/ryo-ebata/cc-audit/commit/c922dfe9a0f090d1e3690a8ead2e0482e69fe799))
+
 ## [3.5.0](https://github.com/ryo-ebata/cc-audit/compare/v3.4.0...v3.5.0) (2026-07-01)
 
 

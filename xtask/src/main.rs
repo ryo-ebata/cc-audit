@@ -298,19 +298,51 @@ fn insert_rule(
     Ok(lines.join("\n"))
 }
 
-fn update_rules_function(lines: &mut [String], fn_name: &str) -> Result<bool> {
+fn update_rules_function(lines: &mut Vec<String>, fn_name: &str) -> Result<bool> {
+    // Case 1: single-line vec, e.g. `vec![pe_001(), pe_002()]`.
     for (i, line) in lines.iter_mut().enumerate() {
-        // Find: vec![pe_001(), pe_002(), ...]
-        if line.contains("vec![") && line.contains("()]") {
-            // Check if it's in the rules() function context (within first 10 lines)
-            if i < 15 {
-                // Add the new function call before the closing bracket
-                let trimmed = line.trim_end();
-                if trimmed.ends_with(']') {
-                    *line = trimmed.strip_suffix(']').unwrap().to_string() + ", " + fn_name + "()]";
-                    return Ok(true);
-                }
+        if line.contains("vec![") && line.contains("()]") && i < 15 {
+            let trimmed = line.trim_end();
+            if trimmed.ends_with(']') {
+                *line = trimmed.strip_suffix(']').unwrap().to_string() + ", " + fn_name + "()]";
+                return Ok(true);
             }
+        }
+    }
+
+    // Case 2: multi-line vec, where `vec![` and the closing `]` are on
+    // separate lines (the shape every builtin file actually uses):
+    //     vec![
+    //         ps_001(),
+    //         ps_009(),
+    //     ]
+    let Some(rules_start) = lines.iter().position(|l| l.contains("fn rules(")) else {
+        return Ok(false);
+    };
+    let Some(vec_line) = lines[rules_start..]
+        .iter()
+        .position(|l| l.contains("vec!["))
+        .map(|off| rules_start + off)
+    else {
+        return Ok(false);
+    };
+    // The first standalone `]` (optionally with a trailing comma) after the
+    // `vec![` line closes the vec.
+    for j in (vec_line + 1)..lines.len() {
+        let trimmed = lines[j].trim();
+        if trimmed == "]" || trimmed == "]," {
+            // Preserve the indentation used by the existing entries.
+            let indent: String = lines[j - 1]
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .collect();
+            let indent = if indent.is_empty() {
+                "        ".to_string()
+            } else {
+                indent
+            };
+            lines.insert(j, format!("{indent}{fn_name}(),"));
+            return Ok(true);
         }
     }
     Ok(false)
@@ -354,4 +386,73 @@ fn find_test_insert_position(lines: &[String]) -> Result<usize> {
     }
 
     bail!("Could not find test module closing brace")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Mirrors the real `src/rules/builtin/*.rs` shape: a multi-line `vec!`
+    /// where `vec![` and the closing `]` live on separate lines.
+    fn sample_multiline() -> Vec<String> {
+        [
+            "pub fn rules() -> Vec<Rule> {",
+            "    vec![",
+            "        ps_001(),",
+            "        ps_009(),",
+            "    ]",
+            "}",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect()
+    }
+
+    #[test]
+    fn update_rules_function_handles_multiline_vec() {
+        let mut lines = sample_multiline();
+        let updated = update_rules_function(&mut lines, "ps_010").unwrap();
+        assert!(updated, "should update multi-line rules() vec");
+
+        let joined = lines.join("\n");
+        assert!(joined.contains("ps_010()"), "new call inserted:\n{joined}");
+
+        // New call must sit after the last entry and before the closing bracket.
+        let ps009 = lines.iter().position(|l| l.contains("ps_009()")).unwrap();
+        let ps010 = lines.iter().position(|l| l.contains("ps_010()")).unwrap();
+        let close = lines.iter().position(|l| l.trim() == "]").unwrap();
+        assert!(ps009 < ps010 && ps010 < close, "wrong order:\n{joined}");
+
+        // Indentation should match the existing entries (8 spaces).
+        assert!(
+            lines[ps010].starts_with("        ps_010()"),
+            "indentation not preserved: {:?}",
+            lines[ps010]
+        );
+    }
+
+    #[test]
+    fn update_rules_function_handles_singleline_vec() {
+        let mut lines: Vec<String> = [
+            "pub fn rules() -> Vec<Rule> {",
+            "    vec![ex_001(), ex_002()]",
+            "}",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let updated = update_rules_function(&mut lines, "ex_003").unwrap();
+        assert!(updated, "should update single-line rules() vec");
+        assert!(lines.join("\n").contains("ex_003()"));
+    }
+
+    #[test]
+    fn update_rules_function_returns_false_without_rules_fn() {
+        let mut lines: Vec<String> = ["fn other() {", "    let x = 1;", "}"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert!(!update_rules_function(&mut lines, "ps_010").unwrap());
+    }
 }

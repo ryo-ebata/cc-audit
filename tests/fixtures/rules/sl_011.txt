@@ -1,0 +1,16 @@
+# SL-011: Live credential token exposure
+# Test cases for snapshot testing
+# Detects high-value live tokens with distinct prefixes not covered by
+# SL-001..010: npm tokens and GitLab personal access tokens.
+# (Stripe live-key coverage is exercised by the unit test; a literal Stripe
+# token cannot be committed because upstream push protection blocks it.)
+# Fixture tokens use low-entropy sequential characters on purpose.
+
+# === Cases that SHOULD be detected ===
+npmrc_token = "npm_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"
+GITLAB_TOKEN=glpat-ABCDEFGHIJKLMNOPQRST
+
+# === Cases that should NOT be detected (benign) ===
+run npm install --save-dev
+token = "glpat-example"
+const npmVersion = "npm_install"

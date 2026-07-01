@@ -1,0 +1,28 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-011",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Live credential token exposure",
+    "line": 10,
+    "code": "npmrc_token = \"npm_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\"",
+    "message": "Live credential exposure: a Stripe live key, npm token, or GitLab PAT is hardcoded.",
+    "recommendation": "Remove the token, rotate it immediately, and load credentials from a secrets manager or environment variables."
+  },
+  {
+    "id": "SL-011",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Live credential token exposure",
+    "line": 11,
+    "code": "GITLAB_TOKEN=glpat-ABCDEFGHIJKLMNOPQRST",
+    "message": "Live credential exposure: a Stripe live key, npm token, or GitLab PAT is hardcoded.",
+    "recommendation": "Remove the token, rotate it immediately, and load credentials from a secrets manager or environment variables."
+  }
+]

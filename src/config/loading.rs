@@ -16,6 +16,16 @@ pub struct ConfigLoadResult {
     pub path: Option<PathBuf>,
 }
 
+/// Returns `true` if a YAML document carries no content, i.e. every line is
+/// blank or a full-line comment. Such documents are semantically empty and
+/// should map to the default configuration.
+fn is_effectively_empty(content: &str) -> bool {
+    content.lines().all(|line| {
+        let trimmed = line.trim();
+        trimmed.is_empty() || trimmed.starts_with('#')
+    })
+}
+
 impl Config {
     /// Load configuration from a file.
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
@@ -31,10 +41,20 @@ impl Config {
             .to_lowercase();
 
         match ext.as_str() {
-            "yaml" | "yml" => serde_yml::from_str(&content).map_err(|e| ConfigError::ParseYaml {
-                path: path.display().to_string(),
-                source: e,
-            }),
+            "yaml" | "yml" => {
+                // An empty or comment-only YAML document means "use defaults".
+                // Handle it explicitly so config loading does not depend on the
+                // YAML backend's null coercion, which varies between crates and
+                // versions (some backends reject an empty document with
+                // "expected mapping, found other" instead of yielding null).
+                if is_effectively_empty(&content) {
+                    return Ok(Self::default());
+                }
+                serde_norway::from_str(&content).map_err(|e| ConfigError::ParseYaml {
+                    path: path.display().to_string(),
+                    source: e,
+                })
+            }
             "json" => serde_json::from_str(&content).map_err(|e| ConfigError::ParseJson {
                 path: path.display().to_string(),
                 source: e,
@@ -147,6 +167,21 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
+    /// Serialize a `Config` to a JSON value with the set-backed `text_files`
+    /// collections sorted, so two logically-equal configs compare equal despite
+    /// `HashSet` iteration order being nondeterministic.
+    fn normalized(config: &Config) -> serde_json::Value {
+        let mut value = serde_json::to_value(config).unwrap();
+        if let Some(text_files) = value.get_mut("text_files").and_then(|t| t.as_object_mut()) {
+            for key in ["extensions", "special_names"] {
+                if let Some(array) = text_files.get_mut(key).and_then(|a| a.as_array_mut()) {
+                    array.sort_by_key(|value| value.to_string());
+                }
+            }
+        }
+        value
+    }
+
     /// Helper to canonicalize and compare two paths for equality.
     fn assert_paths_eq(actual: &Path, expected: &Path) {
         assert_eq!(
@@ -242,5 +277,49 @@ mod tests {
         let found = Config::find_config_file(Some(&subdir)).expect("should find closest config");
 
         assert_paths_eq(&found, &subdir_config);
+    }
+
+    #[test]
+    fn test_from_file_empty_yaml_returns_default() {
+        // An empty `.cc-audit.yaml` must be treated as "use defaults", not as a
+        // parse error. This must not depend on the YAML backend's null handling,
+        // which differs across YAML crates (some reject an empty/comment-only
+        // document instead of yielding null).
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(".cc-audit.yaml");
+        fs::write(&config_path, "").unwrap();
+
+        let config = Config::from_file(&config_path).expect("empty YAML should load as default");
+        // Config does not implement PartialEq; compare via normalized serialized form.
+        assert_eq!(normalized(&config), normalized(&Config::default()));
+    }
+
+    #[test]
+    fn test_from_file_comment_only_yaml_returns_default() {
+        // A config file containing only comments (and blank lines) is
+        // semantically empty and must load as the default configuration.
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(".cc-audit.yaml");
+        fs::write(
+            &config_path,
+            "# Minimal test config\n\n  # indented comment\n",
+        )
+        .unwrap();
+
+        let config =
+            Config::from_file(&config_path).expect("comment-only YAML should load as default");
+        assert_eq!(normalized(&config), normalized(&Config::default()));
+    }
+
+    #[test]
+    fn test_from_file_invalid_yaml_still_errors() {
+        // The empty-document handling must NOT mask genuine parse errors: a file
+        // with real (non-comment) but malformed content must still fail.
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(".cc-audit.yaml");
+        fs::write(&config_path, "severity: {default: error\n").unwrap();
+
+        let result = Config::from_file(&config_path);
+        assert!(result.is_err(), "malformed YAML must still return an error");
     }
 }

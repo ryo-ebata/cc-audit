@@ -67,7 +67,7 @@ pub enum CcAuditError {
     YamlParse {
         path: String,
         #[source]
-        source: serde_yml::Error,
+        source: serde_norway::Error,
     },
 
     /// Invalid skill format (legacy compatibility).
@@ -108,7 +108,7 @@ impl CcAuditError {
     }
 
     /// Create a parse error with YAML format.
-    pub fn yaml_parse_error(path: impl Into<PathBuf>, source: serde_yml::Error) -> Self {
+    pub fn yaml_parse_error(path: impl Into<PathBuf>, source: serde_norway::Error) -> Self {
         Self::Parse {
             path: path.into(),
             format: ParseFormat::Yaml,
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn test_yaml_parse_error() {
         let yaml_str = "invalid: yaml: content";
-        let yaml_err = serde_yml::from_str::<serde_yml::Value>(yaml_str).unwrap_err();
+        let yaml_err = serde_norway::from_str::<serde_norway::Value>(yaml_str).unwrap_err();
         let err = CcAuditError::yaml_parse_error("/test.yaml", yaml_err);
         assert!(err.to_string().contains("/test.yaml"));
         assert!(err.to_string().contains("YAML"));

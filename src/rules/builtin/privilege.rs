@@ -11,6 +11,7 @@ pub fn rules() -> Vec<Rule> {
         pe_006(),
         pe_007(),
         pe_008(),
+        pe_009(),
     ]
 }
 
@@ -243,6 +244,41 @@ fn pe_008() -> Rule {
     }
 }
 
+fn pe_009() -> Rule {
+    Rule {
+        id: "PE-009",
+        name: "Dynamic linker hijacking",
+        description: "Detects shared-library injection via /etc/ld.so.preload writes or LD_PRELOAD pointing at writable, relative, or bare paths (MITRE T1574.006)",
+        severity: Severity::Critical,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Any reference to the global preload file (writes load a lib into every process)
+            Regex::new(r"/etc/ld\.so\.preload").expect("PE-009: invalid regex"),
+            // LD_PRELOAD from a world-writable/temp directory
+            Regex::new(r"LD_PRELOAD\s*=\s*\S*/(tmp|dev/shm|var/tmp)/\S*\.so")
+                .expect("PE-009: invalid regex"),
+            // LD_PRELOAD from a relative path (current/parent dir)
+            Regex::new(r"LD_PRELOAD\s*=\s*(\./|\.\./)").expect("PE-009: invalid regex"),
+            // LD_PRELOAD of a bare filename (resolved from the current directory)
+            Regex::new(r"LD_PRELOAD\s*=\s*[A-Za-z0-9_.-]+\.so\b").expect("PE-009: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PE-009: invalid regex"),
+            // Read-only inspection of the preload file
+            Regex::new(r"^\s*(cat|less|stat|head|tail|grep|ls)\s+[^\n]*/etc/ld\.so\.preload")
+                .expect("PE-009: invalid regex"),
+        ],
+        message: "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+        recommendation: "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths.",
+        fix_hint: Some(
+            "Delete /etc/ld.so.preload writes and untrusted LD_PRELOAD assignments; load only vetted system libraries by absolute path.",
+        ),
+        cwe_ids: &["CWE-426", "CWE-114"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,5 +450,41 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/pe_008.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("pe_008", findings);
+    }
+
+    #[test]
+    fn test_pe_009_detects_linker_hijacking() {
+        let rule = pe_009();
+        let test_cases = vec![
+            // Malicious: ld.so.preload writes and untrusted LD_PRELOAD
+            ("echo /tmp/evil.so > /etc/ld.so.preload", true),
+            ("LD_PRELOAD=/tmp/rootkit.so ./app", true),
+            ("LD_PRELOAD=./evil.so program", true),
+            ("export LD_PRELOAD=evil.so", true),
+            ("echo \"/dev/shm/x.so\" | tee /etc/ld.so.preload", true),
+            // Benign: absolute system lib, read-only inspection, unrelated vars
+            (
+                "LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so myprogram",
+                false,
+            ),
+            ("cat /etc/ld.so.preload", false),
+            ("export LD_LIBRARY_PATH=/opt/lib", false),
+            ("ldconfig -p", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PE-009: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_pe_009() {
+        let rule = pe_009();
+        let content = include_str!("../../../tests/fixtures/rules/pe_009.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_009", findings);
     }
 }

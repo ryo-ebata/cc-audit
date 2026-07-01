@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-009",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Dynamic linker hijacking",
+    "line": 7,
+    "code": "echo /tmp/evil.so > /etc/ld.so.preload",
+    "message": "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+    "recommendation": "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths."
+  },
+  {
+    "id": "PE-009",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Dynamic linker hijacking",
+    "line": 8,
+    "code": "LD_PRELOAD=/tmp/rootkit.so ./app",
+    "message": "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+    "recommendation": "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths."
+  },
+  {
+    "id": "PE-009",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Dynamic linker hijacking",
+    "line": 9,
+    "code": "LD_PRELOAD=./evil.so program",
+    "message": "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+    "recommendation": "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths."
+  },
+  {
+    "id": "PE-009",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Dynamic linker hijacking",
+    "line": 10,
+    "code": "export LD_PRELOAD=evil.so",
+    "message": "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+    "recommendation": "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths."
+  },
+  {
+    "id": "PE-009",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Dynamic linker hijacking",
+    "line": 11,
+    "code": "echo \"/dev/shm/x.so\" | tee /etc/ld.so.preload",
+    "message": "Dynamic linker hijacking detected: a shared library is being injected via /etc/ld.so.preload or an untrusted LD_PRELOAD path.",
+    "recommendation": "Remove the preload injection. Artifacts must not write /etc/ld.so.preload or preload libraries from writable/relative paths."
+  }
+]

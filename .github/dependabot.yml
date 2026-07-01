@@ -8,7 +8,10 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "deps(rust)"
+      # Use a Conventional Commits type accepted by commitlint / the
+      # semantic-PR check. "deps" is not a valid type, so dependency updates
+      # are classified as "build" (per the project's commit-type convention).
+      prefix: "build(deps)"
     labels:
       - "dependencies"
       - "rust"
@@ -28,7 +31,9 @@ updates:
       day: "monday"
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "deps(actions)"
+      # Same rationale as the cargo ecosystem above: "build" is a valid
+      # Conventional Commits type, "deps" is not.
+      prefix: "build(deps)"
     labels:
       - "dependencies"
       - "github-actions"

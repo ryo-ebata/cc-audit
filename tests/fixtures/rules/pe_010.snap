@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-010",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "PATH hijacking",
+    "line": 8,
+    "code": "export PATH=.:$PATH",
+    "message": "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+    "recommendation": "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke."
+  },
+  {
+    "id": "PE-010",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "PATH hijacking",
+    "line": 9,
+    "code": "export PATH=:/usr/bin",
+    "message": "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+    "recommendation": "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke."
+  },
+  {
+    "id": "PE-010",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "PATH hijacking",
+    "line": 10,
+    "code": "PATH=/tmp/bin:$PATH sh -c id",
+    "message": "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+    "recommendation": "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke."
+  },
+  {
+    "id": "PE-010",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "PATH hijacking",
+    "line": 11,
+    "code": "PATH=$PATH:. ./run",
+    "message": "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+    "recommendation": "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke."
+  },
+  {
+    "id": "PE-010",
+    "severity": "high",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "PATH hijacking",
+    "line": 12,
+    "code": "PATH=/dev/shm:$PATH ./payload",
+    "message": "PATH hijacking detected: the current directory or a writable/temp path is placed on PATH, so a planted binary can shadow a trusted command.",
+    "recommendation": "Never put '.', an empty element, or a writable directory on PATH. Use absolute paths for the commands you invoke."
+  }
+]

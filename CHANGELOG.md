@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0](https://github.com/ryo-ebata/cc-audit/compare/v3.4.0...v3.5.0) (2026-07-01)
+
+
+### Features
+
+* **rules:** add EX-017, SL-011; harden SC-003 pip index coverage ([45f4827](https://github.com/ryo-ebata/cc-audit/commit/45f4827a2e1d58d1243155aec04d5c5ce02c8c6c))
+
 ## [3.4.0](https://github.com/ryo-ebata/cc-audit/compare/v3.3.0...v3.4.0) (2026-07-01)
 
 

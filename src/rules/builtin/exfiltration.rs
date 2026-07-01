@@ -19,6 +19,7 @@ pub fn rules() -> Vec<Rule> {
         ex_015(),
         ex_016(),
         ex_017(),
+        ex_018(),
     ]
 }
 
@@ -565,6 +566,35 @@ fn ex_017() -> Rule {
         cwe_ids: &["CWE-200", "CWE-522"],
     }
 }
+
+fn ex_018() -> Rule {
+    Rule {
+        id: "EX-018",
+        name: "Cloud instance metadata access",
+        description: "Detects access to cloud instance metadata endpoints (IMDS), commonly abused via SSRF to steal short-lived instance credentials (MITRE T1552.005)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // AWS/Azure/OpenStack link-local IMDS address
+            Regex::new(r"169\.254\.169\.254").expect("EX-018: invalid regex"),
+            // GCP metadata server hostname
+            Regex::new(r"metadata\.google\.internal").expect("EX-018: invalid regex"),
+            // Alibaba Cloud metadata address
+            Regex::new(r"100\.100\.100\.200").expect("EX-018: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-018: invalid regex"),
+        ],
+        message: "Cloud instance metadata (IMDS) access detected. Artifacts have no legitimate reason to query the metadata endpoint; it is a common credential-theft target.",
+        recommendation: "Remove access to the metadata endpoint. If cloud credentials are needed, use a scoped, audited mechanism — never query IMDS directly from an artifact.",
+        fix_hint: Some(
+            "Remove requests to 169.254.169.254 / metadata.google.internal. Enforce IMDSv2 and block metadata access from untrusted code.",
+        ),
+        cwe_ids: &["CWE-918", "CWE-200"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -800,5 +830,43 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_017.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_017", findings);
+    }
+
+    #[test]
+    fn test_ex_018() {
+        let rule = ex_018();
+        let test_cases = vec![
+            // Malicious: cloud metadata (IMDS) endpoints
+            (
+                "curl http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+                true,
+            ),
+            (
+                "curl -H \"Metadata-Flavor: Google\" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                true,
+            ),
+            ("wget -qO- http://100.100.100.200/latest/meta-data/", true),
+            ("curl -s http://169.254.169.254/latest/api/token", true),
+            // Benign: unrelated hosts and link-local addresses
+            ("curl https://api.example.com/metadata", false),
+            ("ping 169.254.1.1", false),
+            ("curl http://100.100.100.100/status", false),
+            ("echo \"fetching build metadata from registry\"", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-018: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_018() {
+        let rule = ex_018();
+        let content = include_str!("../../../tests/fixtures/rules/ex_018.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_018", findings);
     }
 }

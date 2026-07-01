@@ -1,0 +1,17 @@
+# PE-009: Dynamic linker hijacking (LD_PRELOAD / ld.so.preload)
+# Test cases for snapshot testing
+# Detects shared-library injection via /etc/ld.so.preload writes or LD_PRELOAD
+# pointing at writable/relative/bare paths (MITRE T1574.006).
+
+# === Cases that SHOULD be detected ===
+echo /tmp/evil.so > /etc/ld.so.preload
+LD_PRELOAD=/tmp/rootkit.so ./app
+LD_PRELOAD=./evil.so program
+export LD_PRELOAD=evil.so
+echo "/dev/shm/x.so" | tee /etc/ld.so.preload
+
+# === Cases that should NOT be detected (benign) ===
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so myprogram
+cat /etc/ld.so.preload
+export LD_LIBRARY_PATH=/opt/lib
+ldconfig -p

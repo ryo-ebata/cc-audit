@@ -10,6 +10,7 @@ pub fn rules() -> Vec<Rule> {
         pe_005(),
         pe_006(),
         pe_007(),
+        pe_008(),
     ]
 }
 
@@ -211,6 +212,37 @@ fn pe_007() -> Rule {
     }
 }
 
+fn pe_008() -> Rule {
+    Rule {
+        id: "PE-008",
+        name: "Sudoers NOPASSWD injection",
+        description: "Detects writes that grant passwordless root by appending to /etc/sudoers or dropping a file into /etc/sudoers.d/ (MITRE T1548.003)",
+        severity: Severity::Critical,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // echo/printf a NOPASSWD grant redirected into the sudoers file
+            Regex::new(r"(echo|printf)\s+[^\n]*NOPASSWD[^\n]*(>>|>|tee)\s*[^\n]*/etc/sudoers")
+                .expect("PE-008: invalid regex"),
+            // Creating/overwriting a drop-in file under /etc/sudoers.d/
+            Regex::new(r"(>>|>|tee\s+(-a\s+)?)\s*/etc/sudoers\.d/\S+")
+                .expect("PE-008: invalid regex"),
+            // Appending to the main sudoers file
+            Regex::new(r"(>>|tee\s+(-a\s+)?)\s*/etc/sudoers\b").expect("PE-008: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PE-008: invalid regex"),
+        ],
+        message: "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+        recommendation: "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root.",
+        fix_hint: Some(
+            "Remove writes to /etc/sudoers and /etc/sudoers.d/. Privilege changes belong in reviewed provisioning, not artifacts.",
+        ),
+        cwe_ids: &["CWE-250", "CWE-269"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,5 +371,48 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/pe_005.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("pe_005", findings);
+    }
+
+    #[test]
+    fn test_pe_008_detects_sudoers_injection() {
+        let rule = pe_008();
+        let test_cases = vec![
+            // Malicious: passwordless-root grants via sudoers writes
+            (
+                "echo 'attacker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers",
+                true,
+            ),
+            (
+                "echo \"claude ALL=(ALL) NOPASSWD:ALL\" | tee /etc/sudoers.d/claude",
+                true,
+            ),
+            (
+                "printf '%s\\n' 'x ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/backdoor",
+                true,
+            ),
+            ("tee -a /etc/sudoers < payload.txt", true),
+            ("cat evil >> /etc/sudoers.d/00-backdoor", true),
+            // Benign: reads and syntax checks
+            ("sudo apt-get update", false),
+            ("cat /etc/sudoers", false),
+            ("grep NOPASSWD /etc/sudoers", false),
+            ("visudo -c", false),
+            ("ls -l /etc/sudoers.d/", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PE-008: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_pe_008() {
+        let rule = pe_008();
+        let content = include_str!("../../../tests/fixtures/rules/pe_008.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_008", findings);
     }
 }

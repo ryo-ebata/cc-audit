@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-008",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Sudoers NOPASSWD injection",
+    "line": 7,
+    "code": "echo 'attacker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers",
+    "message": "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+    "recommendation": "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root."
+  },
+  {
+    "id": "PE-008",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Sudoers NOPASSWD injection",
+    "line": 8,
+    "code": "echo \"claude ALL=(ALL) NOPASSWD:ALL\" | tee /etc/sudoers.d/claude",
+    "message": "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+    "recommendation": "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root."
+  },
+  {
+    "id": "PE-008",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Sudoers NOPASSWD injection",
+    "line": 9,
+    "code": "printf '%s\\n' 'x ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/backdoor",
+    "message": "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+    "recommendation": "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root."
+  },
+  {
+    "id": "PE-008",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Sudoers NOPASSWD injection",
+    "line": 10,
+    "code": "tee -a /etc/sudoers < payload.txt",
+    "message": "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+    "recommendation": "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root."
+  },
+  {
+    "id": "PE-008",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Sudoers NOPASSWD injection",
+    "line": 11,
+    "code": "cat evil >> /etc/sudoers.d/00-backdoor",
+    "message": "Sudoers tampering detected: a write grants passwordless root via /etc/sudoers or /etc/sudoers.d/.",
+    "recommendation": "Artifacts must never edit sudoers. Remove the write and audit for a planted NOPASSWD entry granting root."
+  }
+]

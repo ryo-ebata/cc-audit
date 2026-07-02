@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.9](https://github.com/ryo-ebata/cc-audit/compare/v3.17.8...v3.17.9) (2026-07-02)
+
+
+### Bug Fixes
+
+* **scanners:** scan plugin manifests independently, no short-circuit ([#268](https://github.com/ryo-ebata/cc-audit/issues/268)) ([af977b1](https://github.com/ryo-ebata/cc-audit/commit/af977b13685d18a7948467f0c5a96dbd44c5a98a)), closes [#227](https://github.com/ryo-ebata/cc-audit/issues/227)
+
 ## [3.17.8](https://github.com/ryo-ebata/cc-audit/compare/v3.17.7...v3.17.8) (2026-07-02)
 
 

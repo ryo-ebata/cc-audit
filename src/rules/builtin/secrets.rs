@@ -398,7 +398,10 @@ fn sl_010() -> Rule {
         exclusions: vec![
             Regex::new(r"\b(?:test|mock|fake|dummy|example|localhost)|127\.0\.0\.1")
                 .expect("SL-010: invalid regex"),
-            Regex::new(r"password|secret|\$\{").expect("SL-010: invalid regex"),
+            // Only skip env-var references like ${DB_PASSWORD}; `password`/`secret`
+            // must NOT be excluded — they are exactly where DB credentials live
+            // (e.g. a `db_password = "postgres://..."` line). See #215.
+            Regex::new(r"\$\{").expect("SL-010: invalid regex"),
         ],
         message: "Database connection string with embedded credentials detected.",
         recommendation: "Use environment variables for database connection strings.",
@@ -698,6 +701,40 @@ mod tests {
             !rule.patterns.iter().any(|p| p.is_match(&stripe_test)),
             "SL-011: must not match Stripe test key"
         );
+    }
+
+    #[test]
+    fn test_sl_010_detects_db_connection_strings() {
+        let rule = sl_010();
+        let test_cases = vec![
+            // Should detect — real credentials embedded in the URL
+            (r#"url = "postgres://admin:S3cr9pw@prod.db.io/main""#, true),
+            (r#"mongodb+srv://svc:hunter2@cluster0.prod.net/db"#, true),
+            // Regression (#215): the words `password`/`secret` in the variable
+            // name or value must NOT suppress the finding.
+            (
+                r#"db_password = "postgres://admin:S3cr9pw@prod.db.io/main""#,
+                true,
+            ),
+            (
+                r#"url = postgresql://svc:mysecretpw@10.2.3.4:5432/db"#,
+                true,
+            ),
+            // Should not detect — env-var reference, localhost, and test hosts
+            (
+                r#"url = "postgres://user:${DB_PASSWORD}@prod.db.io/main""#,
+                false,
+            ),
+            (r#"redis://:pw@localhost:6379"#, false),
+            (r#"mongodb://test:test@testhost/db"#, false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "SL-010: Failed for input: {}", input);
+        }
     }
 
     #[test]

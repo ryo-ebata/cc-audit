@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.5](https://github.com/ryo-ebata/cc-audit/compare/v3.11.4...v3.11.5) (2026-07-02)
+
+
+### Bug Fixes
+
+* **hook:** route reverse-shell & credential-exfil critical patterns into runtime Bash guard ([f0dc538](https://github.com/ryo-ebata/cc-audit/commit/f0dc538424b22c88fd5ffa91a7c30902e1ac9362)), closes [#159](https://github.com/ryo-ebata/cc-audit/issues/159)
+
 ## [3.11.4](https://github.com/ryo-ebata/cc-audit/compare/v3.11.3...v3.11.4) (2026-07-02)
 
 

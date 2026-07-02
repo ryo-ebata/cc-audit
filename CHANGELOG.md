@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.3](https://github.com/ryo-ebata/cc-audit/compare/v3.17.2...v3.17.3) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** DK-002 detects root via uid:gid form (USER 0:0 / root:root) ([#256](https://github.com/ryo-ebata/cc-audit/issues/256)) ([23d5338](https://github.com/ryo-ebata/cc-audit/commit/23d53383e7fc1f088ec54e4915ee0b011306f55a)), closes [#235](https://github.com/ryo-ebata/cc-audit/issues/235)
+
 ## [3.17.2](https://github.com/ryo-ebata/cc-audit/compare/v3.17.1...v3.17.2) (2026-07-02)
 
 

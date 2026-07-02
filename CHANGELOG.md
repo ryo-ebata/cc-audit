@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.0](https://github.com/ryo-ebata/cc-audit/compare/v3.8.0...v3.9.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** add PE-011 container escape + SC-009 Go module integrity bypass ([a3bce82](https://github.com/ryo-ebata/cc-audit/commit/a3bce829342d412b3d45a2a18cbbd44071ec0dc9))
+
 ## [3.8.0](https://github.com/ryo-ebata/cc-audit/compare/v3.7.0...v3.8.0) (2026-07-02)
 
 

@@ -297,8 +297,8 @@ fn sl_006() -> Rule {
 fn sl_007() -> Rule {
     Rule {
         id: "SL-007",
-        name: "Slack webhook URL",
-        description: "Detects Slack incoming webhook URLs",
+        name: "Slack webhook URL or API token",
+        description: "Detects Slack incoming webhook URLs and Slack API tokens (bot/user/app-level)",
         severity: Severity::High,
         category: Category::SecretLeak,
         confidence: Confidence::Certain,
@@ -307,15 +307,22 @@ fn sl_007() -> Rule {
                 r"https://hooks\.slack\.com/services/T[A-Z0-9]{8,}/B[A-Z0-9]{8,}/[A-Za-z0-9]{20,}",
             )
             .expect("SL-007: invalid regex"),
+            // Bot/user/legacy tokens: xox[b|p|a|r|s]- followed by dash-separated
+            // numeric IDs and an alphanumeric secret. A Slack API token is strictly
+            // higher-impact than a webhook (full Web API: read messages/files, exfil).
+            Regex::new(r"\bxox[baprs]-[0-9A-Za-z]{10,}(-[0-9A-Za-z]{10,}){1,}\b")
+                .expect("SL-007: invalid regex"),
+            // App-level tokens: xapp-1-<app id>-<numeric>-<hex secret>.
+            Regex::new(r"\bxapp-1-[A-Z0-9]+-\d+-[0-9a-f]+\b").expect("SL-007: invalid regex"),
         ],
         exclusions: vec![
             // Test/example patterns
             Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
                 .expect("SL-007: invalid regex"),
         ],
-        message: "Slack webhook URL detected. Anyone with this URL can post to your Slack channel.",
-        recommendation: "Rotate the webhook URL in Slack and use environment variables.",
-        fix_hint: Some("Use $SLACK_WEBHOOK_URL environment variable"),
+        message: "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
+        recommendation: "Rotate the webhook URL or token in Slack and load it from an environment variable.",
+        fix_hint: Some("Use $SLACK_WEBHOOK_URL / $SLACK_BOT_TOKEN environment variable"),
         cwe_ids: &["CWE-798", "CWE-200"],
     }
 }
@@ -563,6 +570,39 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_sl_007_detects_slack_api_tokens() {
+        let rule = sl_007();
+        let test_cases = vec![
+            // Should detect: Slack API tokens (higher-impact than webhook URL)
+            (
+                "SLACK_BOT_TOKEN=xoxb-2345678901-2345678901234-AbCdEfGhIjKlMnOpQrStUvWx",
+                true,
+            ),
+            (
+                "xoxp-1234567890-1234567890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
+                true,
+            ),
+            ("xapp-1-A01B2C3D4E5-1234567890123-abcdef0123456789", true),
+            // Should still detect the original webhook URL
+            (
+                "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX",
+                true,
+            ),
+            // Should not detect: documentation placeholder / benign
+            ("xoxb-your-token-here", false),
+            ("token = xoxb-example-placeholder", false),
+            ("not a slack token", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
     // Snapshot tests
     #[test]
     fn snapshot_sl_001() {
@@ -645,6 +685,14 @@ mod tests {
             !rule.patterns.iter().any(|p| p.is_match(&stripe_test)),
             "SL-011: must not match Stripe test key"
         );
+    }
+
+    #[test]
+    fn snapshot_sl_007() {
+        let rule = sl_007();
+        let content = include_str!("../../../tests/fixtures/rules/sl_007.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sl_007", findings);
     }
 
     #[test]

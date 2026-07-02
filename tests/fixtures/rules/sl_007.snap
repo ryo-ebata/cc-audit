@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/secrets.rs
+expression: findings
+---
+[
+  {
+    "id": "SL-007",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "Slack webhook URL or API token",
+    "line": 8,
+    "code": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX",
+    "message": "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
+    "recommendation": "Rotate the webhook URL or token in Slack and load it from an environment variable."
+  },
+  {
+    "id": "SL-007",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "Slack webhook URL or API token",
+    "line": 9,
+    "code": "SLACK_BOT_TOKEN=xoxb-2345678901-2345678901234-AbCdEfGhIjKlMnOpQrStUvWx",
+    "message": "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
+    "recommendation": "Rotate the webhook URL or token in Slack and load it from an environment variable."
+  },
+  {
+    "id": "SL-007",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "Slack webhook URL or API token",
+    "line": 10,
+    "code": "xoxp-1234567890-1234567890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx",
+    "message": "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
+    "recommendation": "Rotate the webhook URL or token in Slack and load it from an environment variable."
+  },
+  {
+    "id": "SL-007",
+    "severity": "high",
+    "category": "secret_leak",
+    "confidence": "certain",
+    "name": "Slack webhook URL or API token",
+    "line": 11,
+    "code": "xapp-1-A01B2C3D4E5-1234567890123-abcdef0123456789",
+    "message": "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
+    "recommendation": "Rotate the webhook URL or token in Slack and load it from an environment variable."
+  }
+]

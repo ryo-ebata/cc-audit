@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.7](https://github.com/ryo-ebata/cc-audit/compare/v3.11.6...v3.11.7) (2026-07-02)
+
+
+### Bug Fixes
+
+* **scanner:** default check fans out across all scanners ([#155](https://github.com/ryo-ebata/cc-audit/issues/155)) ([610ffd6](https://github.com/ryo-ebata/cc-audit/commit/610ffd61dd7beaaa6735e9e7c767c01ec7aae45e))
+
 ## [3.11.6](https://github.com/ryo-ebata/cc-audit/compare/v3.11.5...v3.11.6) (2026-07-02)
 
 

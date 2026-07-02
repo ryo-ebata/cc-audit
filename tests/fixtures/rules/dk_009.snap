@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/docker.rs
+expression: findings
+---
+[
+  {
+    "id": "DK-009",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Dockerfile hardcoded secret",
+    "line": 8,
+    "code": "ENV AWS_SECRET_ACCESS_KEY=hunter2hunter2hunter2xyz",
+    "message": "Hardcoded secret in Dockerfile ENV/ARG. Secrets baked into image layers persist in the image history.",
+    "recommendation": "Never hardcode secrets in ENV/ARG. Use build secrets (--mount=type=secret) or inject at runtime via a secrets manager."
+  },
+  {
+    "id": "DK-009",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Dockerfile hardcoded secret",
+    "line": 9,
+    "code": "ARG GITHUB_TOKEN=deadbeefcafe1234567890ab",
+    "message": "Hardcoded secret in Dockerfile ENV/ARG. Secrets baked into image layers persist in the image history.",
+    "recommendation": "Never hardcode secrets in ENV/ARG. Use build secrets (--mount=type=secret) or inject at runtime via a secrets manager."
+  },
+  {
+    "id": "DK-009",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Dockerfile hardcoded secret",
+    "line": 10,
+    "code": "ENV DB_PASSWORD=SuperHardcodedPass123",
+    "message": "Hardcoded secret in Dockerfile ENV/ARG. Secrets baked into image layers persist in the image history.",
+    "recommendation": "Never hardcode secrets in ENV/ARG. Use build secrets (--mount=type=secret) or inject at runtime via a secrets manager."
+  },
+  {
+    "id": "DK-009",
+    "severity": "critical",
+    "category": "secret_leak",
+    "confidence": "firm",
+    "name": "Dockerfile hardcoded secret",
+    "line": 11,
+    "code": "ENV API_KEY hardcodedapikey12345",
+    "message": "Hardcoded secret in Dockerfile ENV/ARG. Secrets baked into image layers persist in the image history.",
+    "recommendation": "Never hardcode secrets in ENV/ARG. Use build secrets (--mount=type=secret) or inject at runtime via a secrets manager."
+  }
+]

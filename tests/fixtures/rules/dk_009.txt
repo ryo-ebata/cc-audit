@@ -1,0 +1,17 @@
+# DK-009: Dockerfile hardcoded secret in ENV/ARG
+# Test cases for snapshot testing
+# Detects secrets baked into an image via ENV/ARG with a literal value. SL-004
+# requires quotes and misses unquoted Dockerfile assignments like ENV DB_PASSWORD=x.
+# MITRE T1552.001.
+
+# === Cases that SHOULD be detected ===
+ENV AWS_SECRET_ACCESS_KEY=hunter2hunter2hunter2xyz
+ARG GITHUB_TOKEN=deadbeefcafe1234567890ab
+ENV DB_PASSWORD=SuperHardcodedPass123
+ENV API_KEY hardcodedapikey12345
+
+# === Cases that should NOT be detected (benign) ===
+ARG GITHUB_TOKEN
+ENV API_KEY=${API_KEY}
+ENV NODE_ENV=production
+ENV KEYCLOAK_ADMIN=admin

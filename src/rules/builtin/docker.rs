@@ -11,6 +11,7 @@ pub fn rules() -> Vec<Rule> {
         dk_006(),
         dk_007(),
         dk_008(),
+        dk_009(),
     ]
 }
 
@@ -228,6 +229,44 @@ fn dk_008() -> Rule {
     }
 }
 
+fn dk_009() -> Rule {
+    Rule {
+        id: "DK-009",
+        name: "Dockerfile hardcoded secret",
+        description: "Detects secrets baked into an image via ENV/ARG with a literal value; SL-004 requires quotes and misses unquoted Dockerfile assignments (MITRE T1552.001)",
+        severity: Severity::Critical,
+        category: Category::SecretLeak,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // ENV/ARG NAME=value where NAME contains a sensitive term and value is literal
+            Regex::new(
+                r"(?i)(ENV|ARG)\s+[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE_?KEY|API_?KEY|ACCESS_?KEY|SECRET_?KEY|AUTH)[A-Za-z0-9_]*\s*=\s*\S",
+            )
+            .expect("DK-009: invalid regex"),
+            // ENV NAME value (space form) with a sensitive name and a literal value
+            Regex::new(
+                r"(?i)ENV\s+[A-Za-z0-9_]*(SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|API_?KEY|ACCESS_?KEY)[A-Za-z0-9_]*\s+[^\s$#]",
+            )
+            .expect("DK-009: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("DK-009: invalid regex"),
+            // Documentation placeholders
+            Regex::new(r"(?i)example|placeholder|your[_-]|dummy|changeme|redacted|xxxx|<[a-z_]+>|todo")
+                .expect("DK-009: invalid regex"),
+            // Value is a build-arg/variable reference, not a hardcoded literal
+            Regex::new(r"=\s*\$").expect("DK-009: invalid regex"),
+        ],
+        message: "Hardcoded secret in Dockerfile ENV/ARG. Secrets baked into image layers persist in the image history.",
+        recommendation: "Never hardcode secrets in ENV/ARG. Use build secrets (--mount=type=secret) or inject at runtime via a secrets manager.",
+        fix_hint: Some(
+            "Remove the literal value; pass secrets with `RUN --mount=type=secret` or runtime environment injection.",
+        ),
+        cwe_ids: &["CWE-798", "CWE-312"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -355,5 +394,37 @@ RUN apt-get update
         let content = include_str!("../../../tests/fixtures/rules/dk_003.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("dk_003", findings);
+    }
+
+    #[test]
+    fn test_dk_009_detects_hardcoded_secret() {
+        let rule = dk_009();
+        let test_cases = vec![
+            // Malicious: literal secret values in ENV/ARG
+            ("ENV AWS_SECRET_ACCESS_KEY=hunter2hunter2hunter2xyz", true),
+            ("ARG GITHUB_TOKEN=deadbeefcafe1234567890ab", true),
+            ("ENV DB_PASSWORD=SuperHardcodedPass123", true),
+            ("ENV API_KEY hardcodedapikey12345", true),
+            // Benign: no value, variable passthrough, non-sensitive names
+            ("ARG GITHUB_TOKEN", false),
+            ("ENV API_KEY=${API_KEY}", false),
+            ("ENV NODE_ENV=production", false),
+            ("ENV KEYCLOAK_ADMIN=admin", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "DK-009: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_dk_009() {
+        let rule = dk_009();
+        let content = include_str!("../../../tests/fixtures/rules/dk_009.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dk_009", findings);
     }
 }

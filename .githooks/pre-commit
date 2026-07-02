@@ -1,6 +1,18 @@
 #!/bin/sh
 set -e
 
+# Reject commits made directly on 'main'. Feature work belongs on a branch;
+# main is only ever advanced by a reviewed, merged pull request. Checked first
+# so it fails fast, before the expensive fmt/clippy run.
+# Escape hatch (emergencies only): ALLOW_MAIN_COMMIT=1 git commit ...
+branch=$(git symbolic-ref --short -q HEAD || echo "")
+if [ "$branch" = "main" ] && [ "${ALLOW_MAIN_COMMIT:-0}" != "1" ]; then
+    echo "ERROR: Direct commits to 'main' are not allowed." >&2
+    echo "  Create a feature branch:  git switch -c fix/your-change" >&2
+    echo "  Override (emergency):     ALLOW_MAIN_COMMIT=1 git commit ..." >&2
+    exit 1
+fi
+
 echo "Running pre-commit checks..."
 
 # Format check (same as CI)

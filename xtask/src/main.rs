@@ -61,8 +61,8 @@ fn setup_hooks() -> Result<()> {
     println!("Git hooks configured successfully!");
     println!();
     println!("Hooks enabled:");
-    println!("  - pre-commit: cargo fmt --check, cargo clippy");
-    println!("  - pre-push: cargo test");
+    println!("  - pre-commit: block direct commits to main, cargo fmt --check, cargo clippy");
+    println!("  - pre-push: block direct pushes to main, cargo test");
 
     Ok(())
 }

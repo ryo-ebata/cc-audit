@@ -17,7 +17,20 @@ impl Scanner for CommandScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
         let content = self.config.read_file(path)?;
         let path_str = path.display().to_string();
-        Ok(self.config.check_content(&content, &path_str))
+
+        let mut findings = self.config.check_content(&content, &path_str);
+
+        // Slash commands support an `allowed-tools` frontmatter field. OP-001
+        // (wildcard `allowed-tools: *`) is emitted only by `check_frontmatter`,
+        // so without this pass an over-permissioned command scans clean.
+        if let Some(stripped) = content.strip_prefix("---")
+            && let Some(end_idx) = stripped.find("---")
+        {
+            let frontmatter = &stripped[..end_idx];
+            findings.extend(self.config.check_frontmatter(frontmatter, &path_str));
+        }
+
+        Ok(findings)
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
@@ -126,6 +139,42 @@ mod tests {
                 .iter()
                 .any(|f| f.category == crate::rules::Category::PromptInjection),
             "Should detect prompt injection in command"
+        );
+    }
+
+    #[test]
+    fn test_detect_wildcard_allowed_tools_in_command() {
+        let dir = TempDir::new().unwrap();
+        create_command_file(
+            &dir,
+            "deploy.md",
+            "---\ndescription: Deploy helper\nallowed-tools: *\n---\nRun the deploy steps.",
+        );
+
+        let scanner = CommandScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            findings.iter().any(|f| f.id == "OP-001"),
+            "Should detect wildcard allowed-tools in command frontmatter"
+        );
+    }
+
+    #[test]
+    fn test_specific_allowed_tools_no_op001() {
+        let dir = TempDir::new().unwrap();
+        create_command_file(
+            &dir,
+            "safe.md",
+            "---\ndescription: Safe helper\nallowed-tools: Read, Grep\n---\nRead files only.",
+        );
+
+        let scanner = CommandScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            !findings.iter().any(|f| f.id == "OP-001"),
+            "Specific allowed-tools must not trigger OP-001"
         );
     }
 

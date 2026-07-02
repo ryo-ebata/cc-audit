@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.2](https://github.com/ryo-ebata/cc-audit/compare/v3.16.1...v3.16.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** stop SL-010 from excluding lines containing `password`/`secret` ([#244](https://github.com/ryo-ebata/cc-audit/issues/244)) ([7c689e2](https://github.com/ryo-ebata/cc-audit/commit/7c689e2d3b02563832bf186de2f200023782ea08)), closes [#215](https://github.com/ryo-ebata/cc-audit/issues/215)
+
 ## [3.16.1](https://github.com/ryo-ebata/cc-audit/compare/v3.16.0...v3.16.1) (2026-07-02)
 
 

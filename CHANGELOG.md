@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.4](https://github.com/ryo-ebata/cc-audit/compare/v3.16.3...v3.16.4) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** make PE-003 chmod-777 detection flag- and mode-tolerant ([#248](https://github.com/ryo-ebata/cc-audit/issues/248)) ([a9166aa](https://github.com/ryo-ebata/cc-audit/commit/a9166aa7831c49b6f961b9080ddae222fc3fc620)), closes [#217](https://github.com/ryo-ebata/cc-audit/issues/217)
+
 ## [3.16.3](https://github.com/ryo-ebata/cc-audit/compare/v3.16.2...v3.16.3) (2026-07-02)
 
 

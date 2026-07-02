@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.13.0](https://github.com/ryo-ebata/cc-audit/compare/v3.12.0...v3.13.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** add multilingual detection to PI-001/PI-004 (issue [#140](https://github.com/ryo-ebata/cc-audit/issues/140)) ([bcb8e1e](https://github.com/ryo-ebata/cc-audit/commit/bcb8e1e0987314f644ed22d2987839762a4ce368))
+
 ## [3.12.0](https://github.com/ryo-ebata/cc-audit/compare/v3.11.10...v3.12.0) (2026-07-02)
 
 

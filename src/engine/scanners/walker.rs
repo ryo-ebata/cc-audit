@@ -79,9 +79,15 @@ impl DirectoryWalker {
             return true;
         }
 
+        // Compare case-insensitively so `.MD`/`.SH` on a case-sensitive
+        // filesystem aren't silently skipped (matches SkillFileFilter). See #228.
         path.extension()
             .and_then(|ext| ext.to_str())
-            .is_some_and(|ext| self.config.file_extensions.contains(&ext))
+            .is_some_and(|ext| {
+                self.config
+                    .file_extensions
+                    .contains(&ext.to_lowercase().as_str())
+            })
     }
 
     /// Walk the directory and yield matching file paths.
@@ -184,6 +190,23 @@ mod tests {
         let files: Vec<_> = walker.walk(dir.path()).collect();
 
         assert_eq!(files.len(), 2);
+    }
+
+    #[test]
+    fn test_walk_matches_uppercase_extension() {
+        // Regression (#228): `.MD` must match the `md` filter on a
+        // case-sensitive filesystem.
+        let dir = TempDir::new().unwrap();
+        let commands = dir.path().join(".claude").join("commands");
+        fs::create_dir_all(&commands).unwrap();
+        fs::write(commands.join("evil.MD"), "content").unwrap();
+
+        let config = WalkConfig::new([".claude/commands"]).with_extensions(&["md"]);
+        let walker = DirectoryWalker::new(config);
+        let files: Vec<_> = walker.walk(dir.path()).collect();
+
+        assert_eq!(files.len(), 1, "evil.MD should match the `md` extension");
+        assert!(files[0].ends_with("evil.MD"));
     }
 
     #[test]

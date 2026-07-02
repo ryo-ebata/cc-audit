@@ -41,6 +41,7 @@ pub mod context;
 pub mod cve_db;
 pub mod deobfuscation;
 pub mod engine;
+pub mod homoglyph;
 pub mod line_join;
 pub mod malware_db;
 pub mod rules;

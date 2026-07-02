@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.2](https://github.com/ryo-ebata/cc-audit/compare/v3.11.1...v3.11.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **engine:** cap per-file read size to prevent OOM DoS ([a641e1f](https://github.com/ryo-ebata/cc-audit/commit/a641e1fbb0622fcc62eee72a33bb96024c704b0d)), closes [#143](https://github.com/ryo-ebata/cc-audit/issues/143)
+
 ## [3.11.1](https://github.com/ryo-ebata/cc-audit/compare/v3.11.0...v3.11.1) (2026-07-02)
 
 

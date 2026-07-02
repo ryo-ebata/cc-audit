@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.6](https://github.com/ryo-ebata/cc-audit/compare/v3.17.5...v3.17.6) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** stop SC-005/OP-005 exclusions from colliding with code tokens ([#262](https://github.com/ryo-ebata/cc-audit/issues/262)) ([1cdfaf2](https://github.com/ryo-ebata/cc-audit/commit/1cdfaf2f3383bbedff1751eea7485f8191173c7f)), closes [#232](https://github.com/ryo-ebata/cc-audit/issues/232)
+
 ## [3.17.5](https://github.com/ryo-ebata/cc-audit/compare/v3.17.4...v3.17.5) (2026-07-02)
 
 

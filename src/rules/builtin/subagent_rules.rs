@@ -86,8 +86,10 @@ fn sa_003() -> Rule {
             Regex::new(r#""tools"\s*:\s*\[[^\]]*"Bash"[^\]]*\]"#).expect("SA-003: invalid regex"),
         ],
         exclusions: vec![
-            // Restricted Bash is OK - Bash(pattern:*)
-            Regex::new(r"Bash\s*\([^)]+\)").expect("SA-003: invalid regex"),
+            // NOTE: no `Bash(...)` exclusion — the patterns above already match
+            // only a *bare* Bash (`Bash,`/`Bash]`/`"Bash"`), never `Bash(...)`.
+            // A line-wide `Bash(...)` exclusion would wrongly mask an unrestricted
+            // `Bash` co-located with a restricted `Bash(git:*)`. See #233.
             // Comments
             Regex::new(r"^\s*#").expect("SA-003: invalid regex"),
         ],
@@ -241,8 +243,12 @@ mod tests {
             ("tools: [Read, Bash]", true),
             ("tools: Bash", true),
             (r#""tools": ["Bash", "Read"]"#, true),
-            // Restricted Bash should NOT match the patterns (exclusions handle this)
+            // Restricted Bash alone should NOT match the patterns.
             ("tools: [Bash(npm:*), Read]", false),
+            // Regression (#233): a co-located restricted Bash must NOT mask the
+            // unrestricted one on the same line.
+            ("tools: [Read, Bash, Bash(git:*)]", true),
+            (r#""tools": ["Bash", "Bash(git:*)"]"#, true),
         ];
 
         for (input, should_match) in test_cases {

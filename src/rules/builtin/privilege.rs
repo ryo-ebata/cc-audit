@@ -83,10 +83,11 @@ fn pe_003() -> Rule {
         category: Category::PrivilegeEscalation,
         confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r"chmod\s+777\b").expect("PE-003: invalid regex"),
-            Regex::new(r"chmod\s+[0-7]?777\b").expect("PE-003: invalid regex"),
-            Regex::new(r"chmod\s+-R\s+777\b").expect("PE-003: invalid regex"),
-            Regex::new(r"chmod\s+a\+rwx\b").expect("PE-003: invalid regex"),
+            // Tolerate any leading flags (`-R`, `-Rf`, `--recursive`) and mode
+            // prefixes (`0777`, `00777`, setuid/sticky like `4777`). See #217.
+            Regex::new(r"chmod\s+(-{1,2}[a-zA-Z]+\s+)*[0-7]*777\b").expect("PE-003: invalid regex"),
+            // Symbolic world-writable, with or without a recursive flag.
+            Regex::new(r"chmod\s+(-{1,2}[a-zA-Z]+\s+)*a\+rwx\b").expect("PE-003: invalid regex"),
         ],
         exclusions: vec![],
         message: "Insecure permissions: chmod 777 makes files world-writable",
@@ -392,8 +393,16 @@ mod tests {
             ("chmod 777 /tmp/file", true),
             ("chmod -R 777 /var/www", true),
             ("chmod a+rwx script.sh", true),
+            // Regression (#217): flag/leading-zero/symbolic variants must be caught.
+            ("chmod -Rf 777 /var/www", true),
+            ("chmod -R 0777 /var/www", true),
+            ("chmod 00777 file", true),
+            ("chmod --recursive 777 /srv", true),
+            ("chmod -R a+rwx /srv", true),
+            ("chmod 4777 /usr/bin/x", true), // setuid + world-writable
             ("chmod 755 /tmp/file", false),
             ("chmod 644 config.txt", false),
+            ("chmod +x script.sh", false),
         ];
 
         for (input, should_match) in test_cases {

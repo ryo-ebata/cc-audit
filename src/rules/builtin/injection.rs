@@ -158,25 +158,25 @@ fn pi_003() -> Rule {
             // Note: \u3000 (ideographic space) removed as it's commonly used in CJK languages
             Regex::new(r"[\u1680\u2000-\u200A\u202F\u205F]").expect("PI-003: invalid regex"),
         ],
-        exclusions: vec![
-            // Documentation and markdown files often have legitimate Unicode
-            Regex::new(r"\.md$|\.rst$|\.txt$|\.adoc$").expect("PI-003: invalid regex"),
-            // Localization files may contain special characters
-            Regex::new(r"(?i)locale|i18n|l10n|translations?").expect("PI-003: invalid regex"),
-            // Font and typography related files
-            Regex::new(r"(?i)\.ttf$|\.otf$|\.woff2?$|font").expect("PI-003: invalid regex"),
-            // Gettext translation files
-            Regex::new(r"(?i)\.po$|\.pot$|\.mo$|messages\.").expect("PI-003: invalid regex"),
-            // JSON language/localization files
-            Regex::new(r"(?i)[a-z]{2}(-[A-Z]{2})?\.json$|lang\.json|languages\.json")
-                .expect("PI-003: invalid regex"),
-            // Unicode test files
-            Regex::new(r"(?i)unicode|utf-?8|encoding").expect("PI-003: invalid regex"),
-            // Common legitimate use of ZWNJ in Persian/Arabic scripts
-            Regex::new(r"(?i)(farsi|persian|arabic|urdu|hindi)").expect("PI-003: invalid regex"),
-            // Emoji and symbol related
-            Regex::new(r"(?i)emoji|emoticon|symbol").expect("PI-003: invalid regex"),
-        ],
+        // No exclusions (issue #130).
+        //
+        // The previous exclusions were all broken or exploitable:
+        //   * Path/extension patterns (`\.md$`, `\.po$`, `\.ttf$`, localization
+        //     JSON, ...) were matched against *line content*, never the file
+        //     path, so they never fired — dead code. Re-routing them to a path
+        //     match would be worse: PI-003's primary artifact is `SKILL.md`, so a
+        //     real `\.md$` path exclusion would disable the rule on every skill,
+        //     and any path-based exclusion is an attacker-controlled evasion
+        //     vector (rename the payload to `evil.po`).
+        //   * The remaining patterns matched ordinary words (`emoji`, `unicode`,
+        //     `utf-8`, `encoding`, `font`, `locale`, `i18n`, `arabic`, ...)
+        //     against line content, so dropping any one of those words on a line
+        //     suppressed a zero-width / RTL-override payload — a one-word bypass
+        //     of a High-severity rule.
+        // PI-003 already carries `Confidence::Tentative`, which is the correct
+        // lever for false-positive management here — not content-keyword or
+        // path-based suppression.
+        exclusions: vec![],
         message: "Potential prompt injection: invisible Unicode characters detected",
         recommendation: "Remove invisible Unicode characters and verify content integrity",
         fix_hint: Some("Use: cat -v file.md to reveal invisible chars, then remove them"),
@@ -424,6 +424,50 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             assert_eq!(matched, should_match, "Failed for input: {:?}", input);
         }
+    }
+
+    // --- Issue #130: PI-003 exclusions must not hand attackers a one-word bypass ---
+    //
+    // PI-003's old exclusions matched ordinary words (`emoji`, `unicode`, `utf-8`,
+    // `font`, `locale`, `arabic`, ...) against *line content*. An attacker could
+    // hide a zero-width / RTL-override payload and drop one of those words on the
+    // same line to suppress the High-severity finding. These tests pin the fix:
+    // the payload is still reported regardless of stray keywords.
+
+    #[test]
+    fn test_pi_003_not_bypassed_by_emoji_keyword() {
+        let engine = crate::rules::RuleEngine::new();
+        // RTL-override payload + the word `emoji` on the same line.
+        let content = "Run the setup step.\u{202E}reversed-payload  <!-- emoji -->";
+        let findings = engine.check_content(content, "SKILL.md");
+        assert!(
+            findings.iter().any(|f| f.id == "PI-003"),
+            "PI-003 must still fire when the line contains the word 'emoji'"
+        );
+    }
+
+    #[test]
+    fn test_pi_003_not_bypassed_by_unicode_keyword() {
+        let engine = crate::rules::RuleEngine::new();
+        // Zero-width space payload + unicode/utf-8/encoding keywords.
+        let content = "legit\u{200B}payload note: utf-8 unicode encoding";
+        let findings = engine.check_content(content, "SKILL.md");
+        assert!(
+            findings.iter().any(|f| f.id == "PI-003"),
+            "PI-003 must still fire when the line contains unicode/utf-8/encoding keywords"
+        );
+    }
+
+    #[test]
+    fn test_pi_003_no_false_positive_on_plain_emoji_word() {
+        // Guard against over-fixing: a benign line with the word `emoji` but no
+        // invisible characters must NOT be flagged.
+        let engine = crate::rules::RuleEngine::new();
+        let findings = engine.check_content("This skill adds emoji support", "SKILL.md");
+        assert!(
+            !findings.iter().any(|f| f.id == "PI-003"),
+            "PI-003 must not fire on plain text without invisible characters"
+        );
     }
 
     #[test]

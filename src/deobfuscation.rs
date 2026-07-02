@@ -559,6 +559,39 @@ mod tests {
     }
 
     #[test]
+    fn test_deep_scan_detects_base64_wrapped_aws_key() {
+        // Regression for #146: a secret hidden inside a Base64 blob must still be
+        // caught. Before the deep-scan pre-filter fix, the encoded layer was
+        // dropped before the rule engine saw it, so SL-001 never fired.
+        let deob = Deobfuscator::new();
+        let secret = "aws_access_key_id=AKIAIOSFODNN7ABCDEFG";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(secret.as_bytes());
+        let content = format!("export CREDS={encoded}");
+
+        let findings = deob.deep_scan(&content, "config.sh");
+        assert!(
+            findings.iter().any(|f| f.id == "SL-001"),
+            "Base64-wrapped AWS access key must be decoded and flagged as SL-001"
+        );
+    }
+
+    #[test]
+    fn test_deep_scan_detects_base64_wrapped_private_key() {
+        // Regression for #146: a PEM private-key header wrapped in Base64 must be
+        // decoded and flagged (SL-005), not silently dropped.
+        let deob = Deobfuscator::new();
+        let secret = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA\n";
+        let encoded = base64::engine::general_purpose::STANDARD.encode(secret.as_bytes());
+        let content = format!("blob = \"{encoded}\"");
+
+        let findings = deob.deep_scan(&content, "notes.md");
+        assert!(
+            findings.iter().any(|f| f.id == "SL-005"),
+            "Base64-wrapped private key header must be decoded and flagged as SL-005"
+        );
+    }
+
+    #[test]
     fn test_deep_scan_single_layer_still_benign() {
         // A plain, non-encoded benign line must not produce deep-scan findings
         // even with recursive decoding enabled.

@@ -302,14 +302,19 @@ fn pi_005() -> Rule {
         category: Category::PromptInjection,
         confidence: Confidence::Firm,
         patterns: vec![
-            // Dangerous tool names that mimic system operations
-            Regex::new(r#""name"\s*:\s*"(read_file|write_file|delete_file|execute|shell|bash|sh|cmd|powershell|eval|exec|system|sudo|admin)""#)
+            // Dangerous system-operation keywords appearing as a segment of the
+            // tool name, case-insensitively — catches `Sudo`, `run_shell`,
+            // `bash_exec`, `EXEC`, etc., not just the exact lowercase token. (#230)
+            Regex::new(r#"(?i)"name"\s*:\s*"(?:[a-z0-9_-]*[_-])?(powershell|execute|shell|system|admin|bash|sudo|cmd|eval|exec|sh)(?:[_-][a-z0-9_-]*)?""#)
                 .expect("PI-005: invalid regex"),
-            // Tool names mimicking Claude's built-in tools
+            // Tool names mimicking Claude's built-in tools (exact casing is what
+            // makes the spoof convincing, so this stays case-sensitive).
             Regex::new(r#""name"\s*:\s*"(Read|Write|Edit|Bash|Task|Glob|Grep)""#)
                 .expect("PI-005: invalid regex"),
-            // Deceptive variations with special characters
-            Regex::new(r#""name"\s*:\s*"[Rr]ead[_-]?[Ff]ile|[Ww]rite[_-]?[Ff]ile""#)
+            // read/write/delete file mimics with an optional separator, any case
+            // (`Read_File`, `writeFile`, `delete-file`). Grouped alternation fixes
+            // the earlier top-level `|` precedence bug. (#231)
+            Regex::new(r#"(?i)"name"\s*:\s*"(?:read|write|delete)[_-]?file""#)
                 .expect("PI-005: invalid regex"),
         ],
         exclusions: vec![],
@@ -840,10 +845,23 @@ mod tests {
             (r#""name": "sudo""#, true),
             (r#""name": "Read""#, true),
             (r#""name": "Write""#, true),
+            // Regression (#230): case-insensitive + segmented keyword names.
+            (r#""name": "Sudo""#, true),
+            (r#""name": "BASH""#, true),
+            (r#""name": "run_shell""#, true),
+            (r#""name": "bash_exec""#, true),
+            (r#""name": "exec_command""#, true),
+            // Regression (#231): read/write/delete file mimics, any case/separator.
+            (r#""name": "Read_File""#, true),
+            (r#""name": "writeFile""#, true),
+            (r#""name": "delete-file""#, true),
             // Safe tool names
             (r#""name": "get_weather""#, false),
             (r#""name": "search_database""#, false),
             (r#""name": "calculate_sum""#, false),
+            (r#""name": "file_writer""#, false),
+            // #231 FP guard: the write-file branch must stay anchored to "name".
+            (r#""description": "how to write files safely""#, false),
         ];
 
         for (input, should_match) in test_cases {

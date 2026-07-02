@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.2](https://github.com/ryo-ebata/cc-audit/compare/v3.17.1...v3.17.2) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** make PI-005 tool-name spoofing case-insensitive and fix precedence ([#254](https://github.com/ryo-ebata/cc-audit/issues/254)) ([ec0963c](https://github.com/ryo-ebata/cc-audit/commit/ec0963c2e377a21a4cb8f38604e34b040cd80ddd)), closes [#230](https://github.com/ryo-ebata/cc-audit/issues/230) [#231](https://github.com/ryo-ebata/cc-audit/issues/231)
+
 ## [3.17.1](https://github.com/ryo-ebata/cc-audit/compare/v3.17.0...v3.17.1) (2026-07-02)
 
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.0](https://github.com/ryo-ebata/cc-audit/compare/v3.16.4...v3.17.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** extend EX-001 exfil detection beyond curl/wget ([#250](https://github.com/ryo-ebata/cc-audit/issues/250)) ([ec6ee9d](https://github.com/ryo-ebata/cc-audit/commit/ec6ee9d5d77ecaf64bce812459e3d1bd644ff99a)), closes [#218](https://github.com/ryo-ebata/cc-audit/issues/218)
+
 ## [3.16.4](https://github.com/ryo-ebata/cc-audit/compare/v3.16.3...v3.16.4) (2026-07-02)
 
 

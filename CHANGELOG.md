@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.9](https://github.com/ryo-ebata/cc-audit/compare/v3.11.8...v3.11.9) (2026-07-02)
+
+
+### Bug Fixes
+
+* **malware:** join line-continuations before signature matching ([#151](https://github.com/ryo-ebata/cc-audit/issues/151)) ([d1be672](https://github.com/ryo-ebata/cc-audit/commit/d1be672a4eefc6ec9ed39e226568c7826557e378))
+
 ## [3.11.8](https://github.com/ryo-ebata/cc-audit/compare/v3.11.7...v3.11.8) (2026-07-02)
 
 

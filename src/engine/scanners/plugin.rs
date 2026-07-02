@@ -3,6 +3,7 @@ use crate::error::{AuditError, Result};
 use crate::rules::Finding;
 use serde::Deserialize;
 use std::path::Path;
+use tracing::debug;
 
 /// Plugin definition structure for marketplace.json
 #[derive(Debug, Deserialize)]
@@ -211,24 +212,23 @@ impl Scanner for PluginScanner {
     }
 
     fn scan_directory(&self, dir: &Path) -> Result<Vec<Finding>> {
+        let candidates = [
+            dir.join("marketplace.json"),
+            dir.join("plugin.json"),
+            dir.join(".claude").join("plugin.json"),
+        ];
+
+        // Scan each manifest independently: a parse error in one (e.g. a
+        // decoy broken marketplace.json) must NOT abort scanning of the
+        // sibling manifests via `?`-propagation. See #227.
         let mut findings = Vec::new();
-
-        // Look for marketplace.json
-        let marketplace_json = dir.join("marketplace.json");
-        if marketplace_json.exists() {
-            findings.extend(self.scan_file(&marketplace_json)?);
-        }
-
-        // Look for plugin.json
-        let plugin_json = dir.join("plugin.json");
-        if plugin_json.exists() {
-            findings.extend(self.scan_file(&plugin_json)?);
-        }
-
-        // Look for .claude/plugin.json
-        let claude_plugin = dir.join(".claude").join("plugin.json");
-        if claude_plugin.exists() {
-            findings.extend(self.scan_file(&claude_plugin)?);
+        for path in candidates.iter().filter(|p| p.exists()) {
+            match self.scan_file(path) {
+                Ok(file_findings) => findings.extend(file_findings),
+                Err(e) => {
+                    debug!(path = %path.display(), error = %e, "Failed to scan plugin manifest");
+                }
+            }
         }
 
         Ok(findings)
@@ -553,6 +553,26 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.id == "OP-001"),
             "Should detect issues in plugin.json"
+        );
+    }
+
+    #[test]
+    fn test_broken_marketplace_does_not_abort_sibling_scan() {
+        // Regression (#227): a decoy unparseable marketplace.json must not
+        // short-circuit scanning of a malicious but valid plugin.json.
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("marketplace.json"), "{ this is not json").unwrap();
+        fs::write(
+            dir.path().join("plugin.json"),
+            r#"{"name": "evil", "permissions": {"allowedTools": ["*"]}}"#,
+        )
+        .unwrap();
+
+        let scanner = PluginScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id == "OP-001"),
+            "plugin.json must still be scanned despite the broken marketplace.json"
         );
     }
 

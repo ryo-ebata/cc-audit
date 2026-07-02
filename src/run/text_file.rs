@@ -13,7 +13,7 @@ const SHEBANG_INTERPRETERS: &[&str] = &[
 ];
 
 /// Returns `true` if the file begins with a `#!` shebang naming a known
-/// interpreter (see [`SHEBANG_INTERPRETERS`]).
+/// interpreter (see `SHEBANG_INTERPRETERS`).
 ///
 /// This exists so that extension-less executable scripts (e.g. a `scripts/hook`
 /// with `#!/bin/bash`) are still scanned, closing a silent-evasion gap where the

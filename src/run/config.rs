@@ -86,6 +86,9 @@ impl EffectiveConfig {
             parse_output_format(config.scan.format.as_deref()).unwrap_or(args.format)
         };
 
+        // An explicit `--type` (anything other than the `Auto` default) wins;
+        // otherwise fall back to the config file's `scan_type`, and finally to
+        // `Auto`, which fans out across all scanners at scan time (#155).
         let scan_type = if args.scan_type != ScanType::default() {
             args.scan_type
         } else {

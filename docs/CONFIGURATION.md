@@ -37,7 +37,7 @@ scan:
   output: null              # Output file path
   strict: false             # Show medium/low severity findings
   warn_only: false          # Treat all findings as warnings (always exit 0)
-  scan_type: skill          # skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
+  scan_type: auto           # auto (all scanners, default), skill, hook, mcp, command, rules, docker, dependency, subagent, plugin
   recursive: true           # Recursive scan (enabled by default)
   ci: false
   verbose: false

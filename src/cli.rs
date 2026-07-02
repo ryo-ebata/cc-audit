@@ -60,7 +60,11 @@ impl std::str::FromStr for BadgeFormat {
 #[derive(Debug, Clone, Copy, ValueEnum, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ScanType {
+    /// Auto: run every applicable specialized scanner (the default for a plain
+    /// `check` with no `--type`). Passing an explicit `--type` narrows the scan
+    /// to that single scanner (#155).
     #[default]
+    Auto,
     Skill,
     Hook,
     Mcp,
@@ -79,6 +83,7 @@ impl std::str::FromStr for ScanType {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
+            "auto" | "all" => Ok(ScanType::Auto),
             "skill" => Ok(ScanType::Skill),
             "hook" => Ok(ScanType::Hook),
             "mcp" => Ok(ScanType::Mcp),
@@ -186,7 +191,7 @@ pub struct CheckArgs {
     pub min_rule_severity: Option<RuleSeverity>,
 
     /// Scan type
-    #[arg(short = 't', long = "type", value_enum, default_value_t = ScanType::Skill)]
+    #[arg(short = 't', long = "type", value_enum, default_value_t = ScanType::Auto)]
     pub scan_type: ScanType,
 
     /// Disable recursive scanning (default: recursive enabled)
@@ -737,7 +742,8 @@ mod tests {
         let cli = Cli::try_parse_from(["cc-audit", "check", "./skill/"]).unwrap();
         if let Some(Commands::Check(args)) = cli.command {
             assert!(matches!(args.format, OutputFormat::Terminal));
-            assert!(matches!(args.scan_type, ScanType::Skill));
+            // Default with no --type is Auto: fan out across all scanners (#155).
+            assert!(matches!(args.scan_type, ScanType::Auto));
             assert!(!args.strict);
             assert!(!args.no_recursive);
             assert!(!args.ci);

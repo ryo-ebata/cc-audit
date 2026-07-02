@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.5](https://github.com/ryo-ebata/cc-audit/compare/v3.17.4...v3.17.5) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** SC-001/SC-002 catch `> file && bash file` to any path ([#260](https://github.com/ryo-ebata/cc-audit/issues/260)) ([485d72f](https://github.com/ryo-ebata/cc-audit/commit/485d72fe17039eb6f48316a0b1367d8b22a41203)), closes [#234](https://github.com/ryo-ebata/cc-audit/issues/234)
+
 ## [3.17.4](https://github.com/ryo-ebata/cc-audit/compare/v3.17.3...v3.17.4) (2026-07-02)
 
 

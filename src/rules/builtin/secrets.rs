@@ -41,7 +41,7 @@ fn sl_001() -> Rule {
             Regex::new(r"ASIAIOSFODNN7EXAMPLE").expect("SL-001: invalid regex"),
             Regex::new(r"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY").expect("SL-001: invalid regex"),
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-001: invalid regex"),
             // Generic placeholder patterns
             Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|PUT_YOUR_|<[A-Z_]+>")
@@ -81,7 +81,7 @@ fn sl_002() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-002: invalid regex"),
             // Generic placeholder patterns
             Regex::new(r"(?i)YOUR_|INSERT_|REPLACE_|<[A-Z_]+>").expect("SL-002: invalid regex"),
@@ -117,7 +117,7 @@ fn sl_003() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|placeholder|fixture|sample)")
                 .expect("SL-003: invalid regex"),
             // Common non-secret 40-char strings (to reduce false positives for Cohere pattern)
             Regex::new(r"(?i)sha1|sha256|sha384|sha512|commit|hash|digest|checksum|integrity")
@@ -185,8 +185,10 @@ fn sl_004() -> Rule {
             Regex::new(r"process\.env\.[A-Z_]+").expect("SL-004: invalid regex"),
             Regex::new(r"os\.environ").expect("SL-004: invalid regex"),
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|placeholder|fixture|sample|your[_-]?")
-                .expect("SL-004: invalid regex"),
+            Regex::new(
+                r"(?i)\b(?:test|mock|fake|dummy|example|placeholder|fixture|sample|your[_-]?)",
+            )
+            .expect("SL-004: invalid regex"),
             // Common password prompts/labels/UI text
             Regex::new(r"(?i)enter\s+(your\s+)?password|password\s*(prompt|input|field|label)")
                 .expect("SL-004: invalid regex"),
@@ -244,7 +246,7 @@ fn sl_005() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-005: invalid regex"),
         ],
         message: "Private key detected. Private keys should never be committed to version control.",
@@ -272,7 +274,7 @@ fn sl_006() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-006: invalid regex"),
             // JWT documentation/examples
             Regex::new(r"(?i)jwt\.io|example\.jwt|demo\.jwt").expect("SL-006: invalid regex"),
@@ -317,7 +319,7 @@ fn sl_007() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-007: invalid regex"),
         ],
         message: "Slack webhook URL or API token detected. A bot/user token authenticates against the full Slack Web API (read messages/files, exfiltrate data).",
@@ -341,7 +343,7 @@ fn sl_008() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-008: invalid regex"),
         ],
         message: "Discord webhook URL detected. Anyone with this URL can post to your Discord channel.",
@@ -365,7 +367,7 @@ fn sl_009() -> Rule {
         ],
         exclusions: vec![
             // Test/example patterns
-            Regex::new(r"(?i)test|mock|fake|dummy|example|fixture|sample")
+            Regex::new(r"(?i)\b(?:test|mock|fake|dummy|example|fixture|sample)")
                 .expect("SL-009: invalid regex"),
         ],
         message: "Telegram bot token detected. This token provides full control over the bot.",
@@ -394,7 +396,7 @@ fn sl_010() -> Rule {
             Regex::new(r"redis://:[^@]+@[^/]+").expect("SL-010: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|fake|dummy|example|localhost|127\.0\.0\.1")
+            Regex::new(r"\b(?:test|mock|fake|dummy|example|localhost)|127\.0\.0\.1")
                 .expect("SL-010: invalid regex"),
             Regex::new(r"password|secret|\$\{").expect("SL-010: invalid regex"),
         ],
@@ -477,6 +479,17 @@ mod tests {
             ("ghp_", false), // Too short
             ("not a github token", false),
             ("test ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij", false), // In test context
+            // Regression (#214): a keyword substring inside an ordinary word
+            // (e.g. `latest` contains `test`) must NOT suppress the finding.
+            (
+                r#"latest_token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij""#,
+                true,
+            ),
+            // But a real leading `test` word still excludes.
+            (
+                r#"test_token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij""#,
+                false,
+            ),
         ];
 
         for (input, should_match) in test_cases {

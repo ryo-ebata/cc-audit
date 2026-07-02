@@ -101,6 +101,66 @@ pub fn oversize_file_finding(file: &str, size: u64, limit: u64) -> Finding {
     }
 }
 
+/// Builds a fail-loud diagnostic finding for a manifest (JSON/TOML/…) that
+/// could not be parsed.
+///
+/// The structured scanners parse the manifest to inspect specific fields, but a
+/// parse failure must never silently produce a zero-finding (clean) scan: a
+/// manifest that a lenient loader accepts while a strict parser rejects (BOM,
+/// trailing comma, `//` comment) is a plausible evasion vector. The raw-content
+/// baseline still runs on the bytes; this finding surfaces the parse failure
+/// itself so the artifact can't fake a clean result. See issue #219 / #136.
+/// Returns a fail-loud parse-failure finding, but only when `content` was
+/// plausibly intended to be JSON.
+///
+/// The structured scanners are sometimes invoked on files that were never JSON
+/// (a bare `.md` passed on the command line). Emitting a parse-failure finding
+/// for those would be noise, so gate on a JSON-ish opening: `{`/`[`, or a
+/// leading `//`/`/*` comment, after stripping a UTF-8 BOM. Genuinely malformed
+/// manifests (BOM + `{`, trailing comma, `//` comment) still qualify. See #219.
+pub fn json_parse_failure_finding(content: &str, file: &str, message: &str) -> Option<Finding> {
+    let trimmed = content.trim_start_matches('\u{feff}').trim_start();
+    let looks_like_json = trimmed.starts_with('{')
+        || trimmed.starts_with('[')
+        || trimmed.starts_with("//")
+        || trimmed.starts_with("/*");
+    looks_like_json.then(|| unparseable_manifest_finding(file, message))
+}
+
+/// Builds a fail-loud diagnostic finding for a manifest that could not be
+/// parsed. Prefer [`json_parse_failure_finding`], which gates on JSON-ish
+/// content; call this directly only when the caller already knows the file is a
+/// manifest.
+pub fn unparseable_manifest_finding(file: &str, message: &str) -> Finding {
+    Finding {
+        id: "SC-PARSE-001".to_string(),
+        severity: crate::rules::Severity::Low,
+        category: crate::rules::Category::SupplyChain,
+        confidence: crate::rules::Confidence::Certain,
+        name: "Unparseable manifest".to_string(),
+        location: crate::rules::Location {
+            file: file.to_string(),
+            line: 0,
+            column: None,
+        },
+        code: String::new(),
+        message: format!(
+            "Manifest could not be parsed ({message}); structured field checks \
+             were skipped. Raw-content scanning still ran, but a manifest that a \
+             lenient loader accepts while a strict parser rejects can be an \
+             evasion attempt."
+        ),
+        recommendation: "Review this manifest manually. Ensure it is valid \
+             (no BOM, trailing commas, or comments) before trusting the artifact."
+            .to_string(),
+        fix_hint: None,
+        cwe_ids: vec!["CWE-20".to_string()],
+        rule_severity: None,
+        client: None,
+        context: None,
+    }
+}
+
 /// Core trait for all security scanners.
 ///
 /// Scanners implement this trait to provide file and directory scanning capabilities.

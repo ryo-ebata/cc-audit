@@ -1,5 +1,5 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
-use crate::error::{AuditError, Result};
+use crate::error::Result;
 use crate::rules::Finding;
 use serde::Deserialize;
 use std::path::Path;
@@ -78,43 +78,48 @@ impl_scanner_builder!(PluginScanner);
 
 impl PluginScanner {
     pub fn scan_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
-        // First, try to parse as JSON
-        let manifest: PluginManifest =
-            serde_json::from_str(content).map_err(|e| AuditError::ParseError {
-                path: file_path.to_string(),
-                message: e.to_string(),
-            })?;
-
         let mut findings = Vec::new();
 
-        // Scan skills
-        if let Some(skills) = &manifest.skills {
-            for skill in skills {
-                findings.extend(self.scan_skill(skill, file_path));
-            }
-        }
-
-        // Scan MCP servers
-        if let Some(servers) = &manifest.mcp_servers {
-            for server in servers {
-                findings.extend(self.scan_mcp_server(server, file_path));
-            }
-        }
-
-        // Scan permissions
-        if let Some(permissions) = &manifest.permissions {
-            findings.extend(self.scan_permissions(permissions, file_path));
-        }
-
-        // Scan hooks
-        if let Some(hooks) = &manifest.hooks {
-            for hook in hooks {
-                findings.extend(self.scan_hook(hook, file_path));
-            }
-        }
-
-        // Also scan raw content for patterns that might be missed
+        // Scan the raw content BEFORE parsing, so a malformed-but-loadable
+        // manifest can't skip the baseline via a parse error (issue #219).
         findings.extend(self.config.check_content(content, file_path));
+
+        match serde_json::from_str::<PluginManifest>(content) {
+            Ok(manifest) => {
+                // Scan skills
+                if let Some(skills) = &manifest.skills {
+                    for skill in skills {
+                        findings.extend(self.scan_skill(skill, file_path));
+                    }
+                }
+
+                // Scan MCP servers
+                if let Some(servers) = &manifest.mcp_servers {
+                    for server in servers {
+                        findings.extend(self.scan_mcp_server(server, file_path));
+                    }
+                }
+
+                // Scan permissions
+                if let Some(permissions) = &manifest.permissions {
+                    findings.extend(self.scan_permissions(permissions, file_path));
+                }
+
+                // Scan hooks
+                if let Some(hooks) = &manifest.hooks {
+                    for hook in hooks {
+                        findings.extend(self.scan_hook(hook, file_path));
+                    }
+                }
+            }
+            // Fail loud instead of returning Err (swallowed by the directory
+            // scan to a silent clean result). See #219.
+            Err(e) => findings.extend(crate::engine::scanner::json_parse_failure_finding(
+                content,
+                file_path,
+                &e.to_string(),
+            )),
+        }
 
         Ok(findings)
     }
@@ -334,9 +339,10 @@ mod tests {
 
     #[test]
     fn test_scan_invalid_json() {
+        // Invalid JSON now fails loud rather than erroring out. See #219.
         let scanner = PluginScanner::new();
-        let result = scanner.scan_content("{ invalid }", "test.json");
-        assert!(result.is_err());
+        let findings = scanner.scan_content("{ invalid }", "test.json").unwrap();
+        assert!(findings.iter().any(|f| f.id == "SC-PARSE-001"));
     }
 
     #[test]

@@ -32,17 +32,22 @@ pub trait ManifestScanner: Scanner {
     /// 2. Extracts findings from the manifest structure
     /// 3. Also checks raw content for pattern-based rules
     fn scan_manifest_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
-        // Try to parse as JSON first
-        let manifest: Self::Manifest =
-            serde_json::from_str(content).map_err(|e| crate::error::AuditError::ParseError {
-                path: file_path.to_string(),
-                message: e.to_string(),
-            })?;
+        let mut findings = Vec::new();
 
-        let mut findings = self.scan_manifest(&manifest, file_path);
-
-        // Also check raw content for pattern-based rules
+        // Check raw content BEFORE parsing, so a malformed-but-loadable manifest
+        // can't skip the pattern baseline via a parse error (issue #219).
         findings.extend(self.scanner_config().check_content(content, file_path));
+
+        match serde_json::from_str::<Self::Manifest>(content) {
+            Ok(manifest) => findings.extend(self.scan_manifest(&manifest, file_path)),
+            // Fail loud instead of returning Err (swallowed to a silent clean
+            // result by the directory scan). See #219.
+            Err(e) => findings.extend(crate::engine::scanner::json_parse_failure_finding(
+                content,
+                file_path,
+                &e.to_string(),
+            )),
+        }
 
         Ok(findings)
     }

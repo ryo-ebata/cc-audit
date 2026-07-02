@@ -1,5 +1,5 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
-use crate::error::{AuditError, Result};
+use crate::error::Result;
 use crate::rules::Finding;
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -27,21 +27,26 @@ impl_scanner_builder!(HookScanner);
 
 impl HookScanner {
     pub fn scan_content(&self, content: &str, file_path: &str) -> Result<Vec<Finding>> {
-        // Parse the settings file leniently: truly invalid JSON is an error, but
-        // an unexpected `hooks` shape must not fail the whole scan.
-        let value: serde_json::Value =
-            serde_json::from_str(content).map_err(|e| AuditError::ParseError {
-                path: file_path.to_string(),
-                message: e.to_string(),
-            })?;
-
         let mut findings = Vec::new();
 
         // Defense-in-depth: scan the raw settings text so a renamed/unmodeled
         // event can never produce a silent zero-finding scan (issue #133).
+        // Run it BEFORE parsing so a malformed-but-loadable settings file can't
+        // skip the baseline via a parse error (issue #219).
         findings.extend(self.config.check_content(content, file_path));
 
-        findings.extend(self.scan_hooks_value(value.get("hooks"), file_path));
+        match serde_json::from_str::<serde_json::Value>(content) {
+            Ok(value) => {
+                findings.extend(self.scan_hooks_value(value.get("hooks"), file_path));
+            }
+            // Fail loud instead of returning Err (swallowed to a silent clean
+            // result by the directory scan). See #219.
+            Err(e) => findings.extend(crate::engine::scanner::json_parse_failure_finding(
+                content,
+                file_path,
+                &e.to_string(),
+            )),
+        }
 
         Ok(findings)
     }
@@ -356,9 +361,11 @@ mod tests {
         let settings_path = dir.path().join("settings.json");
         fs::write(&settings_path, "{ invalid json }").unwrap();
 
+        // Invalid JSON now fails loud rather than erroring out (which the
+        // directory scan would swallow to a silent clean result). See #219.
         let scanner = HookScanner::new();
-        let result = scanner.scan_file(&settings_path);
-        assert!(result.is_err());
+        let findings = scanner.scan_file(&settings_path).unwrap();
+        assert!(findings.iter().any(|f| f.id == "SC-PARSE-001"));
     }
 
     #[test]

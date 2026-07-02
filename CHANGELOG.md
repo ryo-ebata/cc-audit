@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.8](https://github.com/ryo-ebata/cc-audit/compare/v3.17.7...v3.17.8) (2026-07-02)
+
+
+### Bug Fixes
+
+* **discovery:** match file extensions case-insensitively ([#266](https://github.com/ryo-ebata/cc-audit/issues/266)) ([426ca4d](https://github.com/ryo-ebata/cc-audit/commit/426ca4d158dfc94d3038e6bb7447a0bf30e87b4d)), closes [#228](https://github.com/ryo-ebata/cc-audit/issues/228)
+
 ## [3.17.7](https://github.com/ryo-ebata/cc-audit/compare/v3.17.6...v3.17.7) (2026-07-02)
 
 

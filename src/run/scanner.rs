@@ -8,7 +8,6 @@ use crate::{
     WalkConfig,
 };
 use chrono::Utc;
-use std::fs;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -443,12 +442,13 @@ pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Fi
 
     if path.is_file() {
         // Lossy-decode so a non-UTF-8 byte cannot silently skip the deep scan
-        // for the whole file (issue #129); only IO errors drop the file.
+        // for the whole file (issue #129); only IO errors and the size cap drop
+        // the file. The read is capped so an oversized artifact cannot OOM the
+        // deep scan (issue #143).
         if !ignore_filter.is_ignored(path)
             && is_text_file(path)
-            && let Ok(bytes) = fs::read(path)
+            && let Ok(content) = crate::engine::scanner::read_to_string_capped(path)
         {
-            let content = String::from_utf8_lossy(&bytes);
             debug!(path = %path.display(), "Running deep scan on file");
             findings.extend(deobfuscator.deep_scan(&content, &path.display().to_string()));
         }
@@ -458,9 +458,8 @@ pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Fi
         for file_path in walker.walk_single(path) {
             if !ignore_filter.is_ignored(&file_path)
                 && is_text_file(&file_path)
-                && let Ok(bytes) = fs::read(&file_path)
+                && let Ok(content) = crate::engine::scanner::read_to_string_capped(&file_path)
             {
-                let content = String::from_utf8_lossy(&bytes);
                 findings.extend(deobfuscator.deep_scan(&content, &file_path.display().to_string()));
             }
         }
@@ -505,6 +504,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
 

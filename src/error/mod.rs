@@ -30,6 +30,9 @@ pub enum AuditError {
         source: std::io::Error,
     },
 
+    #[error("File too large to scan: {path} ({size} bytes exceeds limit of {limit} bytes)")]
+    FileTooLarge { path: String, size: u64, limit: u64 },
+
     #[error("Failed to parse YAML frontmatter: {path}")]
     YamlParseError {
         path: String,

@@ -1,7 +1,6 @@
 //! CVE database scanning for dependency vulnerabilities.
 
 use crate::{CveDatabase, DirectoryWalker, Finding, IgnoreFilter, WalkConfig};
-use std::fs;
 use std::path::Path;
 use tracing::{debug, info};
 
@@ -29,7 +28,8 @@ pub fn scan_path_with_cve_db(
         if !ignore_filter.is_ignored(path)
             && let Some(name) = path.file_name().and_then(|n| n.to_str())
             && CVE_RELEVANT_FILES.contains(&name)
-            && let Ok(content) = fs::read_to_string(path)
+            // Cap the read so an oversized lockfile cannot OOM the scan (#143).
+            && let Ok(content) = crate::engine::scanner::read_to_string_capped(path)
         {
             debug!(path = %path.display(), "Checking file for CVE vulnerabilities");
             findings.extend(check_content_for_cves(&content, path, db));
@@ -41,7 +41,7 @@ pub fn scan_path_with_cve_db(
             if !ignore_filter.is_ignored(&file_path)
                 && let Some(name) = file_path.file_name().and_then(|n| n.to_str())
                 && CVE_RELEVANT_FILES.contains(&name)
-                && let Ok(content) = fs::read_to_string(&file_path)
+                && let Ok(content) = crate::engine::scanner::read_to_string_capped(&file_path)
             {
                 findings.extend(check_content_for_cves(&content, &file_path, db));
             }
@@ -181,6 +181,7 @@ fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<F
 mod tests {
     use super::*;
     use crate::config::IgnoreConfig;
+    use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
 

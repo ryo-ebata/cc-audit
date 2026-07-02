@@ -2,7 +2,6 @@ use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::{AuditError, Result};
 use crate::rules::Finding;
 use serde::Deserialize;
-use std::fs;
 use std::path::Path;
 
 /// Plugin definition structure for marketplace.json
@@ -206,10 +205,8 @@ impl PluginScanner {
 
 impl Scanner for PluginScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
-        let content = fs::read_to_string(path).map_err(|e| AuditError::ReadError {
-            path: path.display().to_string(),
-            source: e,
-        })?;
+        // Cap the read so an oversized artifact cannot OOM the scan (#143).
+        let content = crate::engine::scanner::read_to_string_capped(path)?;
         self.scan_content(&content, &path.display().to_string())
     }
 
@@ -241,6 +238,7 @@ impl Scanner for PluginScanner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use tempfile::TempDir;
 
     #[test]

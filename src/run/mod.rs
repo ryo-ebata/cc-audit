@@ -23,5 +23,5 @@ pub use cve::scan_path_with_cve_db;
 pub use formatter::{format_result_check_args, format_result_with_config};
 pub use malware::scan_path_with_malware_db;
 pub use scanner::{run_scan_with_check_args, run_scan_with_check_args_config};
-pub use text_file::{is_text_file, is_text_file_with_config};
+pub use text_file::{has_known_shebang, is_text_file, is_text_file_with_config};
 pub use watch::{WatchModeResult, setup_watch_mode, watch_iteration};

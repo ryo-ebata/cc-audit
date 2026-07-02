@@ -32,6 +32,9 @@ pub struct EffectiveConfig {
     pub custom_rules: Option<String>,
     /// Strict secrets mode: disable dummy key heuristics for test files.
     pub strict_secrets: bool,
+    /// Honor in-band suppression directives read from scanned content. Off by
+    /// default: untrusted artifacts must not disable rules on themselves (#156).
+    pub allow_inline_suppression: bool,
 
     // v1.1.0: Remote scan options
     pub remote: Option<String>,
@@ -172,6 +175,10 @@ impl EffectiveConfig {
         // strict_secrets: CLI OR config
         let strict_secrets = args.strict_secrets || config.scan.strict_secrets;
 
+        // allow_inline_suppression: CLI OR config (default false = secure)
+        let allow_inline_suppression =
+            args.allow_inline_suppression || config.scan.allow_inline_suppression;
+
         // Parse min_severity from config if CLI doesn't provide it
         let min_severity = args
             .min_severity
@@ -210,6 +217,7 @@ impl EffectiveConfig {
             malware_db,
             custom_rules,
             strict_secrets,
+            allow_inline_suppression,
             // Remote options
             remote,
             git_ref,

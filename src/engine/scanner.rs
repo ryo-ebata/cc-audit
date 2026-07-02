@@ -233,6 +233,14 @@ impl ScannerConfig {
 
     /// Enables or disables strict secrets mode.
     /// When enabled, dummy key heuristics are disabled for test files.
+    /// Enables honoring of in-band suppression directives (`cc-audit-disable`,
+    /// `cc-audit-ignore`) read from scanned content. Off by default: untrusted
+    /// content must not declare which rules may fire on it (issue #156).
+    pub fn with_inline_suppression(mut self, allow: bool) -> Self {
+        self.engine = self.engine.with_inline_suppression(allow);
+        self
+    }
+
     pub fn with_strict_secrets(mut self, strict: bool) -> Self {
         self.strict_secrets = strict;
         self.engine = self.engine.with_strict_secrets(strict);

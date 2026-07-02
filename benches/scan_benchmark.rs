@@ -24,6 +24,7 @@ fn create_test_check_args(path: std::path::PathBuf) -> CheckArgs {
         watch: false,
         skip_comments: false,
         strict_secrets: false,
+        allow_inline_suppression: false,
         fix_hint: false,
         compact: false,
         no_malware_scan: true,

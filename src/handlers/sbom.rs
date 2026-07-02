@@ -128,6 +128,7 @@ mod tests {
             watch: false,
             skip_comments: false,
             strict_secrets: false,
+            allow_inline_suppression: false,
             fix_hint: false,
             compact: false,
             no_malware_scan: false,

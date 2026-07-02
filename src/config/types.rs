@@ -107,6 +107,10 @@ pub struct ScanConfig {
     pub min_rule_severity: Option<String>,
     /// Strict secrets mode: disable dummy key heuristics for test files.
     pub strict_secrets: bool,
+    /// Honor in-band suppression directives (`cc-audit-disable`/`cc-audit-ignore`)
+    /// read from scanned content. Off by default: untrusted artifacts must not be
+    /// able to disable rules on themselves (issue #156).
+    pub allow_inline_suppression: bool,
 
     // ============ Remote Scanning Options (v1.1.0) ============
     /// Remote repository URL to scan.

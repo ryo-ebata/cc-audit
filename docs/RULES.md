@@ -139,7 +139,16 @@ disabled_rules:
 
 ### Via Inline Comments
 
+> **⚠️ Trust-sensitive — off by default.** In-band directives are read from the
+> scanned file itself, which the artifact author controls. When auditing
+> **untrusted third-party** artifacts these directives are **ignored by default**,
+> so a malicious file cannot disable rules on itself. They are honored only when
+> you pass `--allow-inline-suppression` — use it only for your **own trusted**
+> code. For untrusted scans, prefer `disabled_rules` in `.cc-audit.yaml` (an
+> out-of-band channel controlled by whoever runs the scan).
+
 ```bash
+# Requires --allow-inline-suppression
 # cc-audit-ignore: PE-001
 sudo apt update
 

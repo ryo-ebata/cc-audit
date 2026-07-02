@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0](https://github.com/ryo-ebata/cc-audit/compare/v3.6.0...v3.7.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** add EX-019 scripting reverse shell + PS-012 system shell init ([9f24612](https://github.com/ryo-ebata/cc-audit/commit/9f24612964025887814e661e10991aab249eb96f))
+
+
+### Bug Fixes
+
+* **cve:** update CVE database (v3.6.1) ([#124](https://github.com/ryo-ebata/cc-audit/issues/124)) ([8b378aa](https://github.com/ryo-ebata/cc-audit/commit/8b378aae6a7a9641f0a52b7ac58edd2401faa3ce))
+
 ## [3.6.0](https://github.com/ryo-ebata/cc-audit/compare/v3.5.0...v3.6.0) (2026-07-01)
 
 

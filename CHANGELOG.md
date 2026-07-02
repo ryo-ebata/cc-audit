@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.1](https://github.com/ryo-ebata/cc-audit/compare/v3.17.0...v3.17.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **scanners:** detect Dockerfile.&lt;suffix&gt; variants ([#252](https://github.com/ryo-ebata/cc-audit/issues/252)) ([f502605](https://github.com/ryo-ebata/cc-audit/commit/f50260558c10c5d73f53b9b675d5183294f465bf)), closes [#226](https://github.com/ryo-ebata/cc-audit/issues/226)
+
 ## [3.17.0](https://github.com/ryo-ebata/cc-audit/compare/v3.16.4...v3.17.0) (2026-07-02)
 
 

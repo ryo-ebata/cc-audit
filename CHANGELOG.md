@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.12.0](https://github.com/ryo-ebata/cc-audit/compare/v3.11.10...v3.12.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** detect Unicode homoglyph tool-name spoofing (PI-009) ([3226b08](https://github.com/ryo-ebata/cc-audit/commit/3226b08d5e8bad7d2d8b1791128f766a13776a98)), closes [#139](https://github.com/ryo-ebata/cc-audit/issues/139)
+
 ## [3.11.10](https://github.com/ryo-ebata/cc-audit/compare/v3.11.9...v3.11.10) (2026-07-02)
 
 

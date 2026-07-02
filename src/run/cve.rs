@@ -51,6 +51,42 @@ pub fn scan_path_with_cve_db(
     findings
 }
 
+/// Map a known npm package name + version to CVE findings.
+///
+/// The shipped CVE database records both flagship MCP packages under the
+/// `modelcontextprotocol` vendor (issue #149); historical vendor strings
+/// (`geelen`/`anthropic`) never matched. Centralizing the mapping means every
+/// extraction path (package.json ranges, lockfile `packages`, lockfile v1
+/// object deps, mcpServers) shares one correct implementation.
+fn check_npm_package(
+    db: &CveDatabase,
+    package: &str,
+    version: &str,
+    path_str: &str,
+) -> Vec<Finding> {
+    // Extract version number (remove ^, ~, etc.).
+    let clean_version = version.trim_start_matches(|c: char| !c.is_ascii_digit());
+
+    // Normalize scoped aliases to the canonical product name recorded in the DB,
+    // then match by product name across any vendor (issue #149).
+    let product = match package {
+        "@anthropic/mcp-inspector" => "mcp-inspector",
+        "@geelen/mcp-remote" => "mcp-remote",
+        other => other,
+    };
+
+    db.create_findings_by_product(product, clean_version, path_str, 1)
+}
+
+/// Extract a version string from a dependency value that may be either a bare
+/// version string (`package.json`, lockfile v1 shorthand) or an object carrying
+/// a `version` field (lockfile v1 `dependencies`, lockfile v2/3 `packages`).
+fn dependency_version(value: &serde_json::Value) -> Option<&str> {
+    value
+        .as_str()
+        .or_else(|| value.get("version").and_then(|v| v.as_str()))
+}
+
 /// Check file content for known CVEs.
 fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<Finding> {
     let mut findings = Vec::new();
@@ -58,37 +94,29 @@ fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<F
 
     // Try to parse as JSON for structured version extraction
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
-        // Check for npm packages in dependencies
+        // Check for npm packages in dependencies. Values may be strings
+        // (package.json ranges) or objects (lockfileVersion 1 tree), so extract
+        // the version from either shape (issue #153).
         for dep_key in ["dependencies", "devDependencies", "peerDependencies"] {
             if let Some(deps) = json.get(dep_key).and_then(|d| d.as_object()) {
                 for (package, version_val) in deps {
-                    if let Some(version) = version_val.as_str() {
-                        // Extract version number (remove ^, ~, etc.)
-                        let clean_version =
-                            version.trim_start_matches(|c: char| !c.is_ascii_digit());
-
-                        // Check for known vulnerable packages
-                        // mcp-inspector -> anthropic/mcp-inspector
-                        if package == "mcp-inspector" || package == "@anthropic/mcp-inspector" {
-                            findings.extend(db.create_findings(
-                                "anthropic",
-                                "mcp-inspector",
-                                clean_version,
-                                &path_str,
-                                1,
-                            ));
-                        }
-                        // mcp-remote -> geelen/mcp-remote
-                        if package == "mcp-remote" || package == "@geelen/mcp-remote" {
-                            findings.extend(db.create_findings(
-                                "geelen",
-                                "mcp-remote",
-                                clean_version,
-                                &path_str,
-                                1,
-                            ));
-                        }
+                    if let Some(version) = dependency_version(version_val) {
+                        findings.extend(check_npm_package(db, package, version, &path_str));
                     }
+                }
+            }
+        }
+
+        // lockfileVersion 2/3 has no top-level `dependencies`; the resolved tree
+        // lives under `packages`, keyed by `node_modules/<name>` (issue #153).
+        if let Some(packages) = json.get("packages").and_then(|p| p.as_object()) {
+            for (pkg_path, meta) in packages {
+                // Derive the package name from the last `node_modules/` segment;
+                // skip the root entry (empty key).
+                if let Some((_, name)) = pkg_path.rsplit_once("node_modules/")
+                    && let Some(version) = meta.get("version").and_then(|v| v.as_str())
+                {
+                    findings.extend(check_npm_package(db, name, version, &path_str));
                 }
             }
         }
@@ -120,8 +148,7 @@ fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<F
                     && (command.contains("mcp-remote") || command.contains("npx mcp-remote"))
                 {
                     // Try to find version from args or assume latest
-                    findings.extend(db.create_findings(
-                        "geelen",
+                    findings.extend(db.create_findings_by_product(
                         "mcp-remote",
                         "0.0.0", // Unknown version - will match all affected
                         &path_str,
@@ -136,8 +163,7 @@ fn check_content_for_cves(content: &str, path: &Path, db: &CveDatabase) -> Vec<F
                         .and_then(|c| c.as_str())
                         .is_some_and(|c| c.contains("mcp-inspector"))
                 {
-                    findings.extend(db.create_findings(
-                        "anthropic",
+                    findings.extend(db.create_findings_by_product(
                         "mcp-inspector",
                         "0.0.0", // Unknown version
                         &path_str,
@@ -249,8 +275,11 @@ mod tests {
         let db = CveDatabase::default();
         let filter = create_default_filter(temp_dir.path());
         let findings = scan_path_with_cve_db(&file_path, &db, &filter);
-        // May find CVE for mcp-remote
-        assert!(findings.is_empty() || !findings.is_empty());
+        // mcp-remote 0.0.1 is < 0.3.0 (CVE-2025-6514), so a finding is required.
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "mcp-remote 0.0.1 must be flagged as CVE-2025-6514"
+        );
     }
 
     #[test]
@@ -272,8 +301,113 @@ mod tests {
         let db = CveDatabase::default();
         let filter = create_default_filter(temp_dir.path());
         let findings = scan_path_with_cve_db(&file_path, &db, &filter);
-        // Test that the function handles this package
-        assert!(findings.is_empty() || !findings.is_empty());
+        // mcp-inspector 0.2.0 is < 0.5.0 (CVE-2025-49596), so a finding is required.
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-49596"),
+            "mcp-inspector 0.2.0 must be flagged as CVE-2025-49596"
+        );
+    }
+
+    #[test]
+    fn test_scan_package_json_bare_mcp_remote() {
+        // Issue #149: the bare (unscoped) package name must match too.
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(file, r#"{{"dependencies": {{"mcp-remote": "0.0.1"}}}}"#).unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "bare mcp-remote 0.0.1 must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_scan_lockfile_v3_packages() {
+        // Issue #153: lockfileVersion 3 has no top-level `dependencies`; the tree
+        // lives under `packages` keyed by node_modules/<name>, value an object.
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package-lock.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+              "name": "t",
+              "version": "1.0.0",
+              "lockfileVersion": 3,
+              "packages": {{
+                "": {{ "name": "t", "version": "1.0.0" }},
+                "node_modules/mcp-remote": {{ "version": "0.0.1", "resolved": "x", "integrity": "y" }}
+              }}
+            }}"#
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "lockfileVersion 3 packages[node_modules/mcp-remote].version must be checked"
+        );
+    }
+
+    #[test]
+    fn test_scan_lockfile_v1_object_deps() {
+        // Issue #153: lockfileVersion 1 has top-level `dependencies` whose values
+        // are objects ({"version": …}), not strings.
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package-lock.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+              "name": "t",
+              "version": "1.0.0",
+              "lockfileVersion": 1,
+              "dependencies": {{
+                "mcp-remote": {{ "version": "0.0.1", "resolved": "x", "integrity": "y" }}
+              }}
+            }}"#
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "lockfileVersion 1 object-valued dependencies must be checked"
+        );
+    }
+
+    #[test]
+    fn test_scan_lockfile_patched_no_finding() {
+        // A lockfile pinning a fixed version must not produce a finding.
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package-lock.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        writeln!(
+            file,
+            r#"{{
+              "lockfileVersion": 3,
+              "packages": {{
+                "node_modules/mcp-remote": {{ "version": "0.3.0" }}
+              }}
+            }}"#
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            !findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "mcp-remote 0.3.0 is patched and must not be flagged"
+        );
     }
 
     #[test]
@@ -321,8 +455,12 @@ mod tests {
         let db = CveDatabase::default();
         let filter = create_default_filter(temp_dir.path());
         let findings = scan_path_with_cve_db(&file_path, &db, &filter);
-        // Should check mcp-remote in mcpServers
-        assert!(findings.is_empty() || !findings.is_empty());
+        // mcpServers referencing mcp-remote is checked with version 0.0.0, which
+        // is < 0.3.0, so CVE-2025-6514 must fire.
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-6514"),
+            "mcp-remote referenced in mcpServers must be flagged"
+        );
     }
 
     #[test]
@@ -346,8 +484,12 @@ mod tests {
         let db = CveDatabase::default();
         let filter = create_default_filter(temp_dir.path());
         let findings = scan_path_with_cve_db(&file_path, &db, &filter);
-        // Should check inspector server
-        assert!(findings.is_empty() || !findings.is_empty());
+        // mcpServers referencing mcp-inspector is checked with version 0.0.0,
+        // which is < 0.5.0, so CVE-2025-49596 must fire.
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-49596"),
+            "mcp-inspector referenced in mcpServers must be flagged"
+        );
     }
 
     #[test]
@@ -401,14 +543,21 @@ mod tests {
         )
         .unwrap();
 
-        // Default config ignores node_modules
-        let filter = create_default_filter(temp_dir.path());
+        // Configure the filter to ignore node_modules (the default IgnoreConfig
+        // carries no patterns; real usage loads them from .cc-audit.yaml).
+        let filter = IgnoreFilter::from_config(&IgnoreConfig {
+            patterns: vec!["**/node_modules/**".to_string()],
+        });
 
         let db = CveDatabase::default();
         let findings = scan_path_with_cve_db(temp_dir.path(), &db, &filter);
 
-        // Should be empty because node_modules is ignored by default
-        assert!(findings.is_empty());
+        // mcp-inspector 0.1.0 would otherwise be flagged (CVE-2025-49596); it
+        // must be skipped because the file lives under an ignored node_modules.
+        assert!(
+            findings.is_empty(),
+            "files under ignored node_modules must not be scanned"
+        );
     }
 
     #[test]

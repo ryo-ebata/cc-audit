@@ -190,7 +190,68 @@ impl CveDatabase {
         0
     }
 
-    /// Create findings for matching CVEs
+    /// Check a product/version against all CVEs, ignoring vendor.
+    ///
+    /// An npm package name uniquely identifies a product, but the same package
+    /// can be recorded under different vendor strings across databases (the
+    /// shipped DB uses `modelcontextprotocol`; a custom DB may use `anthropic`
+    /// or `geelen`). Matching on product name avoids brittle vendor coupling
+    /// that silently produced zero findings (issue #149).
+    pub fn check_product_by_name(&self, product: &str, version: &str) -> Vec<&CveEntry> {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                entry.affected_products.iter().any(|p| {
+                    p.product.eq_ignore_ascii_case(product)
+                        && Self::version_matches(&p.version_affected, version)
+                })
+            })
+            .collect()
+    }
+
+    /// Build a `Finding` for a matched CVE entry, deriving the vendor and fixed
+    /// version from the product entry that matched.
+    fn finding_from_cve(
+        cve: &CveEntry,
+        product: &str,
+        version: &str,
+        file_path: &str,
+        line: usize,
+    ) -> Finding {
+        let affected = cve
+            .affected_products
+            .iter()
+            .find(|p| p.product.eq_ignore_ascii_case(product));
+        let vendor = affected.map(|p| p.vendor.as_str()).unwrap_or("");
+
+        Finding {
+            id: cve.id.clone(),
+            severity: Self::parse_severity(&cve.severity),
+            category: Category::SupplyChain,
+            confidence: Confidence::Certain,
+            name: cve.title.clone(),
+            location: Location {
+                file: file_path.to_string(),
+                line,
+                column: None,
+            },
+            code: format!("{}/{} v{}", vendor, product, version),
+            message: cve.description.clone(),
+            recommendation: if let Some(ref fixed) = affected.and_then(|p| p.version_fixed.clone())
+            {
+                format!("Update to version {} or later", fixed)
+            } else {
+                "Check for security updates from the vendor".to_string()
+            },
+            fix_hint: None,
+            cwe_ids: cve.cwe_ids.clone(),
+            rule_severity: None,
+            client: None,
+            context: None,
+        }
+    }
+
+    /// Create findings for matching CVEs (vendor + product).
     pub fn create_findings(
         &self,
         vendor: &str,
@@ -199,42 +260,26 @@ impl CveDatabase {
         file_path: &str,
         line: usize,
     ) -> Vec<Finding> {
-        let matches = self.check_product(vendor, product, version);
-
-        matches
+        self.check_product(vendor, product, version)
             .into_iter()
-            .map(|cve| Finding {
-                id: cve.id.clone(),
-                severity: Self::parse_severity(&cve.severity),
-                category: Category::SupplyChain,
-                confidence: Confidence::Certain,
-                name: cve.title.clone(),
-                location: Location {
-                    file: file_path.to_string(),
-                    line,
-                    column: None,
-                },
-                code: format!("{}/{} v{}", vendor, product, version),
-                message: cve.description.clone(),
-                recommendation: if let Some(ref fixed) = cve
-                    .affected_products
-                    .iter()
-                    .find(|p| {
-                        p.vendor.eq_ignore_ascii_case(vendor)
-                            && p.product.eq_ignore_ascii_case(product)
-                    })
-                    .and_then(|p| p.version_fixed.clone())
-                {
-                    format!("Update to version {} or later", fixed)
-                } else {
-                    "Check for security updates from the vendor".to_string()
-                },
-                fix_hint: None,
-                cwe_ids: cve.cwe_ids.clone(),
-                rule_severity: None,
-                client: None,
-                context: None,
-            })
+            .map(|cve| Self::finding_from_cve(cve, product, version, file_path, line))
+            .collect()
+    }
+
+    /// Create findings for matching CVEs by product name, ignoring vendor.
+    ///
+    /// Preferred for npm packages, where the package name is the reliable key
+    /// and the recorded vendor string varies between databases (issue #149).
+    pub fn create_findings_by_product(
+        &self,
+        product: &str,
+        version: &str,
+        file_path: &str,
+        line: usize,
+    ) -> Vec<Finding> {
+        self.check_product_by_name(product, version)
+            .into_iter()
+            .map(|cve| Self::finding_from_cve(cve, product, version, file_path, line))
             .collect()
     }
 

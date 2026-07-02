@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.8](https://github.com/ryo-ebata/cc-audit/compare/v3.11.7...v3.11.8) (2026-07-02)
+
+
+### Bug Fixes
+
+* **engine:** join shell line-continuations before rule matching ([#126](https://github.com/ryo-ebata/cc-audit/issues/126)) ([b14b195](https://github.com/ryo-ebata/cc-audit/commit/b14b19501f27b25d6b96f7ed7a3ecb9ebcf0dc37))
+
 ## [3.11.7](https://github.com/ryo-ebata/cc-audit/compare/v3.11.6...v3.11.7) (2026-07-02)
 
 

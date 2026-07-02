@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.7](https://github.com/ryo-ebata/cc-audit/compare/v3.17.6...v3.17.7) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** drop Bash(...) exclusion that masked co-located unrestricted grants ([#264](https://github.com/ryo-ebata/cc-audit/issues/264)) ([1985827](https://github.com/ryo-ebata/cc-audit/commit/1985827a01beb19eb483aae339a61dbf22ef11dc)), closes [#233](https://github.com/ryo-ebata/cc-audit/issues/233)
+
 ## [3.17.6](https://github.com/ryo-ebata/cc-audit/compare/v3.17.5...v3.17.6) (2026-07-02)
 
 

@@ -116,8 +116,10 @@ fn op_004() -> Rule {
                 .expect("OP-004: invalid regex"),
         ],
         exclusions: vec![
-            // Restricted Bash is OK
-            Regex::new(r"Bash\([^)]+\)").expect("OP-004: invalid regex"),
+            // NOTE: no `Bash(...)` exclusion — the patterns match only a bare
+            // `Bash` (`Bash[^(]` / `Bash = *`), so a line-wide `Bash(...)`
+            // exclusion would mask an unrestricted `Bash` sitting next to a
+            // restricted `Bash(npm:*)`. See #233.
             // Schema/type definitions
             Regex::new(r"(?i)schema|interface|type\s+\w+|typedef").expect("OP-004: invalid regex"),
             // Comments
@@ -216,8 +218,10 @@ fn op_007() -> Rule {
         ],
         exclusions: vec![
             Regex::new(r"^\s*#").expect("OP-007: invalid regex"),
-            Regex::new(r"Bash\([^)]+\)").expect("OP-007: invalid regex"), // Restricted Bash is OK
-            Regex::new(r"Write\([^)]+\)").expect("OP-007: invalid regex"), // Restricted Write is OK
+            // NOTE: no `Bash(...)`/`Write(...)` exclusions — the patterns match
+            // only bare `Bash[^(]` / `Write[^(]`, so line-wide restricted-form
+            // exclusions would mask an unrestricted grant co-located with a
+            // restricted one. See #233.
         ],
         message: "Excessive permission delegation to subagent detected. Subagents should have minimal required permissions.",
         recommendation: "Restrict subagent permissions to only required tools with specific patterns.",
@@ -343,6 +347,41 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
             assert_eq!(matched && !excluded, should_match, "OP-005: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_004_restricted_bash_does_not_mask_unrestricted() {
+        let rule = op_004();
+        let cases = vec![
+            ("allowed-tools: Bash, Read", true),
+            // Regression (#233): co-located restricted Bash must not mask bare Bash.
+            ("allowed-tools: Bash, Bash(npm:*)", true),
+            // Restricted only → not flagged.
+            ("allowed-tools: Bash(npm:*), Read", false),
+        ];
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "OP-004: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_007_restricted_grant_does_not_mask_unrestricted() {
+        let rule = op_007();
+        let cases = vec![
+            // Regression (#233): bare Bash/Write next to a restricted form.
+            ("subagent allowed-tools: Bash, Bash(git:*)", true),
+            ("subagent allowed-tools: Write, Write(docs/*)", true),
+            // Restricted only → not flagged.
+            ("subagent allowed-tools: Bash(git:*)", false),
+            ("subagent allowed-tools: Read, Grep", false),
+        ];
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "OP-007: {}", input);
         }
     }
 

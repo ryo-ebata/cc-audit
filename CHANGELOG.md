@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.6](https://github.com/ryo-ebata/cc-audit/compare/v3.11.5...v3.11.6) (2026-07-02)
+
+
+### Bug Fixes
+
+* **hook:** scan Write/Edit content for reverse-shell & installer payloads ([a2c7bba](https://github.com/ryo-ebata/cc-audit/commit/a2c7bba74d8717954780ec60836f163fbf89b362)), closes [#165](https://github.com/ryo-ebata/cc-audit/issues/165)
+
 ## [3.11.5](https://github.com/ryo-ebata/cc-audit/compare/v3.11.4...v3.11.5) (2026-07-02)
 
 

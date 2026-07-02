@@ -55,7 +55,7 @@ impl TargetKind {
         if (path_str.contains(".claude/commands/")
             || path_str.contains("/commands/")
             || path_str.starts_with("commands/"))
-            && file_name.ends_with(".md")
+            && file_name.to_lowercase().ends_with(".md")
         {
             return Self::Command;
         }
@@ -72,9 +72,9 @@ impl TargetKind {
             return Self::RulesDir;
         }
 
-        // Check by extension
+        // Check by extension (case-insensitively — `.MD`/`.YAML`). See #228.
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-            match ext {
+            match ext.to_lowercase().as_str() {
                 "md" => {
                     if path_str.contains("scripts/") || path_str.contains(".claude/") {
                         return Self::Skill;

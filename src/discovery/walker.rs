@@ -79,9 +79,14 @@ impl DirectoryWalker {
             return true;
         }
 
+        // Case-insensitive so `.MD`/`.SH` aren't skipped on case-sensitive FS. (#228)
         path.extension()
             .and_then(|ext| ext.to_str())
-            .is_some_and(|ext| self.config.file_extensions.contains(&ext))
+            .is_some_and(|ext| {
+                self.config
+                    .file_extensions
+                    .contains(&ext.to_lowercase().as_str())
+            })
     }
 
     /// Walk the directory and yield matching file paths.

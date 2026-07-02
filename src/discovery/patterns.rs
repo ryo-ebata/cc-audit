@@ -23,10 +23,10 @@ impl FilePattern {
             return true;
         }
 
-        // Check extensions
+        // Check extensions (case-insensitively, so `.MD` matches `md`). See #228.
         if !self.extensions.is_empty() {
             if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                return self.extensions.contains(&ext);
+                return self.extensions.contains(&ext.to_lowercase().as_str());
             }
             return false;
         }

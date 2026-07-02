@@ -27,6 +27,8 @@ impl DockerScanner {
         match file_name {
             Some(name) => {
                 name == "dockerfile"
+                    // `Dockerfile.<suffix>` variants: .staging, .base, .ci, … (#226)
+                    || name.starts_with("dockerfile.")
                     || name.ends_with(".dockerfile")
                     || name == "docker-compose.yml"
                     || name == "docker-compose.yaml"
@@ -253,6 +255,29 @@ RUN npm install
     }
 
     #[test]
+    fn test_scan_dockerfile_suffix_variant() {
+        // Regression (#226): `Dockerfile.<env>` variants must be scanned.
+        let dir = TempDir::new().unwrap();
+        create_dockerfile(
+            &dir,
+            "Dockerfile.staging",
+            r#"
+FROM node:18
+USER root
+RUN curl -fsSL https://get.docker.com | bash
+"#,
+        );
+
+        let scanner = DockerScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            findings.iter().any(|f| f.id == "DK-002"),
+            "Should detect USER root in Dockerfile.staging"
+        );
+    }
+
+    #[test]
     fn test_scan_empty_directory() {
         let dir = TempDir::new().unwrap();
         let scanner = DockerScanner::new();
@@ -315,8 +340,16 @@ RUN docker run --privileged nginx
         )));
         assert!(DockerScanner::is_dockerfile(Path::new("compose.yml")));
         assert!(DockerScanner::is_dockerfile(Path::new("compose.yaml")));
+        // Regression (#226): Dockerfile.<suffix> variants.
+        assert!(DockerScanner::is_dockerfile(Path::new(
+            "Dockerfile.staging"
+        )));
+        assert!(DockerScanner::is_dockerfile(Path::new("Dockerfile.base")));
+        assert!(DockerScanner::is_dockerfile(Path::new("Dockerfile.ci")));
+        assert!(DockerScanner::is_dockerfile(Path::new("dockerfile.prod")));
         assert!(!DockerScanner::is_dockerfile(Path::new("README.md")));
         assert!(!DockerScanner::is_dockerfile(Path::new("script.sh")));
+        assert!(!DockerScanner::is_dockerfile(Path::new("mydockerfile.txt")));
     }
 
     #[test]

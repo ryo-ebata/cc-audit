@@ -152,7 +152,9 @@ fn op_005() -> Rule {
                 .expect("OP-005: invalid regex"),
             Regex::new(r"chmod\s+[0-7]*7[0-7]*\s").expect("OP-005: invalid regex"), // world-writable
         ],
-        exclusions: vec![Regex::new(r"test|mock|example").expect("OP-005: invalid regex")],
+        // Whole-word only: as a substring, `test` collided with ordinary words
+        // like `latest`, blinding this Critical rule (`sudo … latest-tools`). (#232)
+        exclusions: vec![Regex::new(r"\b(?:test|mock|example)\b").expect("OP-005: invalid regex")],
         message: "Elevated privilege request detected. May allow system-wide changes.",
         recommendation: "Avoid using sudo or elevated privileges in automated tools.",
         fix_hint: Some("Remove sudo/admin privileges and run with minimal permissions"),
@@ -323,6 +325,24 @@ mod tests {
         for (input, should_match) in test_cases {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             assert_eq!(matched, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_005_exclusion_not_bypassed_by_latest() {
+        let rule = op_005();
+        let cases = vec![
+            // Regression (#232): `test` inside `latest` must not suppress OP-005.
+            ("sudo apt-get install latest-tools", true),
+            ("sudo rm -rf /var/cache", true),
+            // Whole-word test/mock/example still exclude.
+            ("sudo test-runner --dry-run", false),
+            ("mock sudo call in example", false),
+        ];
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "OP-005: {}", input);
         }
     }
 

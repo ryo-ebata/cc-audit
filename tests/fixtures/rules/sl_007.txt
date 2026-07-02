@@ -1,0 +1,17 @@
+# SL-007: Slack webhook URL or API token
+# Test cases for snapshot testing
+# Detects Slack incoming webhook URLs and Slack API tokens (bot/user/app-level).
+# API tokens authenticate against the full Slack Web API (read messages/files,
+# exfiltrate workspace data), so they are strictly higher-impact than a webhook.
+
+# === Cases that SHOULD be detected ===
+https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX
+SLACK_BOT_TOKEN=xoxb-2345678901-2345678901234-AbCdEfGhIjKlMnOpQrStUvWx
+xoxp-1234567890-1234567890123-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx
+xapp-1-A01B2C3D4E5-1234567890123-abcdef0123456789
+
+# === Cases that should NOT be detected (benign) ===
+xoxb-your-token-here
+SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+token = xoxb-example-placeholder
+not a slack token at all

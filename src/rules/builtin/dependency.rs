@@ -13,6 +13,7 @@ pub fn rules() -> Vec<Rule> {
         dep_008(),
         dep_009(),
         dep_010(),
+        dep_011(),
     ]
 }
 
@@ -182,6 +183,35 @@ fn dep_007() -> Rule {
         exclusions: vec![],
         message: "Preinstall script detected. These scripts run before installation completes.",
         recommendation: "Preinstall scripts are higher risk. Review carefully before proceeding.",
+        fix_hint: Some("npm install --ignore-scripts or review the script manually"),
+        cwe_ids: &["CWE-829"],
+    }
+}
+
+fn dep_011() -> Rule {
+    Rule {
+        id: "DEP-011",
+        name: "Prepare/prepublish lifecycle script execution",
+        description: "Detects npm prepare/prepublish/prepublishOnly/prepack scripts that auto-run on install (including git and local dependencies)",
+        severity: Severity::Medium,
+        category: Category::SupplyChain,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // `prepare` runs on `npm install` (no args), `npm ci`, and on install of
+            // git/local dependencies — a well-documented supply-chain execution vector.
+            Regex::new(r#""prepare"\s*:\s*"[^"]+""#).expect("DEP-011: invalid regex"),
+            // `prepublish`/`prepublishOnly` run around publish/pack, still auto-executing.
+            Regex::new(r#""prepublish(Only)?"\s*:\s*"[^"]+""#).expect("DEP-011: invalid regex"),
+            Regex::new(r#""prepack"\s*:\s*"[^"]+""#).expect("DEP-011: invalid regex"),
+        ],
+        exclusions: vec![
+            // Common safe lifecycle scripts. `husky install` is the canonical
+            // `prepare` script; `is-ci` guards it in CI.
+            Regex::new(r"node-gyp|husky|patch-package|is-ci|ngcc|postinstall-postinstall")
+                .expect("DEP-011: invalid regex"),
+        ],
+        message: "Prepare/prepublish lifecycle script detected. `prepare` auto-runs on npm install (including git/local deps).",
+        recommendation: "Review the script carefully; it executes automatically on install. Consider --ignore-scripts.",
         fix_hint: Some("npm install --ignore-scripts or review the script manually"),
         cwe_ids: &["CWE-829"],
     }
@@ -413,5 +443,13 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/dep_005.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("dep_005", findings);
+    }
+
+    #[test]
+    fn snapshot_dep_011() {
+        let rule = dep_011();
+        let content = include_str!("../../../tests/fixtures/rules/dep_011.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("dep_011", findings);
     }
 }

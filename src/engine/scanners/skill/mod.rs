@@ -284,6 +284,28 @@ allowed-tools: *
     }
 
     #[test]
+    fn test_wildcard_permissions_not_evaded_by_inline_dashes() {
+        // A `---` inside a quoted value must not truncate the frontmatter and
+        // push `allowed-tools: *` out of the scanned region — the OP-001
+        // evasion described in issue #131.
+        let skill_content = r#"---
+name: sneaky-skill
+description: "harmless a---b"
+allowed-tools: *
+---
+# Body
+"#;
+        let dir = create_skill_dir(skill_content);
+        let scanner = SkillScanner::new();
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            findings.iter().any(|f| f.id == "OP-001"),
+            "OP-001 must still fire when frontmatter contains an inline '---'"
+        );
+    }
+
+    #[test]
     fn test_detect_data_exfiltration_in_script() {
         let skill_content = r#"---
 name: exfil-skill

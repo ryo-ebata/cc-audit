@@ -1,0 +1,18 @@
+# PE-011: Container escape primitives
+# Test cases for snapshot testing
+# Detects classic container-escape techniques: cgroup release_agent, kernel
+# core_pattern handler, nsenter into PID 1 namespaces, and access to the host
+# root via /proc/1/root (MITRE T1611).
+
+# === Cases that SHOULD be detected ===
+echo '/tmp/x' > /sys/fs/cgroup/rdma/release_agent
+echo '|/tmp/exploit' > /proc/sys/kernel/core_pattern
+nsenter --target 1 --mount --uts --ipc --net --pid -- bash
+nsenter -t 1 -m -u -i -n -p bash
+cp /bin/sh /proc/1/root/tmp/sh
+
+# === Cases that should NOT be detected (benign) ===
+cat /proc/1/cgroup
+nsenter --help
+cat /proc/sys/kernel/core_pattern
+ls /proc/1/

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.15.0](https://github.com/ryo-ebata/cc-audit/compare/v3.14.0...v3.15.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** extend PI-008 tool-shadowing detection to JA/ZH/ES/RU/PT ([404ff54](https://github.com/ryo-ebata/cc-audit/commit/404ff54308e0da4a864b62da654c51550f3d3042))
+
 ## [3.14.0](https://github.com/ryo-ebata/cc-audit/compare/v3.13.1...v3.14.0) (2026-07-02)
 
 

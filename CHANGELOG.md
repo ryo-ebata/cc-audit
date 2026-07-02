@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.10.0](https://github.com/ryo-ebata/cc-audit/compare/v3.9.0...v3.10.0) (2026-07-02)
+
+
+### Features
+
+* **rules:** add DEP-011 prepare/prepublish lifecycle script detection ([9672687](https://github.com/ryo-ebata/cc-audit/commit/967268795b163d42e6d16ca6f9a6d92046e0aa54)), closes [#137](https://github.com/ryo-ebata/cc-audit/issues/137)
+
 ## [3.9.0](https://github.com/ryo-ebata/cc-audit/compare/v3.8.0...v3.9.0) (2026-07-02)
 
 

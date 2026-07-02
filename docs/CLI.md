@@ -281,9 +281,16 @@ cc-audit proxy [OPTIONS] --target <HOST:PORT>
 
 ## Scan Types
 
+When no `--type` is given, cc-audit runs in **`auto`** mode: every applicable
+specialized scanner below (except `rules`) runs over the path, so structured
+MCP/hook/subagent/Docker/dependency/plugin detections — including Critical ones —
+are not silently skipped. Pass an explicit `--type` to **narrow** the scan to a
+single scanner.
+
 | Type | Description | Target Files |
 |------|-------------|--------------|
-| `skill` | Claude Code skill definitions (default) | `SKILL.md`, `*.md` with frontmatter |
+| `auto` | Run all applicable scanners below (default; `--type` omitted) | Any of the below |
+| `skill` | Claude Code skill definitions | `SKILL.md`, `*.md` with frontmatter |
 | `hook` | Hook configurations | `settings.json`, hook scripts |
 | `mcp` | MCP server configurations | `mcp.json`, server definitions |
 | `command` | Slash command definitions | `.claude/commands/*.md` |

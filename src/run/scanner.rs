@@ -117,9 +117,15 @@ fn run_scan_with_check_args_internal(
     // Create ignore filter from config
     let create_ignore_filter = |_path: &Path| IgnoreFilter::from_config(&config.ignore);
 
-    // Count files to scan (single pass for file count)
+    // Resolve which scanners to run: `Auto` (the default) fans out across all
+    // applicable specialized scanners, an explicit type narrows to one (#155).
+    let scan_types = resolve_scan_types(&effective.scan_type);
+
+    // Count files to scan (single pass for file count). Each scanner walks the
+    // path independently, so the progress total scales with the scanner count.
     eprintln!("Collecting files to scan...");
-    let total_files = count_files_to_scan(&scan_paths, &create_ignore_filter);
+    let total_files =
+        count_files_to_scan(&scan_paths, &create_ignore_filter) * scan_types.len().max(1);
 
     // Check if running in TTY (interactive terminal)
     let is_tty = std::io::stderr().is_terminal();
@@ -133,29 +139,49 @@ fn run_scan_with_check_args_internal(
         Arc::new(move || progress_clone.inc());
 
     for path in &scan_paths {
-        // Use effective scan_type from merged config
-        let result = run_scanner_for_type(
-            &effective.scan_type,
-            path,
-            &create_ignore_filter,
-            effective.skip_comments,
-            effective.strict_secrets,
-            effective.allow_inline_suppression,
-            effective.recursive,
-            &custom_rules,
-            progress_callback.clone(),
-        );
+        // Fan out across every applicable scanner when the type is left at its
+        // `Auto` default; an explicit `--type` narrows to a single scanner (#155).
+        let fan_out = scan_types.len() > 1;
+        let mut path_scanned = false;
+        for scan_type in &scan_types {
+            let result = run_scanner_for_type(
+                scan_type,
+                path,
+                &create_ignore_filter,
+                effective.skip_comments,
+                effective.strict_secrets,
+                effective.allow_inline_suppression,
+                effective.recursive,
+                &custom_rules,
+                progress_callback.clone(),
+            );
 
-        match result {
-            Ok(findings) => {
-                all_findings.extend(findings);
-                targets.push(path.display().to_string());
+            match result {
+                Ok(findings) => {
+                    all_findings.extend(findings);
+                    path_scanned = true;
+                }
+                Err(e) => {
+                    // In an `Auto` fan-out an inapplicable scanner may fail to
+                    // parse a path in another scanner's format (e.g. the MCP
+                    // JSON parser handed a Markdown file). Skip just that scanner
+                    // and let the others cover the path instead of aborting the
+                    // whole scan; an explicit `--type` still surfaces the error.
+                    if fan_out {
+                        if effective.verbose {
+                            eprintln!("Skipping {scan_type:?} scanner for {}: {e}", path.display());
+                        }
+                        continue;
+                    }
+                    eprintln!("Error scanning {}: {}", path.display(), e);
+                    progress.finish();
+                    return None;
+                }
             }
-            Err(e) => {
-                eprintln!("Error scanning {}: {}", path.display(), e);
-                progress.finish();
-                return None;
-            }
+        }
+
+        if path_scanned {
+            targets.push(path.display().to_string());
         }
 
         // Run malware database scan on files
@@ -183,6 +209,10 @@ fn run_scan_with_check_args_internal(
     // Finish and clear progress bar
     progress.finish();
 
+    // In an `Auto` fan-out the same rule can be flagged at the same location by
+    // more than one scanner; collapse those duplicates (#155).
+    let all_findings = dedup_findings(all_findings);
+
     // Filter and process findings
     let filtered_findings =
         filter_and_process_findings_check_args(all_findings, args, &config, &effective);
@@ -198,6 +228,55 @@ fn run_scan_with_check_args_internal(
         risk_score: Some(risk_score),
         elapsed_ms: start.elapsed().as_millis() as u64,
     })
+}
+
+/// Concrete scanners run when the scan type is left at its `Auto` default.
+///
+/// `Rules` is intentionally excluded: it targets custom rule-definition
+/// directories, not downloaded artifacts, and is only meaningful when the user
+/// explicitly asks for it via `--type rules`.
+const DEFAULT_SCAN_TYPES: &[ScanType] = &[
+    ScanType::Skill,
+    ScanType::Hook,
+    ScanType::Mcp,
+    ScanType::Command,
+    ScanType::Subagent,
+    ScanType::Docker,
+    ScanType::Dependency,
+    ScanType::Plugin,
+];
+
+/// Expand the effective scan type into the concrete scanners to run.
+///
+/// `Auto` (the default for a plain `check` with no `--type`) fans out across
+/// every applicable specialized scanner so structured MCP/Hook/Docker/etc.
+/// detections — including Critical ones — are not silently skipped (#155). An
+/// explicit `--type` narrows the scan to exactly that one scanner.
+fn resolve_scan_types(scan_type: &ScanType) -> Vec<ScanType> {
+    match scan_type {
+        ScanType::Auto => DEFAULT_SCAN_TYPES.to_vec(),
+        other => vec![*other],
+    }
+}
+
+/// Collapse findings that are identical in rule id and location.
+///
+/// An `Auto` fan-out runs several scanners over the same files, so the same rule
+/// can be reported at the same `(file, line, column)` more than once. Keep the
+/// first occurrence of each and drop the rest (#155).
+fn dedup_findings(findings: Vec<Finding>) -> Vec<Finding> {
+    let mut seen = std::collections::HashSet::new();
+    findings
+        .into_iter()
+        .filter(|f| {
+            seen.insert((
+                f.id.clone(),
+                f.location.file.clone(),
+                f.location.line,
+                f.location.column,
+            ))
+        })
+        .collect()
 }
 
 /// Run the appropriate scanner based on scan type.
@@ -217,6 +296,9 @@ where
     F: Fn(&Path) -> IgnoreFilter,
 {
     match scan_type {
+        // `Auto` is expanded into concrete scanners by `resolve_scan_types`
+        // before dispatch, so it never reaches a single-scanner run.
+        ScanType::Auto => Ok(Vec::new()),
         ScanType::Skill => {
             let ignore_filter = create_ignore_filter(path);
             let scanner = SkillScanner::new()
@@ -530,6 +612,81 @@ mod tests {
     // Create a no-op progress callback for testing
     fn create_noop_progress_callback() -> crate::engine::scanner::ProgressCallback {
         Arc::new(|| {})
+    }
+
+    fn finding_at(id: &str, file: &str, line: usize) -> Finding {
+        use crate::rules::types::{Category, Confidence, Location, Severity};
+        Finding {
+            id: id.to_string(),
+            severity: Severity::Critical,
+            category: Category::PrivilegeEscalation,
+            confidence: Confidence::Firm,
+            name: "test".to_string(),
+            location: Location {
+                file: file.to_string(),
+                line,
+                column: None,
+            },
+            code: "code".to_string(),
+            message: "msg".to_string(),
+            recommendation: "rec".to_string(),
+            fix_hint: None,
+            cwe_ids: Vec::new(),
+            rule_severity: None,
+            client: None,
+            context: None,
+        }
+    }
+
+    #[test]
+    fn test_resolve_scan_types_auto_fans_out() {
+        // Auto (the default) expands to every applicable scanner but not `Rules`.
+        let types = resolve_scan_types(&ScanType::Auto);
+        assert_eq!(types.len(), DEFAULT_SCAN_TYPES.len());
+        assert!(types.contains(&ScanType::Mcp));
+        assert!(types.contains(&ScanType::Docker));
+        assert!(!types.contains(&ScanType::Rules));
+        assert!(!types.contains(&ScanType::Auto));
+    }
+
+    #[test]
+    fn test_resolve_scan_types_explicit_narrows() {
+        // An explicit type narrows to exactly that one scanner.
+        assert_eq!(resolve_scan_types(&ScanType::Mcp), vec![ScanType::Mcp]);
+        assert_eq!(resolve_scan_types(&ScanType::Rules), vec![ScanType::Rules]);
+    }
+
+    #[test]
+    fn test_dedup_findings_collapses_same_rule_and_location() {
+        let findings = vec![
+            finding_at("PE-001", "a.mcp.json", 4),
+            // Duplicate: same rule + same location from another scanner.
+            finding_at("PE-001", "a.mcp.json", 4),
+            // Different line: kept.
+            finding_at("PE-001", "a.mcp.json", 9),
+            // Different rule: kept.
+            finding_at("PE-002", "a.mcp.json", 4),
+        ];
+        let deduped = dedup_findings(findings);
+        assert_eq!(deduped.len(), 3);
+    }
+
+    #[test]
+    fn test_run_scanner_for_type_auto_returns_empty() {
+        // `Auto` is expanded before dispatch, so a direct dispatch is a no-op.
+        let create_ignore_filter = |_p: &Path| IgnoreFilter::default();
+        let result = run_scanner_for_type(
+            &ScanType::Auto,
+            Path::new("."),
+            &create_ignore_filter,
+            false,
+            false,
+            false,
+            true,
+            &[],
+            create_noop_progress_callback(),
+        );
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]

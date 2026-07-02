@@ -58,9 +58,12 @@ fn dep_002() -> Rule {
         category: Category::SupplyChain,
         confidence: Confidence::Certain,
         patterns: vec![
-            // npm: git://, git+https://, git+ssh://, github:
-            Regex::new(r#":\s*"(git://|git\+https://|git\+ssh://|github:)[^"]*"#)
-                .expect("DEP-002: invalid regex"),
+            // npm: git://, git+https://, git+ssh://, and host shorthands
+            // github:/gitlab:/bitbucket:/gist: (all resolve to remote git). (#236)
+            Regex::new(
+                r#":\s*"(git://|git\+https://|git\+ssh://|(github|gitlab|bitbucket|gist):)[^"]*"#,
+            )
+            .expect("DEP-002: invalid regex"),
             // Cargo: git = "..."
             Regex::new(r#"\bgit\s*=\s*"https?://[^"]*""#).expect("DEP-002: invalid regex"),
             // pip: git+ in requirements
@@ -321,12 +324,22 @@ mod tests {
             r#": "git+https://github.com/user/repo""#,
             r#": "github:user/repo""#,
             r#"git = "https://github.com/user/repo""#,
+            // Regression (#236): other host shorthands.
+            r#": "gitlab:evil/repo""#,
+            r#": "bitbucket:user/repo""#,
+            r#": "gist:a1b2c3d4""#,
         ];
 
         for url in git_urls {
             let matched = dep_002.patterns.iter().any(|p| p.is_match(url));
             assert!(matched, "Should detect git URL: {}", url);
         }
+
+        // A normal semver dependency must not be flagged as a git shorthand.
+        assert!(
+            !dep_002.patterns[0].is_match(r#": "^1.2.3""#),
+            "semver range should not match the git-shorthand pattern"
+        );
     }
 
     #[test]

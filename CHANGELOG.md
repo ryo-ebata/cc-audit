@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.1](https://github.com/ryo-ebata/cc-audit/compare/v3.11.0...v3.11.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **cve:** match npm packages by product name; parse real lockfiles (closes [#149](https://github.com/ryo-ebata/cc-audit/issues/149), closes [#153](https://github.com/ryo-ebata/cc-audit/issues/153)) ([216d409](https://github.com/ryo-ebata/cc-audit/commit/216d4098574f51ae562d70080c74c3d3ec58a282))
+* **deobfuscation:** iteratively decode nested encodings in deep scan (closes [#128](https://github.com/ryo-ebata/cc-audit/issues/128)) ([8a81b1d](https://github.com/ryo-ebata/cc-audit/commit/8a81b1d03f408223de34c238099b5cc5a793da75))
+* **discovery:** scan extension-less scripts via shebang detection ([8264ebc](https://github.com/ryo-ebata/cc-audit/commit/8264ebc290a6d166428769cd901a51e4104f626a)), closes [#152](https://github.com/ryo-ebata/cc-audit/issues/152)
+* **engine:** lossy-decode non-UTF-8 files instead of failing open (closes [#129](https://github.com/ryo-ebata/cc-audit/issues/129)) ([5eb1004](https://github.com/ryo-ebata/cc-audit/commit/5eb100478df7225e9653a31acba1c020aa5054b2))
+* **engine:** scan all hook events, not just four (closes [#133](https://github.com/ryo-ebata/cc-audit/issues/133)) ([3a9b6e8](https://github.com/ryo-ebata/cc-audit/commit/3a9b6e877a5036834058aa17ce4f55399e2ebe8e))
+* **engine:** scan command frontmatter for OP-001 wildcard tools (closes [#135](https://github.com/ryo-ebata/cc-audit/issues/135)) ([7719d7e](https://github.com/ryo-ebata/cc-audit/commit/7719d7eceae2c36c234315c55d6507b72fe40076))
+* **parser:** match frontmatter delimiters on their own line (closes [#131](https://github.com/ryo-ebata/cc-audit/issues/131)) ([4a226ed](https://github.com/ryo-ebata/cc-audit/commit/4a226ed7f546a329dd99578d4279b9c559e47b7e))
+
 ## [3.11.0](https://github.com/ryo-ebata/cc-audit/compare/v3.10.1...v3.11.0) (2026-07-02)
 
 

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.16.1](https://github.com/ryo-ebata/cc-audit/compare/v3.16.0...v3.16.1) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** anchor SL-* keyword exclusions to word boundaries ([#242](https://github.com/ryo-ebata/cc-audit/issues/242)) ([f3e808f](https://github.com/ryo-ebata/cc-audit/commit/f3e808f40d67cb5682a55edf7f4a47eccb2f47eb)), closes [#214](https://github.com/ryo-ebata/cc-audit/issues/214)
+
 ## [3.16.0](https://github.com/ryo-ebata/cc-audit/compare/v3.15.0...v3.16.0) (2026-07-02)
 
 

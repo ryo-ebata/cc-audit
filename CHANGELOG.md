@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.11.10](https://github.com/ryo-ebata/cc-audit/compare/v3.11.9...v3.11.10) (2026-07-02)
+
+
+### Bug Fixes
+
+* **rules:** remove PI-003 exclusions that enabled a one-word bypass ([ae34d8b](https://github.com/ryo-ebata/cc-audit/commit/ae34d8bf7fa653ffa92bd403df186fad2ae4f867)), closes [#130](https://github.com/ryo-ebata/cc-audit/issues/130)
+
 ## [3.11.9](https://github.com/ryo-ebata/cc-audit/compare/v3.11.8...v3.11.9) (2026-07-02)
 
 

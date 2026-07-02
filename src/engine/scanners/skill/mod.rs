@@ -88,8 +88,18 @@ impl Scanner for SkillScanner {
     }
 
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
-        let content = self.config.read_file(path)?;
         let path_str = path.display().to_string();
+        let content = match self.config.read_file(path) {
+            Ok(content) => content,
+            // Fail loud: an oversized file is skipped but surfaced as a finding so
+            // it cannot fake a clean scan or hide content above the cap (#143/#136).
+            Err(crate::error::AuditError::FileTooLarge { size, limit, .. }) => {
+                return Ok(vec![crate::engine::scanner::oversize_file_finding(
+                    &path_str, size, limit,
+                )]);
+            }
+            Err(e) => return Err(e),
+        };
         let findings = self.config.check_content(&content, &path_str);
 
         // Note: Progress reporting is handled by the caller (scan_directory or scan_path)
@@ -519,6 +529,27 @@ cat ~/.ssh/id_rsa
         assert!(
             findings.iter().any(|f| f.id == "EX-015"),
             "reverse shell in an extension-less shebang script must be detected"
+        );
+    }
+
+    #[test]
+    fn test_scan_oversized_file_is_skipped_with_diagnostic() {
+        // Regression for #143: an oversized file must not OOM the scan; it is
+        // skipped and surfaced as a fail-loud SC-SIZE-001 diagnostic instead of
+        // silently disappearing.
+        let dir = TempDir::new().unwrap();
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "---\nname: test\n---\n# Test").unwrap();
+
+        let big = dir.path().join("big.md");
+        fs::write(&big, vec![b'a'; 4096]).unwrap();
+
+        // Tiny cap so we don't need a real multi-MB file in the test.
+        let scanner = SkillScanner::new().with_max_file_size(1024);
+        let findings = scanner.scan_path(dir.path()).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id == "SC-SIZE-001"),
+            "oversized file must yield a fail-loud diagnostic finding"
         );
     }
 

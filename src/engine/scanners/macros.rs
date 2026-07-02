@@ -61,6 +61,13 @@ macro_rules! impl_scanner_builder {
                 self
             }
 
+            /// Overrides the maximum size (in bytes) of a file that will be read
+            /// into memory. Files above the cap are refused before allocation.
+            pub fn with_max_file_size(mut self, max_file_size: u64) -> Self {
+                self.config = self.config.with_max_file_size(max_file_size);
+                self
+            }
+
             /// Sets a progress callback that will be called for each scanned file.
             pub fn with_progress_callback(
                 mut self,

@@ -12,6 +12,95 @@ use std::fs;
 use std::path::Path;
 use tracing::{debug, trace};
 
+/// Maximum size, in bytes, of a single file the scanner will read into memory.
+///
+/// cc-audit inspects untrusted third-party artifacts, so an attacker fully
+/// controls file sizes. Reading an arbitrarily large file unconditionally lets a
+/// single multi-GB file exhaust memory and OOM-kill the scan (a DoS that can
+/// fail the security gate open). Files above this cap are refused *before* any
+/// allocation. 10 MiB is far above any legitimate Claude Code artifact
+/// (skills, hooks, MCP configs, lockfiles) while bounding worst-case memory.
+///
+/// See issue #143 (CWE-400 Uncontrolled Resource Consumption, CWE-770
+/// Allocation of Resources Without Limits).
+pub const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Reads a file into a `String`, refusing to allocate for files larger than
+/// `limit` bytes.
+///
+/// The size is checked via `fs::metadata` **before** the file is read, so an
+/// oversized file never drives a large allocation. Returns
+/// [`AuditError::FileTooLarge`] for oversized files and [`AuditError::ReadError`]
+/// for genuine I/O errors. Bytes are lossy-decoded (invalid UTF-8 → replacement
+/// char) so a partially-binary file is still scanned rather than skipped (issue
+/// #129).
+pub fn read_to_string_capped_with_limit(path: &Path, limit: u64) -> Result<String> {
+    let metadata = fs::metadata(path).map_err(|e| AuditError::ReadError {
+        path: path.display().to_string(),
+        source: e,
+    })?;
+
+    let size = metadata.len();
+    if size > limit {
+        return Err(AuditError::FileTooLarge {
+            path: path.display().to_string(),
+            size,
+            limit,
+        });
+    }
+
+    let bytes = fs::read(path).map_err(|e| AuditError::ReadError {
+        path: path.display().to_string(),
+        source: e,
+    })?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Reads a file into a `String`, refusing files larger than [`MAX_FILE_SIZE`].
+///
+/// Convenience wrapper over [`read_to_string_capped_with_limit`] for the many
+/// scan readers that use the default cap.
+pub fn read_to_string_capped(path: &Path) -> Result<String> {
+    read_to_string_capped_with_limit(path, MAX_FILE_SIZE)
+}
+
+/// Builds a fail-loud diagnostic finding for a file skipped because it exceeded
+/// the size cap.
+///
+/// Emitting a finding (rather than silently dropping the file) prevents an
+/// oversized file from faking a clean scan or hiding content above the cap —
+/// the fail-loud coverage contract from issue #136. Modeled as a low-severity
+/// supply-chain concern: an oversized untrusted artifact is suspicious in its
+/// own right.
+pub fn oversize_file_finding(file: &str, size: u64, limit: u64) -> Finding {
+    Finding {
+        id: "SC-SIZE-001".to_string(),
+        severity: crate::rules::Severity::Low,
+        category: crate::rules::Category::SupplyChain,
+        confidence: crate::rules::Confidence::Certain,
+        name: "Oversized file skipped".to_string(),
+        location: crate::rules::Location {
+            file: file.to_string(),
+            line: 0,
+            column: None,
+        },
+        code: String::new(),
+        message: format!(
+            "File is {size} bytes, exceeding the {limit}-byte scan limit; it was \
+             not scanned. An oversized untrusted artifact can exhaust memory or \
+             hide content above the cap."
+        ),
+        recommendation: "Review this file manually. If it is legitimate, raise the \
+             configured size limit; otherwise treat the oversized artifact as suspicious."
+            .to_string(),
+        fix_hint: None,
+        cwe_ids: vec!["CWE-400".to_string(), "CWE-770".to_string()],
+        rule_severity: None,
+        client: None,
+        context: None,
+    }
+}
+
 /// Core trait for all security scanners.
 ///
 /// Scanners implement this trait to provide file and directory scanning capabilities.
@@ -86,6 +175,7 @@ pub struct ScannerConfig {
     strict_secrets: bool,
     recursive: bool,
     progress_callback: Option<ProgressCallback>,
+    max_file_size: u64,
 }
 
 impl ScannerConfig {
@@ -98,7 +188,21 @@ impl ScannerConfig {
             strict_secrets: false,
             recursive: true,
             progress_callback: None,
+            max_file_size: MAX_FILE_SIZE,
         }
+    }
+
+    /// Overrides the maximum size (in bytes) of a file that will be read into
+    /// memory. Files above the cap are refused before allocation (see
+    /// [`MAX_FILE_SIZE`]).
+    pub fn with_max_file_size(mut self, max_file_size: u64) -> Self {
+        self.max_file_size = max_file_size;
+        self
+    }
+
+    /// Returns the configured maximum file size in bytes.
+    pub fn max_file_size(&self) -> u64 {
+        self.max_file_size
     }
 
     /// Enables or disables recursive scanning.
@@ -175,21 +279,18 @@ impl ScannerConfig {
 
     /// Reads a file and returns its content as a string.
     ///
-    /// Reads raw bytes and lossy-decodes them (invalid UTF-8 → replacement
-    /// char) so a single non-UTF-8 byte cannot silently neutralize the scan for
-    /// an entire file (issue #129). Only genuine IO errors (missing file,
-    /// permission denied) are propagated; a legacy-encoded or partially-binary
-    /// file is still scanned rather than failing open.
+    /// Refuses files larger than the configured cap ([`ScannerConfig::max_file_size`])
+    /// before allocating, so an oversized untrusted artifact cannot OOM-kill the
+    /// scan (issue #143). Otherwise reads raw bytes and lossy-decodes them
+    /// (invalid UTF-8 → replacement char) so a single non-UTF-8 byte cannot
+    /// silently neutralize the scan for an entire file (issue #129). Only genuine
+    /// IO errors and the size cap are propagated; a legacy-encoded or
+    /// partially-binary file is still scanned rather than failing open.
     pub fn read_file(&self, path: &Path) -> Result<String> {
         trace!(path = %path.display(), "Reading file");
-        let bytes = fs::read(path).map_err(|e| {
+        read_to_string_capped_with_limit(path, self.max_file_size).inspect_err(|e| {
             debug!(path = %path.display(), error = %e, "Failed to read file");
-            AuditError::ReadError {
-                path: path.display().to_string(),
-                source: e,
-            }
-        })?;
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
+        })
     }
 
     /// Checks the content against all rules and returns findings.
@@ -301,6 +402,54 @@ mod tests {
         let config = ScannerConfig::new();
         let result = config.read_file(Path::new("/nonexistent/file.txt"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_to_string_capped_rejects_oversized() {
+        // A file larger than the (tiny) limit must be refused with FileTooLarge,
+        // never read into memory (issue #143 — OOM / DoS prevention).
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("big.txt");
+        fs::write(&file_path, vec![b'a'; 100]).unwrap();
+
+        let err = read_to_string_capped_with_limit(&file_path, 10).unwrap_err();
+        assert!(
+            matches!(err, AuditError::FileTooLarge { size, limit, .. } if size == 100 && limit == 10),
+            "oversized file must yield FileTooLarge, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_read_to_string_capped_allows_within_limit() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("ok.txt");
+        fs::write(&file_path, "hello").unwrap();
+
+        let content = read_to_string_capped_with_limit(&file_path, 1024).unwrap();
+        assert_eq!(content, "hello");
+    }
+
+    #[test]
+    fn test_read_file_respects_configured_size_cap() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("payload.md");
+        fs::write(&file_path, vec![b'x'; 5000]).unwrap();
+
+        // Default cap reads it fine; a small configured cap refuses it.
+        assert!(ScannerConfig::new().read_file(&file_path).is_ok());
+        let err = ScannerConfig::new()
+            .with_max_file_size(1000)
+            .read_file(&file_path)
+            .unwrap_err();
+        assert!(matches!(err, AuditError::FileTooLarge { .. }));
+    }
+
+    #[test]
+    fn test_oversize_file_finding_is_fail_loud() {
+        let finding = oversize_file_finding("evil/big.md", 50_000_000, MAX_FILE_SIZE);
+        assert_eq!(finding.id, "SC-SIZE-001");
+        assert_eq!(finding.category, crate::rules::Category::SupplyChain);
+        assert_eq!(finding.location.file, "evil/big.md");
     }
 
     #[test]

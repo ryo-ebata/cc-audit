@@ -54,6 +54,13 @@ macro_rules! impl_scanner_builder {
                 self
             }
 
+            /// Enables honoring of in-band suppression directives read from
+            /// scanned content. Off by default (secure for untrusted scans).
+            pub fn with_inline_suppression(mut self, allow: bool) -> Self {
+                self.config = self.config.with_inline_suppression(allow);
+                self
+            }
+
             /// Enables or disables recursive scanning.
             /// When disabled, only scans the immediate directory (max_depth = 1).
             pub fn with_recursive(mut self, recursive: bool) -> Self {

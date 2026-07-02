@@ -140,6 +140,7 @@ fn run_scan_with_check_args_internal(
             &create_ignore_filter,
             effective.skip_comments,
             effective.strict_secrets,
+            effective.allow_inline_suppression,
             effective.recursive,
             &custom_rules,
             progress_callback.clone(),
@@ -207,6 +208,7 @@ fn run_scanner_for_type<F>(
     create_ignore_filter: &F,
     skip_comments: bool,
     strict_secrets: bool,
+    allow_inline_suppression: bool,
     recursive: bool,
     custom_rules: &[DynamicRule],
     progress_callback: crate::engine::scanner::ProgressCallback,
@@ -221,6 +223,7 @@ where
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -230,6 +233,7 @@ where
             let scanner = HookScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -239,6 +243,7 @@ where
             let scanner = McpScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -248,6 +253,7 @@ where
             let scanner = CommandScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -257,6 +263,7 @@ where
             let scanner = RulesDirScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -268,6 +275,7 @@ where
                 .with_ignore_filter(ignore_filter)
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -277,6 +285,7 @@ where
             let scanner = DependencyScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -286,6 +295,7 @@ where
             let scanner = SubagentScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -295,6 +305,7 @@ where
             let scanner = PluginScanner::new()
                 .with_skip_comments(skip_comments)
                 .with_strict_secrets(strict_secrets)
+                .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
@@ -617,6 +628,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -661,6 +673,7 @@ mod tests {
             &ScanType::Hook,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,
@@ -709,6 +722,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -753,6 +767,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -793,6 +808,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -820,6 +836,7 @@ mod tests {
             &ScanType::Command,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,
@@ -867,6 +884,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -901,6 +919,7 @@ mod tests {
             &ScanType::Docker,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,
@@ -952,6 +971,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -994,6 +1014,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -1033,6 +1054,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -1064,6 +1086,7 @@ mod tests {
             &ScanType::Subagent,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,
@@ -1113,6 +1136,7 @@ mod tests {
             false,
             false,
             false,
+            false,
             &[],
             create_noop_progress_callback(),
         );
@@ -1148,6 +1172,7 @@ mod tests {
             &ScanType::Plugin,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,
@@ -1187,6 +1212,7 @@ mod tests {
             &ScanType::Rules,
             &file_path,
             &ignore_fn,
+            false,
             false,
             false,
             false,

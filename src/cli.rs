@@ -209,6 +209,12 @@ pub struct CheckArgs {
     #[arg(long)]
     pub strict_secrets: bool,
 
+    /// Honor in-band suppression directives (cc-audit-disable / cc-audit-ignore)
+    /// read from the scanned content. Off by default so untrusted artifacts
+    /// cannot disable rules on themselves; enable only for your own trusted code.
+    #[arg(long)]
+    pub allow_inline_suppression: bool,
+
     /// Show fix hints in terminal output
     #[arg(long)]
     pub fix_hint: bool,
@@ -436,6 +442,7 @@ impl Default for CheckArgs {
             min_confidence: None,
             skip_comments: false,
             strict_secrets: false,
+            allow_inline_suppression: false,
             fix_hint: false,
             compact: false,
             watch: false,
@@ -501,6 +508,7 @@ impl CheckArgs {
             watch: false,
             skip_comments: effective.skip_comments,
             strict_secrets: effective.strict_secrets,
+            allow_inline_suppression: effective.allow_inline_suppression,
             fix_hint: effective.fix_hint,
             compact: effective.compact,
             no_malware_scan: effective.no_malware_scan,

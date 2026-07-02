@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.10](https://github.com/ryo-ebata/cc-audit/compare/v3.17.9...v3.17.10) (2026-07-02)
+
+
+### Bug Fixes
+
+* **scanners:** run raw baseline before parse and fail loud on unparseable manifest ([#270](https://github.com/ryo-ebata/cc-audit/issues/270)) ([dcc7a3f](https://github.com/ryo-ebata/cc-audit/commit/dcc7a3fdaf6cea74df3840d241c21d651e49fcbb)), closes [#219](https://github.com/ryo-ebata/cc-audit/issues/219)
+
 ## [3.17.9](https://github.com/ryo-ebata/cc-audit/compare/v3.17.8...v3.17.9) (2026-07-02)
 
 

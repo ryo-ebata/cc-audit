@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/privilege.rs
+expression: findings
+---
+[
+  {
+    "id": "PE-011",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Container escape primitives",
+    "line": 8,
+    "code": "echo '/tmp/x' > /sys/fs/cgroup/rdma/release_agent",
+    "message": "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+    "recommendation": "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces."
+  },
+  {
+    "id": "PE-011",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Container escape primitives",
+    "line": 9,
+    "code": "echo '|/tmp/exploit' > /proc/sys/kernel/core_pattern",
+    "message": "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+    "recommendation": "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces."
+  },
+  {
+    "id": "PE-011",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Container escape primitives",
+    "line": 10,
+    "code": "nsenter --target 1 --mount --uts --ipc --net --pid -- bash",
+    "message": "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+    "recommendation": "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces."
+  },
+  {
+    "id": "PE-011",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Container escape primitives",
+    "line": 11,
+    "code": "nsenter -t 1 -m -u -i -n -p bash",
+    "message": "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+    "recommendation": "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces."
+  },
+  {
+    "id": "PE-011",
+    "severity": "critical",
+    "category": "privilege_escalation",
+    "confidence": "firm",
+    "name": "Container escape primitives",
+    "line": 12,
+    "code": "cp /bin/sh /proc/1/root/tmp/sh",
+    "message": "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+    "recommendation": "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces."
+  }
+]

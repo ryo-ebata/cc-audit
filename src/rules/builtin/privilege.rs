@@ -13,6 +13,7 @@ pub fn rules() -> Vec<Rule> {
         pe_008(),
         pe_009(),
         pe_010(),
+        pe_011(),
     ]
 }
 
@@ -313,6 +314,41 @@ fn pe_010() -> Rule {
     }
 }
 
+fn pe_011() -> Rule {
+    Rule {
+        id: "PE-011",
+        name: "Container escape primitives",
+        description: "Detects classic container-escape techniques: cgroup release_agent, kernel core_pattern handler, nsenter into PID 1 namespaces, and host-root access via /proc/1/root (MITRE T1611)",
+        severity: Severity::Critical,
+        category: Category::PrivilegeEscalation,
+        confidence: Confidence::Firm,
+        patterns: vec![
+            // cgroup notify-on-release escape file
+            Regex::new(r"release_agent").expect("PE-011: invalid regex"),
+            // Kernel core dump handler hijack
+            Regex::new(r"/proc/sys/kernel/core_pattern").expect("PE-011: invalid regex"),
+            // Entering the host's namespaces via PID 1
+            Regex::new(r"nsenter\s+[^\n]*(-t\s*1\b|--target[ =]1\b)")
+                .expect("PE-011: invalid regex"),
+            // Reaching the host root filesystem through PID 1
+            Regex::new(r"/proc/1/root/").expect("PE-011: invalid regex"),
+        ],
+        exclusions: vec![
+            // Comment lines
+            Regex::new(r"^\s*#").expect("PE-011: invalid regex"),
+            // Read-only inspection (diagnostics), not a write/escape
+            Regex::new(r"^\s*(cat|less|stat|grep|head|tail|ls)\s+[^\n]*(core_pattern|/proc/1/root|release_agent)")
+                .expect("PE-011: invalid regex"),
+        ],
+        message: "Container escape primitive detected: cgroup release_agent, core_pattern, nsenter into PID 1, or /proc/1/root host access.",
+        recommendation: "Remove the container-escape construct. Artifacts must never manipulate cgroup release_agent, core_pattern, or enter host namespaces.",
+        fix_hint: Some(
+            "Delete release_agent/core_pattern writes, nsenter --target 1, and /proc/1/root access; run workloads with least privilege and no host namespace access.",
+        ),
+        cwe_ids: &["CWE-250", "CWE-269"],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,5 +589,41 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/pe_010.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("pe_010", findings);
+    }
+
+    #[test]
+    fn test_pe_011_detects_container_escape() {
+        let rule = pe_011();
+        let test_cases = vec![
+            // Malicious: container-escape primitives
+            ("echo '/tmp/x' > /sys/fs/cgroup/rdma/release_agent", true),
+            ("echo '|/tmp/exploit' > /proc/sys/kernel/core_pattern", true),
+            (
+                "nsenter --target 1 --mount --uts --ipc --net --pid -- bash",
+                true,
+            ),
+            ("nsenter -t 1 -m -u -i -n -p bash", true),
+            ("cp /bin/sh /proc/1/root/tmp/sh", true),
+            // Benign: reads and unrelated inspection
+            ("cat /proc/1/cgroup", false),
+            ("nsenter --help", false),
+            ("cat /proc/sys/kernel/core_pattern", false),
+            ("ls /proc/1/", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "PE-011: Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn snapshot_pe_011() {
+        let rule = pe_011();
+        let content = include_str!("../../../tests/fixtures/rules/pe_011.txt");
+        let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
+        crate::assert_rule_snapshot!("pe_011", findings);
     }
 }

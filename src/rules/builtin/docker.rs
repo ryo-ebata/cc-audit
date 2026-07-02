@@ -55,10 +55,9 @@ fn dk_002() -> Rule {
         category: Category::PrivilegeEscalation,
         confidence: Confidence::Firm,
         patterns: vec![
-            // USER root (multiline mode with (?m))
-            Regex::new(r"(?im)^USER\s+root\s*$").expect("DK-002: invalid regex"),
-            // USER 0
-            Regex::new(r"(?m)^USER\s+0\s*$").expect("DK-002: invalid regex"),
+            // USER root / USER 0, optionally with a `:<gid>` suffix
+            // (`USER 0:0`, `USER root:root`). See #235.
+            Regex::new(r"(?im)^USER\s+(root|0)(:\S+)?\s*$").expect("DK-002: invalid regex"),
             // user: root in compose
             Regex::new(r#"user:\s*["']?root["']?"#).expect("DK-002: invalid regex"),
             Regex::new(r#"user:\s*["']?0["']?"#).expect("DK-002: invalid regex"),
@@ -302,12 +301,16 @@ mod tests {
             // Should detect
             ("USER root", true),
             ("USER 0", true),
+            // Regression (#235): uid:gid form.
+            ("USER 0:0", true),
+            ("USER root:root", true),
             ("user: root", true),
             ("user: \"root\"", true),
             ("user: 0", true),
             // Should not detect
             ("USER nobody", false),
             ("USER 1000", false),
+            ("USER 1000:1000", false),
             ("user: app", false),
             ("# USER root", false), // comment
         ];

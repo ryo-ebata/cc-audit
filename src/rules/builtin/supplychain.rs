@@ -229,7 +229,10 @@ fn sc_005() -> Rule {
             Regex::new(r#"set(Timeout|Interval)\s*\(\s*["']"#).expect("SC-005: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|example|spec").expect("SC-005: invalid regex"),
+            // Whole-word only, and drop `spec`: as a substring it collided with
+            // ordinary code (`config.spec`, `latest`) and blinded this Critical
+            // rule. See #232.
+            Regex::new(r"\b(?:test|mock|example)\b").expect("SC-005: invalid regex"),
             // JSON.parse is safe
             Regex::new(r"JSON\.parse").expect("SC-005: invalid regex"),
         ],
@@ -576,5 +579,25 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/sc_009.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("sc_009", findings);
+    }
+
+    #[test]
+    fn test_sc_005_exclusion_not_bypassed_by_code_tokens() {
+        let rule = sc_005();
+        let cases = vec![
+            // Regression (#232): `spec`/`test` as substrings of code tokens must
+            // NOT suppress dynamic-eval detection.
+            ("eval(config.spec)", true),
+            ("data = eval(atob(p)) // latest", true),
+            ("exec(payload) # respects order", true),
+            // Whole-word test/mock/example still exclude (test fixtures).
+            ("eval(x) // test helper", false),
+            ("mock.eval(payload)", false),
+        ];
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "SC-005: {}", input);
+        }
     }
 }

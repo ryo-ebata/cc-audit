@@ -29,6 +29,7 @@ pub enum CveDbError {
 pub struct AffectedProduct {
     pub vendor: String,
     pub product: String,
+    /// Version constraint, or `*` when all versions are affected.
     pub version_affected: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version_fixed: Option<String>,
@@ -129,9 +130,14 @@ impl CveDatabase {
     }
 
     /// Check if a version string matches a version requirement
-    /// Supports: "< X.Y.Z", "<= X.Y.Z", "= X.Y.Z", ">= X.Y.Z", "> X.Y.Z"
+    /// Supports: "*" (all versions), "< X.Y.Z", "<= X.Y.Z", "= X.Y.Z",
+    /// ">= X.Y.Z", "> X.Y.Z"
     fn version_matches(requirement: &str, version: &str) -> bool {
         let requirement = requirement.trim();
+
+        if requirement == "*" {
+            return true;
+        }
 
         // Parse the operator and version from the requirement
         let (op, req_version) = if let Some(rest) = requirement.strip_prefix("<=") {
@@ -342,6 +348,57 @@ mod tests {
         assert!(CveDatabase::version_matches("= 1.5.0", "1.5.0"));
         assert!(!CveDatabase::version_matches("= 1.5.0", "1.5.1"));
         assert!(!CveDatabase::version_matches("= 1.5.0", "1.4.9"));
+    }
+
+    #[test]
+    fn test_version_comparison_wildcard() {
+        for requirement in ["*", " \t*\n"] {
+            for version in [
+                "0.0.0",
+                "1.5.0",
+                "10.0.26100",
+                "1.5.0-beta.1",
+                "1.5.0+build.42",
+            ] {
+                assert!(
+                    CveDatabase::version_matches(requirement, version),
+                    "{requirement:?} should match {version}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_builtin_wildcard_findings() {
+        let db = CveDatabase::builtin().unwrap();
+
+        for (product, version, cve_id) in [
+            ("github_copilot", "1.372.0", "CVE-2025-66389"),
+            ("windows", "10.0.26100", "CVE-2026-44470"),
+            ("windows", "10.0.26100", "CVE-2026-35603"),
+        ] {
+            for findings in [
+                db.create_findings("microsoft", product, version, "package.json", 10),
+                db.create_findings_by_product(product, version, "package.json", 10),
+            ] {
+                let finding = findings
+                    .iter()
+                    .find(|finding| finding.id == cve_id)
+                    .unwrap_or_else(|| panic!("{cve_id} should match {product} {version}"));
+                assert_eq!(finding.location.file, "package.json");
+                assert_eq!(finding.location.line, 10);
+                assert_eq!(
+                    finding.recommendation,
+                    "Check for security updates from the vendor"
+                );
+            }
+        }
+
+        assert!(
+            db.check_product("unrelated", "windows", "10.0.26100")
+                .is_empty()
+        );
+        assert!(db.check_product_by_name("unrelated", "1.5.0").is_empty());
     }
 
     #[test]

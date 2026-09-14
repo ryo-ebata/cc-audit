@@ -71,11 +71,14 @@ fn check_npm_package(
         return Vec::new();
     }
 
-    // Normalize scoped aliases to the canonical product name recorded in the DB,
-    // then match by product name across any vendor (issue #149).
+    // Normalize only known canonical and historical package names. Stripping
+    // every npm scope would incorrectly treat unrelated packages such as
+    // `@untrusted/inspector` as the vulnerable MCP Inspector product.
     let product = match package {
-        "@anthropic/mcp-inspector" => "mcp-inspector",
-        "@geelen/mcp-remote" => "mcp-remote",
+        "mcp-inspector" | "@anthropic/mcp-inspector" | "@modelcontextprotocol/inspector" => {
+            "mcp-inspector"
+        }
+        "mcp-remote" | "@geelen/mcp-remote" => "mcp-remote",
         other => other,
     };
 
@@ -310,6 +313,46 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.id == "CVE-2025-49596"),
             "mcp-inspector 0.2.0 must be flagged as CVE-2025-49596"
+        );
+    }
+
+    #[test]
+    fn test_scan_with_canonical_mcp_inspector_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+
+        fs::write(
+            &file_path,
+            r#"{"dependencies":{"@modelcontextprotocol/inspector":"0.2.0"}}"#,
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-49596"),
+            "canonical @modelcontextprotocol/inspector 0.2.0 must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_scan_does_not_normalize_unrelated_scoped_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+
+        fs::write(
+            &file_path,
+            r#"{"dependencies":{"@untrusted/inspector":"0.2.0"}}"#,
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.is_empty(),
+            "unrelated scoped packages must not inherit MCP CVEs"
         );
     }
 

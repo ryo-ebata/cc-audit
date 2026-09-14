@@ -5,7 +5,6 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use tracing::debug;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,14 +138,14 @@ impl Scanner for McpScanner {
         // Parallel scan using Rayon
         let findings: Vec<Finding> = files
             .par_iter()
-            .flat_map(|path| {
+            .map(|path| {
                 let result = self.scan_file(path);
                 self.config.report_progress();
-                result.unwrap_or_else(|e| {
-                    debug!(path = %path.display(), error = %e, "Failed to scan file");
-                    vec![]
-                })
+                result
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .collect();
 
         Ok(findings)

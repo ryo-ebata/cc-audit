@@ -4,7 +4,7 @@ use crate::error::Result;
 use crate::rules::Finding;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Scanner for Claude Code subagent definitions in .claude/agents/
 pub struct SubagentScanner {
@@ -93,15 +93,15 @@ impl Scanner for SubagentScanner {
         // Parallel scan of collected files
         let findings: Vec<Finding> = files
             .par_iter()
-            .flat_map(|path| {
+            .map(|path| {
                 debug!(path = %path.display(), "Scanning agent file");
                 let result = self.scan_file(path);
                 self.config.report_progress(); // Thread-safe progress reporting
-                result.unwrap_or_else(|e| {
-                    warn!(path = %path.display(), error = %e, "Failed to scan agent file");
-                    vec![]
-                })
+                result
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .collect();
 
         Ok(findings)

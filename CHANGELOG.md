@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.22](https://github.com/ryo-ebata/cc-audit/compare/v3.17.21...v3.17.22) (2026-09-14)
+
+
+### Bug Fixes
+
+* **config:** surface malformed project configuration ([#321](https://github.com/ryo-ebata/cc-audit/issues/321)) ([6a21929](https://github.com/ryo-ebata/cc-audit/commit/6a21929c44cd109de27d67fe13742dc0dd007a34))
+
 ## [3.17.21](https://github.com/ryo-ebata/cc-audit/compare/v3.17.20...v3.17.21) (2026-09-14)
 
 

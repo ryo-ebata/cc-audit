@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.18](https://github.com/ryo-ebata/cc-audit/compare/v3.17.17...v3.17.18) (2026-09-14)
+
+
+### Bug Fixes
+
+* **rules:** detect direct wget docker pipelines ([#312](https://github.com/ryo-ebata/cc-audit/issues/312)) ([5509c30](https://github.com/ryo-ebata/cc-audit/commit/5509c3054114620140e3cb7961a4683f3f93ddeb))
+
 ## [3.17.17](https://github.com/ryo-ebata/cc-audit/compare/v3.17.16...v3.17.17) (2026-09-14)
 
 

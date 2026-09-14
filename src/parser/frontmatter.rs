@@ -17,6 +17,14 @@ impl FrontmatterParser {
     /// assert_eq!(frontmatter, Some("\nname: test\n"));
     /// ```
     pub fn extract(content: &str) -> Option<&str> {
+        // Markdown frontmatter may be preceded by a UTF-8 BOM or blank lines.
+        // Normalize only the opening position; the returned slice still points
+        // into the original content and preserves the frontmatter body.
+        let content = content
+            .strip_prefix('\u{feff}')
+            .unwrap_or(content)
+            .trim_start_matches([' ', '\t', '\r', '\n']);
+
         // The opening delimiter must be a line consisting solely of `---`.
         // Requiring a line break right after `---` rejects `----`, `---x`, and a
         // top-of-file `------` thematic break (issue #131).
@@ -66,6 +74,13 @@ mod tests {
         let content = "---\nname: test\ndescription: A test\n---\n# Content";
         let result = FrontmatterParser::extract(content);
         assert_eq!(result, Some("\nname: test\ndescription: A test\n"));
+    }
+
+    #[test]
+    fn test_frontmatter_allows_bom_and_leading_blank_lines() {
+        let content = "\u{feff}\n\n---\nallowed-tools: *\n---\n# Content";
+        let result = FrontmatterParser::extract(content);
+        assert_eq!(result, Some("\nallowed-tools: *\n"));
     }
 
     #[test]

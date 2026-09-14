@@ -1,6 +1,7 @@
 use super::walker::{DirectoryWalker, WalkConfig};
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
+use crate::parser::FrontmatterParser;
 use crate::rules::Finding;
 use rayon::prelude::*;
 use std::path::Path;
@@ -23,10 +24,7 @@ impl Scanner for CommandScanner {
         // Slash commands support an `allowed-tools` frontmatter field. OP-001
         // (wildcard `allowed-tools: *`) is emitted only by `check_frontmatter`,
         // so without this pass an over-permissioned command scans clean.
-        if let Some(stripped) = content.strip_prefix("---")
-            && let Some(end_idx) = stripped.find("---")
-        {
-            let frontmatter = &stripped[..end_idx];
+        if let Some(frontmatter) = FrontmatterParser::extract(&content) {
             findings.extend(self.config.check_frontmatter(frontmatter, &path_str));
         }
 

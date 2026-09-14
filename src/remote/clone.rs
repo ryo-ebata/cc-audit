@@ -202,6 +202,46 @@ impl GitCloner {
         sanitized
     }
 
+    /// Return the total size of a checkout, including its `.git` directory.
+    fn repository_size_bytes(path: &Path) -> Result<u64, std::io::Error> {
+        let mut size: u64 = 0;
+        for entry in walkdir::WalkDir::new(path) {
+            let entry = entry.map_err(|e| {
+                let message = e.to_string();
+                e.into_io_error()
+                    .unwrap_or_else(|| std::io::Error::other(message))
+            })?;
+            if entry.file_type().is_file() {
+                size = size.saturating_add(entry.metadata()?.len());
+            }
+        }
+        Ok(size)
+    }
+
+    /// Enforce the configured repository size limit. A zero limit is unlimited.
+    fn check_repository_size(&self, url: &str, path: &Path) -> Result<(), RemoteError> {
+        if self.max_size_mb == 0 || !path.exists() {
+            return Ok(());
+        }
+
+        let size_bytes =
+            Self::repository_size_bytes(path).map_err(|e| RemoteError::CloneFailed {
+                url: url.to_string(),
+                message: self.sanitize_error_message(&e.to_string()),
+            })?;
+        let limit_bytes = self.max_size_mb.saturating_mul(1024 * 1024);
+        if size_bytes > limit_bytes {
+            let size_mb = size_bytes / (1024 * 1024) + u64::from(size_bytes % (1024 * 1024) != 0);
+            return Err(RemoteError::RepositoryTooLarge {
+                url: url.to_string(),
+                size_mb,
+                limit_mb: self.max_size_mb,
+            });
+        }
+
+        Ok(())
+    }
+
     /// Execute git clone command with security measures and timeout.
     fn execute_clone(&self, url: &str, path: &Path, git_ref: &str) -> Result<(), RemoteError> {
         // Create askpass script for secure token handling
@@ -255,6 +295,12 @@ impl GitCloner {
         let start = std::time::Instant::now();
 
         loop {
+            if let Err(error) = self.check_repository_size(url, path) {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
+
             match child.try_wait() {
                 Ok(Some(status)) => {
                     // Process finished
@@ -287,6 +333,7 @@ impl GitCloner {
                         });
                     }
 
+                    self.check_repository_size(url, path)?;
                     return Ok(());
                 }
                 Ok(None) => {
@@ -470,5 +517,48 @@ mod tests {
     fn test_cloner_with_max_size() {
         let cloner = GitCloner::new().with_max_size(100);
         assert_eq!(cloner.max_size_mb, 100);
+    }
+
+    #[test]
+    fn test_repository_size_limit_allows_below_limit() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        std::fs::write(temp_dir.path().join("small.txt"), b"small").unwrap();
+
+        let cloner = GitCloner::new().with_max_size(1);
+        assert!(
+            cloner
+                .check_repository_size("https://github.com/owner/repo", temp_dir.path())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_repository_size_limit_detects_above_limit() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let large_file = vec![0_u8; 1024 * 1024 + 1];
+        std::fs::write(temp_dir.path().join("large.bin"), large_file).unwrap();
+
+        let cloner = GitCloner::new().with_max_size(1);
+        let error = cloner
+            .check_repository_size("https://github.com/owner/repo", temp_dir.path())
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            RemoteError::RepositoryTooLarge { limit_mb: 1, .. }
+        ));
+    }
+
+    #[test]
+    fn test_repository_size_limit_zero_is_unlimited() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let large_file = vec![0_u8; 1024 * 1024 + 1];
+        std::fs::write(temp_dir.path().join("large.bin"), large_file).unwrap();
+
+        let cloner = GitCloner::new();
+        assert!(
+            cloner
+                .check_repository_size("https://github.com/owner/repo", temp_dir.path())
+                .is_ok()
+        );
     }
 }

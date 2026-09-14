@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.19](https://github.com/ryo-ebata/cc-audit/compare/v3.17.18...v3.17.19) (2026-09-14)
+
+
+### Bug Fixes
+
+* **rules:** detect full environment dumps ([#314](https://github.com/ryo-ebata/cc-audit/issues/314)) ([0c7cc45](https://github.com/ryo-ebata/cc-audit/commit/0c7cc45450603250948b0e79f721b74f6b9e37fa))
+
 ## [3.17.18](https://github.com/ryo-ebata/cc-audit/compare/v3.17.17...v3.17.18) (2026-09-14)
 
 

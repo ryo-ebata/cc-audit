@@ -89,10 +89,18 @@ fn op_003() -> Rule {
                 .expect("OP-003: invalid regex"),
             // Comments
             Regex::new(r"^\s*(#|//|/\*|\*)").expect("OP-003: invalid regex"),
-            // Example/documentation context
-            Regex::new(r"(?i)example|documentation|readme|docs/").expect("OP-003: invalid regex"),
-            // Test context
-            Regex::new(r"(?i)test|spec|mock").expect("OP-003: invalid regex"),
+            // Example/documentation context: only an explicit fixture marker
+            // at line start or a dedicated example/docs path component.
+            Regex::new(
+                r"(?i)^\s*(?:example|documentation|readme)\b|(?:examples?|docs?|documentation|readme)[/\\]",
+            )
+            .expect("OP-003: invalid regex"),
+            // Test context: only an explicit test/spec/mock marker at the
+            // beginning of a fixture line or as a directory/name component.
+            // Do not let identifiers such as `latest` or `contest` suppress a
+            // real permission grant.
+            Regex::new(r"(?i)^\s*(?:test|spec|mock)\b|(?:tests?|specs?|mocks?)[/\\]")
+                .expect("OP-003: invalid regex"),
         ],
         message: "Unrestricted network permission detected. May allow data exfiltration.",
         recommendation: "Restrict network access to specific domains or disable if not needed.",
@@ -418,6 +426,30 @@ mod tests {
         for input in negative {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             assert!(!matched, "OP-006 should not match: {input}");
+        }
+    }
+
+    #[test]
+    fn test_op_003_exclusion_does_not_hide_identifiers() {
+        let rule = op_003();
+        let cases = [
+            ("allow-network: true # latest policy", true),
+            ("allow-network: true # contest policy", true),
+            ("allow-network: true", true),
+            ("test fixture: allow-network: true", false),
+            ("tests/fixtures/config: allow-network: true", false),
+            ("mock allow-network: true", false),
+            ("allow-network: true # documentation", true),
+            ("allow-network: true # readme", true),
+            ("examples/fixture.yaml: allow-network: true", false),
+            ("docs/config.md: allow-network: true", false),
+            ("example fixture: allow-network: true", false),
+        ];
+
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "OP-003: {input}");
         }
     }
 

@@ -20,6 +20,9 @@ pub enum CveDbError {
     #[error("Failed to parse CVE database JSON: {0}")]
     ParseJson(#[from] serde_json::Error),
 
+    #[error("Invalid escaped product name for {cve_id}: {product}")]
+    InvalidProduct { cve_id: String, product: String },
+
     #[error("Failed to parse version requirement for {cve_id}: {version}")]
     InvalidVersion { cve_id: String, version: String },
 }
@@ -82,6 +85,16 @@ impl CveDatabase {
     /// Load CVE database from a JSON string
     pub fn from_json(json: &str) -> Result<Self, CveDbError> {
         let file: CveDatabaseFile = serde_json::from_str(json)?;
+        for entry in &file.entries {
+            for product in &entry.affected_products {
+                if product.product.contains('\\') {
+                    return Err(CveDbError::InvalidProduct {
+                        cve_id: entry.id.clone(),
+                        product: product.product.clone(),
+                    });
+                }
+            }
+        }
         Ok(Self {
             entries: file.entries,
             version: file.version,
@@ -495,6 +508,31 @@ mod tests {
         let db = CveDatabase::from_file(temp_file.path()).unwrap();
         assert_eq!(db.version(), "1.0.0");
         assert!(db.is_empty());
+    }
+
+    #[test]
+    fn test_from_json_rejects_escaped_product_names() {
+        let json = r#"{
+            "version": "1.0.0",
+            "updated_at": "2025-01-01",
+            "entries": [{
+                "id": "CVE-TEST",
+                "title": "test",
+                "description": "test",
+                "severity": "high",
+                "affected_products": [{
+                    "vendor": "test",
+                    "product": "\\@scope\\/package",
+                    "version_affected": "*"
+                }],
+                "published_at": "2025-01-01"
+            }]
+        }"#;
+
+        assert!(matches!(
+            CveDatabase::from_json(json),
+            Err(CveDbError::InvalidProduct { .. })
+        ));
     }
 
     #[test]

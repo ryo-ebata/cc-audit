@@ -392,6 +392,26 @@ mod tests {
     }
 
     #[test]
+    fn test_scan_frontmcp_packages() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+        fs::write(
+            &file_path,
+            r#"{"dependencies":{"@frontmcp/sdk":"1.0.0","@frontmcp/adapters":"1.0.0"}}"#,
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert_eq!(
+            findings.iter().filter(|f| f.id == "CVE-2026-39885").count(),
+            2,
+            "both published FrontMCP packages must be flagged"
+        );
+    }
+
+    #[test]
     fn test_scan_lockfile_v3_packages() {
         // Issue #153: lockfileVersion 3 has no top-level `dependencies`; the tree
         // lives under `packages` keyed by node_modules/<name>, value an object.

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.27](https://github.com/ryo-ebata/cc-audit/compare/v3.17.26...v3.17.27) (2026-09-14)
+
+
+### Bug Fixes
+
+* **cve:** normalize canonical MCP package names ([#331](https://github.com/ryo-ebata/cc-audit/issues/331)) ([7e5fbe0](https://github.com/ryo-ebata/cc-audit/commit/7e5fbe00340cb953fb9bfe1cfcae9f5c1e2be92c))
+
 ## [3.17.26](https://github.com/ryo-ebata/cc-audit/compare/v3.17.25...v3.17.26) (2026-09-14)
 
 

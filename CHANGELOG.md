@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.19.0](https://github.com/ryo-ebata/cc-audit/compare/v3.18.0...v3.19.0) (2026-09-14)
+
+
+### Features
+
+* **rules:** add French prompt injection detection ([#341](https://github.com/ryo-ebata/cc-audit/issues/341)) ([f2f0dc4](https://github.com/ryo-ebata/cc-audit/commit/f2f0dc4537068fa919175d98a1130116efd044ee))
+
 ## [3.18.0](https://github.com/ryo-ebata/cc-audit/compare/v3.17.30...v3.18.0) (2026-09-14)
 
 

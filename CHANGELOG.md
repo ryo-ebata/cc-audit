@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.21.0](https://github.com/ryo-ebata/cc-audit/compare/v3.20.0...v3.21.0) (2026-09-14)
+
+
+### Features
+
+* **rules:** add Arabic prompt injection detection ([#345](https://github.com/ryo-ebata/cc-audit/issues/345)) ([7a7a52b](https://github.com/ryo-ebata/cc-audit/commit/7a7a52b3bf28e84e7b255cffb3c237951c81757a))
+
 ## [3.20.0](https://github.com/ryo-ebata/cc-audit/compare/v3.19.0...v3.20.0) (2026-09-14)
 
 

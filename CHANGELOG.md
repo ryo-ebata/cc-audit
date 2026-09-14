@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.25](https://github.com/ryo-ebata/cc-audit/compare/v3.17.24...v3.17.25) (2026-09-14)
+
+
+### Bug Fixes
+
+* **parser:** accept BOM and leading whitespace in frontmatter ([#327](https://github.com/ryo-ebata/cc-audit/issues/327)) ([abbb36a](https://github.com/ryo-ebata/cc-audit/commit/abbb36a3789936455fbf7b0327c0d8bbba3df4c9))
+
 ## [3.17.24](https://github.com/ryo-ebata/cc-audit/compare/v3.17.23...v3.17.24) (2026-09-14)
 
 

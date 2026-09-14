@@ -71,13 +71,14 @@ fn check_npm_package(
         return Vec::new();
     }
 
-    // Normalize npm scopes and historical/canonical package names to the
-    // product names recorded in the DB (e.g. `@modelcontextprotocol/inspector`
-    // is published as the `inspector` package but tracked as mcp-inspector).
-    let package_name = package.rsplit('/').next().unwrap_or(package);
-    let product = match package_name {
-        "inspector" | "mcp-inspector" => "mcp-inspector",
-        "remote" | "mcp-remote" => "mcp-remote",
+    // Normalize only known canonical and historical package names. Stripping
+    // every npm scope would incorrectly treat unrelated packages such as
+    // `@untrusted/inspector` as the vulnerable MCP Inspector product.
+    let product = match package {
+        "mcp-inspector" | "@anthropic/mcp-inspector" | "@modelcontextprotocol/inspector" => {
+            "mcp-inspector"
+        }
+        "mcp-remote" | "@geelen/mcp-remote" => "mcp-remote",
         other => other,
     };
 
@@ -332,6 +333,26 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.id == "CVE-2025-49596"),
             "canonical @modelcontextprotocol/inspector 0.2.0 must be flagged"
+        );
+    }
+
+    #[test]
+    fn test_scan_does_not_normalize_unrelated_scoped_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+
+        fs::write(
+            &file_path,
+            r#"{"dependencies":{"@untrusted/inspector":"0.2.0"}}"#,
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.is_empty(),
+            "unrelated scoped packages must not inherit MCP CVEs"
         );
     }
 

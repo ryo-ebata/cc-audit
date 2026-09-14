@@ -44,6 +44,10 @@ pub fn require_config(
     project_root: Option<&Path>,
 ) -> Result<(Config, std::path::PathBuf), ExitCode> {
     let load_result = Config::try_load(project_root);
+    if let Some(error) = load_result.error {
+        eprintln!("Error: {error}");
+        return Err(ExitCode::from(2));
+    }
     if let Some(path) = load_result.path {
         Ok((load_result.config, path))
     } else {
@@ -118,6 +122,19 @@ mod tests {
         let result = HandlerResult::Error(2);
         let exit_code: ExitCode = result.into();
         assert_eq!(exit_code, ExitCode::from(2));
+    }
+
+    #[test]
+    fn test_require_config_rejects_malformed_config() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join(".cc-audit.yaml"),
+            "severity: {default: error\n",
+        )
+        .unwrap();
+
+        let result = require_config(Some(temp_dir.path()));
+        assert!(matches!(result, Err(code) if code == ExitCode::from(2)));
     }
 
     #[test]

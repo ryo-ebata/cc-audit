@@ -14,6 +14,8 @@ pub struct ConfigLoadResult {
     pub config: Config,
     /// The path to the configuration file, if found.
     pub path: Option<PathBuf>,
+    /// The error encountered while loading the discovered configuration file.
+    pub error: Option<ConfigError>,
 }
 
 /// Returns `true` if a YAML document carries no content, i.e. every line is
@@ -132,23 +134,35 @@ impl Config {
     /// Try to load configuration from the project directory or global config.
     /// Returns both the configuration and the path where it was found.
     pub fn try_load(project_root: Option<&Path>) -> ConfigLoadResult {
-        if let Some(path) = Self::find_config_file(project_root)
-            && let Ok(config) = Self::from_file(&path)
-        {
-            return ConfigLoadResult {
-                config,
-                path: Some(path),
+        if let Some(path) = Self::find_config_file(project_root) {
+            return match Self::from_file(&path) {
+                Ok(config) => ConfigLoadResult {
+                    config,
+                    path: Some(path),
+                    error: None,
+                },
+                Err(error) => ConfigLoadResult {
+                    config: Self::default(),
+                    path: Some(path),
+                    error: Some(error),
+                },
             };
         }
 
         ConfigLoadResult {
             config: Self::default(),
             path: None,
+            error: None,
         }
     }
 
     /// Load configuration from the project directory or global config.
     /// Returns default configuration if no file is found.
+    ///
+    /// A discovered but malformed or unreadable file is also replaced with
+    /// defaults for compatibility with this infallible API, but the error is
+    /// emitted so callers do not silently run with a different policy. Use
+    /// [`Config::try_load`] when the error must be handled programmatically.
     ///
     /// Search order:
     /// 1. `.cc-audit.yaml` in project root
@@ -157,7 +171,11 @@ impl Config {
     /// 4. `~/.config/cc-audit/config.yaml`
     /// 5. Default configuration
     pub fn load(project_root: Option<&Path>) -> Self {
-        Self::try_load(project_root).config
+        let result = Self::try_load(project_root);
+        if let Some(error) = &result.error {
+            tracing::error!(%error, "Configuration file was found but could not be loaded");
+        }
+        result.config
     }
 }
 
@@ -321,5 +339,40 @@ mod tests {
 
         let result = Config::from_file(&config_path);
         assert!(result.is_err(), "malformed YAML must still return an error");
+    }
+
+    fn assert_try_load_reports_error(filename: &str, content: Option<&str>) {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join(filename);
+        if let Some(content) = content {
+            fs::write(&config_path, content).unwrap();
+        } else {
+            fs::create_dir(&config_path).unwrap();
+        }
+
+        let result = Config::try_load(Some(temp_dir.path()));
+        assert_paths_eq(result.path.as_deref().unwrap(), &config_path);
+        assert!(result.error.is_some(), "load error should be preserved");
+        assert_eq!(normalized(&result.config), normalized(&Config::default()));
+    }
+
+    #[test]
+    fn test_try_load_reports_invalid_yaml() {
+        assert_try_load_reports_error(".cc-audit.yaml", Some("severity: {default: error\n"));
+    }
+
+    #[test]
+    fn test_try_load_reports_invalid_json() {
+        assert_try_load_reports_error(".cc-audit.json", Some("{\"severity\":\n"));
+    }
+
+    #[test]
+    fn test_try_load_reports_invalid_toml() {
+        assert_try_load_reports_error(".cc-audit.toml", Some("[severity\n"));
+    }
+
+    #[test]
+    fn test_try_load_reports_unreadable_config() {
+        assert_try_load_reports_error(".cc-audit.yaml", None);
     }
 }

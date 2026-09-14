@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.17](https://github.com/ryo-ebata/cc-audit/compare/v3.17.16...v3.17.17) (2026-09-14)
+
+
+### Bug Fixes
+
+* **rules:** cover chromium browser data paths ([#309](https://github.com/ryo-ebata/cc-audit/issues/309)) ([bb3a3d3](https://github.com/ryo-ebata/cc-audit/commit/bb3a3d34653c912f7c0a9dfd085dd2b71c66d513))
+* **rules:** detect decoded payload interpreter pipes ([#311](https://github.com/ryo-ebata/cc-audit/issues/311)) ([a365b3a](https://github.com/ryo-ebata/cc-audit/commit/a365b3a5776ee1fc7c858c5d3063487a3cd795b4))
+
 ## [3.17.16](https://github.com/ryo-ebata/cc-audit/compare/v3.17.15...v3.17.16) (2026-09-14)
 
 

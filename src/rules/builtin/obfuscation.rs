@@ -196,6 +196,14 @@ fn ob_005() -> Rule {
     }
 }
 
+const OB006_EXECUTION_TARGETS: &str =
+    r"(?:bash|sh|zsh|dash|python(?:3)?(?:\s+-m\s+\S+)?|node|ruby|perl|eval)";
+
+fn ob006_decode_pipe_pattern(decoder: &str) -> Regex {
+    Regex::new(&format!(r"{decoder}.*\|\s*{OB006_EXECUTION_TARGETS}"))
+        .expect("OB-006: invalid regex")
+}
+
 fn ob_006() -> Rule {
     Rule {
         id: "OB-006",
@@ -206,39 +214,34 @@ fn ob_006() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             // base32 decode and execute
-            Regex::new(r"base32\s+(-d|--decode).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
-            Regex::new(r"\|\s*base32\s+(-d|--decode)\s*\|\s*(bash|sh)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"base32\s+(-d|--decode)"),
+            Regex::new(&format!(
+                r"\|\s*base32\s+(-d|--decode)\s*\|\s*{OB006_EXECUTION_TARGETS}"
+            ))
+            .expect("OB-006: invalid regex"),
             // ROT13 (tr command)
-            Regex::new(r#"tr\s+['"]A-Za-z['"]\s+['"]N-ZA-Mn-za-m['"]\s*\|\s*(bash|sh)"#)
-                .expect("OB-006: invalid regex"),
+            Regex::new(&format!(
+                r#"tr\s+['"]A-Za-z['"]\s+['"]N-ZA-Mn-za-m['"]\s*\|\s*{OB006_EXECUTION_TARGETS}"#
+            ))
+            .expect("OB-006: invalid regex"),
             // gzip/gunzip pipe to execution
-            Regex::new(r"(gunzip|gzip\s+-d|zcat).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(gunzip|gzip\s+-d|zcat)"),
             // bzip2 pipe to execution
-            Regex::new(r"(bunzip2|bzip2\s+-d|bzcat).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(bunzip2|bzip2\s+-d|bzcat)"),
             // xz/unxz pipe to execution
-            Regex::new(r"(unxz|xz\s+-d|xzcat).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(unxz|xz\s+-d|xzcat)"),
             // zstd decompression pipe to execution (new compression format)
-            Regex::new(r"(zstd\s+-d|zstdcat|unzstd).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(zstd\s+-d|zstdcat|unzstd)"),
             // lz4 decompression pipe to execution
-            Regex::new(r"(lz4\s+-d|lz4cat|unlz4).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(lz4\s+-d|lz4cat|unlz4)"),
             // lzma/unlzma pipe to execution
-            Regex::new(r"(lzma\s+-d|lzcat|unlzma).*\|\s*(bash|sh|zsh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(lzma\s+-d|lzcat|unlzma)"),
             // openssl encoding
-            Regex::new(r"openssl\s+(enc|base64)\s+-d.*\|\s*(bash|sh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"openssl\s+(enc|base64)\s+-d"),
             // uudecode
-            Regex::new(r"uudecode.*\|\s*(bash|sh|eval)").expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"uudecode"),
             // base58/base85 (used in some encoding schemes)
-            Regex::new(r"(base58|base85)\s*decode.*\|\s*(bash|sh|eval)")
-                .expect("OB-006: invalid regex"),
+            ob006_decode_pipe_pattern(r"(base58|base85)\s*decode"),
             // Multi-stage: base64 + ROT13 combined
             Regex::new(r"base64\s+(-d|--decode).*tr\s+.*A-Za-z").expect("OB-006: invalid regex"),
             // Python zlib/gzip decompression + exec
@@ -466,6 +469,35 @@ mod tests {
         let content = include_str!("../../../tests/fixtures/rules/ob_006.txt");
         let findings = crate::rules::snapshot_test::scan_with_rule(&rule, content);
         crate::assert_rule_snapshot!("ob_006", findings);
+    }
+
+    #[test]
+    fn test_ob_006_detects_interpreter_execution_targets() {
+        let rule = ob_006();
+        let positive = [
+            "base32 -d payload | python3",
+            "base32 --decode payload | python -m http.server",
+            "zcat payload.gz | node",
+            "unxz payload.xz | dash",
+            "openssl base64 -d -in payload | perl",
+            "bunzip2 payload.bz2 | ruby",
+        ];
+        let negative = [
+            "base32 -d payload",
+            "zcat payload.gz > payload",
+            "# base32 -d payload | python3",
+        ];
+
+        for input in positive {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(matched && !excluded, "OB-006 should match: {input}");
+        }
+        for input in negative {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(!matched || excluded, "OB-006 should not match: {input}");
+        }
     }
 
     #[test]

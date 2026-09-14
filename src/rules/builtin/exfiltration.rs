@@ -374,19 +374,25 @@ fn ex_011() -> Rule {
         category: Category::Exfiltration,
         confidence: Confidence::Firm,
         patterns: vec![
-            // Chrome data paths
-            Regex::new(r"Chrome/User Data|\.config/google-chrome").expect("EX-011: invalid regex"),
-            // Firefox data paths
-            Regex::new(r"\.mozilla/firefox|places\.sqlite|logins\.json")
+            // Chromium-family profile roots across Linux, macOS, and Windows.
+            Regex::new(
+                r"(?i)(?:\.config[\\/](?:google-chrome|chromium|BraveSoftware[\\/]Brave-Browser|microsoft-edge)|Library[\\/]Application Support[\\/](?:Google[\\/]Chrome|Chromium|BraveSoftware[\\/]Brave-Browser)|(?:%?LOCALAPPDATA%?|AppData[\\/]Local)[\\/](?:(?:Google[\\/]Chrome|Microsoft[\\/]Edge|BraveSoftware[\\/]Brave-Browser)[\\/]User Data))",
+            )
+            .expect("EX-011: invalid regex"),
+            // Firefox profiles and sensitive databases.
+            Regex::new(r"(?i)\.mozilla[\\/]firefox|[\\/](?:places\.sqlite|logins\.json|key4\.db|cert9\.db)")
                 .expect("EX-011: invalid regex"),
-            // Safari data
-            Regex::new(r"Library/Safari/History\.db|Library/Cookies")
+            // Safari data paths.
+            Regex::new(r"(?i)Library[\\/]Safari[\\/](?:History\.db|Cookies)")
                 .expect("EX-011: invalid regex"),
-            // Generic browser data patterns
-            Regex::new(r"(Login Data|Cookies|History)\s*sqlite").expect("EX-011: invalid regex"),
+            // Sensitive Chromium stores. Require a path boundary so prose such
+            // as "browser history" does not trigger this Critical rule.
+            Regex::new(r"(?i)(?:^|[\\/])(?:Login Data|Cookies|Web Data|History)(?:$|[\\/]|\.sqlite(?:3)?$)")
+                .expect("EX-011: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|example|documentation").expect("EX-011: invalid regex"),
+            Regex::new(r"^\s*(?://|#|/\*)\s*(?:test|mock|example|documentation)\b")
+                .expect("EX-011: invalid regex"),
         ],
         message: "Browser data access detected. Browser history, cookies, or passwords may be stolen.",
         recommendation: "Remove browser data access unless it's a legitimate browser-related tool.",
@@ -1095,6 +1101,41 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
             assert_eq!(matched && !excluded, should_match, "EX-010: {input}");
+        }
+    }
+
+    #[test]
+    fn test_ex_011_browser_paths_across_platforms() {
+        let rule = ex_011();
+        let positive = [
+            "cp ~/.config/chromium/Default/Login Data /tmp/stolen",
+            "cp ~/.config/BraveSoftware/Brave-Browser/Default/Cookies /tmp/stolen",
+            "cp ~/.config/microsoft-edge/Default/Web Data /tmp/stolen",
+            "cp ~/Library/Application Support/Google/Chrome/Default/History /tmp/stolen",
+            "cp ~/Library/Application Support/Chromium/Default/Login Data /tmp/stolen",
+            "cp ~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies /tmp/stolen",
+            r"copy %LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Login Data C:\tmp\stolen",
+            r"copy %LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Cookies C:\tmp\stolen",
+            r"copy %LOCALAPPDATA%\Google\Chrome\User Data\Default\History C:\tmp\stolen",
+            "cp ~/.mozilla/firefox/abc123/key4.db /tmp/stolen",
+            "cp ~/.config/chromium/Default/Cookies /tmp/stolen # documentation",
+        ];
+        let negative = [
+            "Browser history is documented in the user guide",
+            "The example mentions Chrome cookies but does not access them",
+            "echo Login Data",
+            "// documentation: cp ~/.config/chromium/Default/Cookies /tmp/stolen",
+        ];
+
+        for input in positive {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(matched && !excluded, "EX-011 should match: {input}");
+        }
+        for input in negative {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(!matched || excluded, "EX-011 should not match: {input}");
         }
     }
 }

@@ -142,18 +142,14 @@ impl CveDatabase {
             .collect()
     }
 
-    /// Check if a version string matches a version requirement
-    /// Supports: "*" (all versions), "< X.Y.Z", "<= X.Y.Z", "= X.Y.Z",
-    /// ">= X.Y.Z", "> X.Y.Z"
+    /// Check if a version string matches a SemVer version requirement.
     fn version_matches(requirement: &str, version: &str) -> bool {
         let requirement = requirement.trim();
-
         if requirement == "*" {
             return true;
         }
 
-        // Parse the operator and version from the requirement
-        let (op, req_version) = if let Some(rest) = requirement.strip_prefix("<=") {
+        let (operator, required_version) = if let Some(rest) = requirement.strip_prefix("<=") {
             ("<=", rest.trim())
         } else if let Some(rest) = requirement.strip_prefix(">=") {
             (">=", rest.trim())
@@ -164,49 +160,23 @@ impl CveDatabase {
         } else if let Some(rest) = requirement.strip_prefix('=') {
             ("=", rest.trim())
         } else {
-            ("=", requirement) // Default to exact match
+            ("=", requirement)
         };
 
-        // Parse versions into comparable parts
-        let version_parts = Self::parse_version(version);
-        let req_parts = Self::parse_version(req_version);
+        let Ok(required_version) = semver::Version::parse(required_version) else {
+            return false;
+        };
+        let Ok(version) = semver::Version::parse(version.trim()) else {
+            return false;
+        };
 
-        match op {
-            "<" => Self::compare_versions(&version_parts, &req_parts) < 0,
-            "<=" => Self::compare_versions(&version_parts, &req_parts) <= 0,
-            ">" => Self::compare_versions(&version_parts, &req_parts) > 0,
-            ">=" => Self::compare_versions(&version_parts, &req_parts) >= 0,
-            _ => Self::compare_versions(&version_parts, &req_parts) == 0,
+        match operator {
+            "<" => version < required_version,
+            "<=" => version <= required_version,
+            ">" => version > required_version,
+            ">=" => version >= required_version,
+            _ => version == required_version,
         }
-    }
-
-    /// Parse version string into comparable parts
-    fn parse_version(version: &str) -> Vec<u32> {
-        version
-            .split(['.', '-', '_'])
-            .filter_map(|s| {
-                // Extract leading numeric part
-                let num_str: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-                num_str.parse().ok()
-            })
-            .collect()
-    }
-
-    /// Compare two parsed versions
-    /// Returns: -1 if a < b, 0 if a == b, 1 if a > b
-    fn compare_versions(a: &[u32], b: &[u32]) -> i32 {
-        let max_len = a.len().max(b.len());
-        for i in 0..max_len {
-            let av = a.get(i).copied().unwrap_or(0);
-            let bv = b.get(i).copied().unwrap_or(0);
-            if av < bv {
-                return -1;
-            }
-            if av > bv {
-                return 1;
-            }
-        }
-        0
     }
 
     /// Check a product/version against all CVEs, ignoring vendor.
@@ -339,6 +309,8 @@ mod tests {
         assert!(!CveDatabase::version_matches("< 1.5.0", "1.5.0"));
         assert!(!CveDatabase::version_matches("< 1.5.0", "1.5.1"));
         assert!(!CveDatabase::version_matches("< 1.5.0", "2.0.0"));
+        assert!(CveDatabase::version_matches("< 1.5.0", "1.5.0-beta.1"));
+        assert!(CveDatabase::version_matches("< 1.5.0", "1.5.0-rc.1"));
     }
 
     #[test]
@@ -456,9 +428,11 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_version_with_prerelease() {
-        let parts = CveDatabase::parse_version("1.5.0-beta.1");
-        assert_eq!(parts, vec![1, 5, 0, 1]);
+    fn test_version_comparison_prerelease_ordering() {
+        assert!(CveDatabase::version_matches("< 0.3.0", "0.3.0-rc.1"));
+        assert!(CveDatabase::version_matches("< 0.3.0", "0.3.0-beta.1"));
+        assert!(!CveDatabase::version_matches("< 0.3.0", "0.3.0"));
+        assert!(CveDatabase::version_matches(">= 0.3.0-rc.1", "0.3.0"));
     }
 
     #[test]

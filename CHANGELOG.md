@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.20.0](https://github.com/ryo-ebata/cc-audit/compare/v3.19.0...v3.20.0) (2026-09-14)
+
+
+### Features
+
+* **rules:** add German prompt injection detection ([#343](https://github.com/ryo-ebata/cc-audit/issues/343)) ([6e9ff7e](https://github.com/ryo-ebata/cc-audit/commit/6e9ff7e34a5c12246db773219c48b2ded3f74f96))
+
 ## [3.19.0](https://github.com/ryo-ebata/cc-audit/compare/v3.18.0...v3.19.0) (2026-09-14)
 
 

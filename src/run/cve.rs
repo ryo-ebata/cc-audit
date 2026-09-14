@@ -56,16 +56,20 @@ pub fn scan_path_with_cve_db(
 /// The shipped CVE database records both flagship MCP packages under the
 /// `modelcontextprotocol` vendor (issue #149); historical vendor strings
 /// (`geelen`/`anthropic`) never matched. Centralizing the mapping means every
-/// extraction path (package.json ranges, lockfile `packages`, lockfile v1
-/// object deps, mcpServers) shares one correct implementation.
+/// extraction path (package.json exact versions, lockfile `packages`, lockfile
+/// v1 object deps, mcpServers) shares one correct implementation.
 fn check_npm_package(
     db: &CveDatabase,
     package: &str,
     version: &str,
     path_str: &str,
 ) -> Vec<Finding> {
-    // Extract version number (remove ^, ~, etc.).
-    let clean_version = version.trim_start_matches(|c: char| !c.is_ascii_digit());
+    // Manifest dependency values are often ranges (`^`, `~`, `>=`) or tags
+    // (`latest`). They do not identify the installed version, so never coerce
+    // them to their lower bound (or to 0.0.0) for a CVE decision.
+    if semver::Version::parse(version).is_err() {
+        return Vec::new();
+    }
 
     // Normalize scoped aliases to the canonical product name recorded in the DB,
     // then match by product name across any vendor (issue #149).
@@ -75,7 +79,7 @@ fn check_npm_package(
         other => other,
     };
 
-    db.create_findings_by_product(product, clean_version, path_str, 1)
+    db.create_findings_by_product(product, version, path_str, 1)
 }
 
 /// Extract a version string from a dependency value that may be either a bare
@@ -324,6 +328,24 @@ mod tests {
             findings.iter().any(|f| f.id == "CVE-2025-6514"),
             "bare mcp-remote 0.0.1 must be flagged"
         );
+    }
+
+    #[test]
+    fn test_scan_package_json_ranges_do_not_become_lower_bounds() {
+        for version in ["^0.0.1", "~0.0.1", ">=0.0.1", "latest", "*"] {
+            let temp_dir = TempDir::new().unwrap();
+            let file_path = temp_dir.path().join("package.json");
+            let content = format!(r#"{{"dependencies": {{"mcp-remote": "{version}"}}}}"#);
+            fs::write(&file_path, content).unwrap();
+
+            let db = CveDatabase::default();
+            let filter = create_default_filter(temp_dir.path());
+            let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+            assert!(
+                findings.is_empty(),
+                "manifest range {version} must not be treated as a resolved version"
+            );
+        }
     }
 
     #[test]

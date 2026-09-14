@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.30](https://github.com/ryo-ebata/cc-audit/compare/v3.17.29...v3.17.30) (2026-09-14)
+
+
+### Bug Fixes
+
+* **skill:** scan extended script file types ([#337](https://github.com/ryo-ebata/cc-audit/issues/337)) ([d5bd6de](https://github.com/ryo-ebata/cc-audit/commit/d5bd6dea57c016ae7b15ff0068a0d095d0a63d02))
+
 ## [3.17.29](https://github.com/ryo-ebata/cc-audit/compare/v3.17.28...v3.17.29) (2026-09-14)
 
 

@@ -352,7 +352,12 @@ fn ex_010() -> Rule {
             // Windows hook patterns
             Regex::new(r"SetWindowsHookEx|GetAsyncKeyState").expect("EX-010: invalid regex"),
         ],
-        exclusions: vec![Regex::new(r"\b(?:test|mock|example)\b").expect("EX-010: invalid regex")],
+        // Only exclude comment-only fixture lines. A trailing marker on an
+        // executable keylogger line must never suppress this Critical rule.
+        exclusions: vec![
+            Regex::new(r"^\s*(?://|#|/\*)\s*(?:test|mock|example)\b")
+                .expect("EX-010: invalid regex"),
+        ],
         message: "Keylogger pattern detected. Keyboard input may be captured and exfiltrated.",
         recommendation: "Remove keyboard capture functionality unless it's a legitimate feature.",
         fix_hint: Some("Remove keyboard hooking code"),
@@ -1080,8 +1085,10 @@ mod tests {
         let test_cases = [
             ("GetAsyncKeyState(VK_LBUTTON); // latest input", true),
             ("GetAsyncKeyState(VK_LBUTTON); // contest fixture", true),
-            ("GetAsyncKeyState(VK_LBUTTON); // test fixture", false),
-            ("GetAsyncKeyState(VK_LBUTTON); // example fixture", false),
+            ("GetAsyncKeyState(VK_LBUTTON); // test fixture", true),
+            ("GetAsyncKeyState(VK_LBUTTON); // example fixture", true),
+            ("// test fixture: GetAsyncKeyState(VK_LBUTTON)", false),
+            ("# example fixture: GetAsyncKeyState(VK_LBUTTON)", false),
         ];
 
         for (input, should_match) in test_cases {

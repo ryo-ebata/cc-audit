@@ -71,11 +71,13 @@ fn check_npm_package(
         return Vec::new();
     }
 
-    // Normalize scoped aliases to the canonical product name recorded in the DB,
-    // then match by product name across any vendor (issue #149).
-    let product = match package {
-        "@anthropic/mcp-inspector" => "mcp-inspector",
-        "@geelen/mcp-remote" => "mcp-remote",
+    // Normalize npm scopes and historical/canonical package names to the
+    // product names recorded in the DB (e.g. `@modelcontextprotocol/inspector`
+    // is published as the `inspector` package but tracked as mcp-inspector).
+    let package_name = package.rsplit('/').next().unwrap_or(package);
+    let product = match package_name {
+        "inspector" | "mcp-inspector" => "mcp-inspector",
+        "remote" | "mcp-remote" => "mcp-remote",
         other => other,
     };
 
@@ -310,6 +312,26 @@ mod tests {
         assert!(
             findings.iter().any(|f| f.id == "CVE-2025-49596"),
             "mcp-inspector 0.2.0 must be flagged as CVE-2025-49596"
+        );
+    }
+
+    #[test]
+    fn test_scan_with_canonical_mcp_inspector_package() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("package.json");
+
+        fs::write(
+            &file_path,
+            r#"{"dependencies":{"@modelcontextprotocol/inspector":"0.2.0"}}"#,
+        )
+        .unwrap();
+
+        let db = CveDatabase::default();
+        let filter = create_default_filter(temp_dir.path());
+        let findings = scan_path_with_cve_db(&file_path, &db, &filter);
+        assert!(
+            findings.iter().any(|f| f.id == "CVE-2025-49596"),
+            "canonical @modelcontextprotocol/inspector 0.2.0 must be flagged"
         );
     }
 

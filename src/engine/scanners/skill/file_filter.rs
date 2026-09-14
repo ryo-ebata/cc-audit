@@ -2,7 +2,8 @@ use std::path::Path;
 
 /// File extensions that should be scanned in skill directories
 const SCANNABLE_EXTENSIONS: &[&str] = &[
-    "md", "sh", "bash", "zsh", "py", "rb", "js", "ts", "json", "yaml", "yml", "toml",
+    "md", "sh", "bash", "zsh", "py", "rb", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "yaml",
+    "yml", "toml", "ps1", "bat", "cmd", "pl", "php", "lua", "fish",
 ];
 
 /// Configuration file names that should be excluded from scanning
@@ -71,6 +72,18 @@ mod tests {
         assert!(SkillFileFilter::should_scan(Path::new("test.rb")));
         assert!(SkillFileFilter::should_scan(Path::new("test.js")));
         assert!(SkillFileFilter::should_scan(Path::new("test.ts")));
+    }
+
+    #[test]
+    fn test_extended_script_files() {
+        for extension in [
+            "mjs", "cjs", "jsx", "tsx", "ps1", "bat", "cmd", "pl", "php", "lua", "fish",
+        ] {
+            assert!(
+                SkillFileFilter::should_scan(Path::new(&format!("test.{extension}"))),
+                "{extension} files must be scannable"
+            );
+        }
     }
 
     #[test]

@@ -376,7 +376,7 @@ fn ex_011() -> Rule {
         patterns: vec![
             // Chromium-family profile roots across Linux, macOS, and Windows.
             Regex::new(
-                r"(?i)(?:\.config[\\/](?:google-chrome|chromium|BraveSoftware[\\/]Brave-Browser|microsoft-edge)|Library[\\/]Application Support[\\/](?:Google[\\/]Chrome|Chromium|BraveSoftware[\\/]Brave-Browser)|(?:%?LOCALAPPDATA%?|AppData[\\/]Local)[\\/](?:Microsoft[\\/]Edge|BraveSoftware[\\/]Brave-Browser)[\\/]User Data)",
+                r"(?i)(?:\.config[\\/](?:google-chrome|chromium|BraveSoftware[\\/]Brave-Browser|microsoft-edge)|Library[\\/]Application Support[\\/](?:Google[\\/]Chrome|Chromium|BraveSoftware[\\/]Brave-Browser)|(?:%?LOCALAPPDATA%?|AppData[\\/]Local)[\\/](?:(?:Google[\\/]Chrome|Microsoft[\\/]Edge|BraveSoftware[\\/]Brave-Browser)[\\/]User Data))",
             )
             .expect("EX-011: invalid regex"),
             // Firefox profiles and sensitive databases.
@@ -391,7 +391,8 @@ fn ex_011() -> Rule {
                 .expect("EX-011: invalid regex"),
         ],
         exclusions: vec![
-            Regex::new(r"test|mock|example|documentation").expect("EX-011: invalid regex"),
+            Regex::new(r"^\s*(?://|#|/\*)\s*(?:test|mock|example|documentation)\b")
+                .expect("EX-011: invalid regex"),
         ],
         message: "Browser data access detected. Browser history, cookies, or passwords may be stolen.",
         recommendation: "Remove browser data access unless it's a legitimate browser-related tool.",
@@ -1115,12 +1116,15 @@ mod tests {
             "cp ~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Cookies /tmp/stolen",
             r"copy %LOCALAPPDATA%\Microsoft\Edge\User Data\Default\Login Data C:\tmp\stolen",
             r"copy %LOCALAPPDATA%\BraveSoftware\Brave-Browser\User Data\Default\Cookies C:\tmp\stolen",
+            r"copy %LOCALAPPDATA%\Google\Chrome\User Data\Default\History C:\tmp\stolen",
             "cp ~/.mozilla/firefox/abc123/key4.db /tmp/stolen",
+            "cp ~/.config/chromium/Default/Cookies /tmp/stolen # documentation",
         ];
         let negative = [
             "Browser history is documented in the user guide",
             "The example mentions Chrome cookies but does not access them",
             "echo Login Data",
+            "// documentation: cp ~/.config/chromium/Default/Cookies /tmp/stolen",
         ];
 
         for input in positive {

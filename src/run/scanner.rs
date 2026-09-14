@@ -162,12 +162,11 @@ fn run_scan_with_check_args_internal(
                     path_scanned = true;
                 }
                 Err(e) => {
-                    // In an `Auto` fan-out an inapplicable scanner may fail to
-                    // parse a path in another scanner's format (e.g. the MCP
-                    // JSON parser handed a Markdown file). Skip just that scanner
-                    // and let the others cover the path instead of aborting the
-                    // whole scan; an explicit `--type` still surfaces the error.
-                    if fan_out {
+                    // A file can be passed to every scanner in Auto mode, so
+                    // format-specific errors from an inapplicable scanner may
+                    // be skipped. Directory scanners select applicable files;
+                    // their I/O errors must fail closed.
+                    if fan_out && path.is_file() {
                         if effective.verbose {
                             eprintln!("Skipping {scan_type:?} scanner for {}: {e}", path.display());
                         }

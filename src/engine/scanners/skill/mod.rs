@@ -193,22 +193,22 @@ impl Scanner for SkillScanner {
         // Parallel scan of collected files
         let parallel_findings: Vec<Finding> = files_to_scan
             .par_iter()
-            .flat_map(|path| {
+            .map(|path| {
                 // Always report progress for every file (even if not scannable)
                 // to match the file count from count_files_to_scan()
                 let findings = if self.should_scan_file(path) {
                     debug!(path = %path.display(), "Scanning file");
-                    self.scan_file(path).unwrap_or_else(|e| {
-                        debug!(path = %path.display(), error = %e, "Failed to scan file");
-                        vec![]
-                    })
+                    self.scan_file(path)
                 } else {
                     debug!(path = %path.display(), "Skipping non-scannable file");
-                    vec![]
+                    Ok(vec![])
                 };
                 self.config.report_progress(); // Thread-safe progress reporting
                 findings
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .collect();
 
         findings.extend(parallel_findings);

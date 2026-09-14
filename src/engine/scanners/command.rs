@@ -45,15 +45,15 @@ impl Scanner for CommandScanner {
         // Parallel scan of collected files
         let findings: Vec<Finding> = files
             .par_iter()
-            .flat_map(|path| {
+            .map(|path| {
                 debug!(path = %path.display(), "Scanning command file");
                 let result = self.scan_file(path);
                 self.config.report_progress(); // Thread-safe progress reporting
-                result.unwrap_or_else(|e| {
-                    debug!(path = %path.display(), error = %e, "Failed to scan file");
-                    vec![]
-                })
+                result
             })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
             .collect();
 
         Ok(findings)
@@ -189,6 +189,24 @@ mod tests {
 
         assert!(findings.iter().any(|f| f.id == "PE-001"));
         assert!(findings.iter().any(|f| f.id == "PE-005"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_scan_directory_propagates_read_errors() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = TempDir::new().unwrap();
+        let path = create_command_file(&dir, "unreadable.md", "safe content");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).unwrap();
+
+        let result = CommandScanner::new().scan_path(dir.path());
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(
+            result.is_err(),
+            "unreadable files must not be reported clean"
+        );
     }
 
     #[test]

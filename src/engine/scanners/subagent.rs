@@ -1,6 +1,7 @@
 use super::walker::{DirectoryWalker, WalkConfig};
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
+use crate::parser::FrontmatterParser;
 use crate::rules::Finding;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
@@ -21,10 +22,7 @@ impl SubagentScanner {
         findings.extend(self.config.check_content(content, file_path));
 
         // Check for YAML frontmatter in agent definitions
-        if let Some(stripped) = content.strip_prefix("---")
-            && let Some(end_idx) = stripped.find("---")
-        {
-            let frontmatter = &stripped[..end_idx];
+        if let Some(frontmatter) = FrontmatterParser::extract(content) {
             findings.extend(self.scan_frontmatter(frontmatter, file_path));
         }
 

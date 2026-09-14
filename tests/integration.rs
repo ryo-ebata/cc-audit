@@ -26,6 +26,25 @@ fn create_test_config(dir: &Path) {
     fs::write(dir.join(".cc-audit.yaml"), config_content).unwrap();
 }
 
+mod runtime_executor {
+    use super::fixtures_path;
+    use cc_audit::{Config, ScanContext, ScanExecutor};
+
+    #[test]
+    fn public_executor_reports_findings_for_malicious_fixture() {
+        let fixture = fixtures_path().join("rules/sc_001.txt");
+        let context = ScanContext::new(vec![fixture], Config::default());
+        let mut executor = ScanExecutor::new(context);
+
+        let result = executor.run().expect("public executor scan should succeed");
+
+        assert!(!result.findings.is_empty());
+        assert!(!result.summary.passed);
+        assert!(result.risk_score.is_some());
+        assert!(result.elapsed_ms > 0);
+    }
+}
+
 mod malicious_skills {
     use super::*;
 

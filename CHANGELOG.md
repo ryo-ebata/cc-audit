@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.17.21](https://github.com/ryo-ebata/cc-audit/compare/v3.17.20...v3.17.21) (2026-09-14)
+
+
+### Bug Fixes
+
+* **ci:** derive CVE merge checks from ruleset ([#320](https://github.com/ryo-ebata/cc-audit/issues/320)) ([5025bd9](https://github.com/ryo-ebata/cc-audit/commit/5025bd9ed78f894ad13ac12c7d985b5555da2e79))
+* **rules:** detect direct wget execution pipelines ([#318](https://github.com/ryo-ebata/cc-audit/issues/318)) ([82c93bd](https://github.com/ryo-ebata/cc-audit/commit/82c93bda6b677eef9f750aa0f77de893d2649dd2))
+
 ## [3.17.20](https://github.com/ryo-ebata/cc-audit/compare/v3.17.19...v3.17.20) (2026-09-14)
 
 

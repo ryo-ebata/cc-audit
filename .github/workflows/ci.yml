@@ -29,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: bash .github/scripts/test-resolve-release-tag.sh
+      - run: bash .github/scripts/test-homebrew-workflow.sh
 
   changes:
     name: Detect Changes

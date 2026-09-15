@@ -712,7 +712,6 @@ mod tests {
             "---\nname: test\ndescription: Test skill\n---\n# Test"
         )
         .unwrap();
-
         let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
         let result = run_scan_with_check_args(&args);
         assert!(result.is_some());
@@ -1545,6 +1544,12 @@ mod tests {
         )
         .unwrap();
 
+        let path_matches = |actual: &str, expected: &Path| {
+            // Normalize only this assertion so platform-specific separators
+            // do not hide whether the expected file was actually detected.
+            actual.replace('\\', "/") == expected.display().to_string().replace('\\', "/")
+        };
+
         let profile_args = CheckArgs {
             paths: vec![temp_dir.path().to_path_buf()],
             scan_type: ScanType::Skill,
@@ -1577,12 +1582,22 @@ mod tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.location.file == top_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
         assert!(
             findings
                 .iter()
-                .any(|f| f.location.file == deep_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
 
         let cli_no_recursive = CheckArgs {
@@ -1608,12 +1623,22 @@ mod tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.location.file == top_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
         assert!(
             !findings
                 .iter()
-                .any(|f| f.location.file == deep_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
 
         let non_recursive_args = CheckArgs {
@@ -1646,12 +1671,22 @@ mod tests {
         assert!(
             findings
                 .iter()
-                .any(|f| f.location.file == top_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
         assert!(
             !findings
                 .iter()
-                .any(|f| f.location.file == deep_level.display().to_string())
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
     }
 }

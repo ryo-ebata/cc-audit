@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.6](https://github.com/ryo-ebata/cc-audit/compare/v3.22.5...v3.22.6) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ci:** stop retrying crates.io quota errors ([#392](https://github.com/ryo-ebata/cc-audit/issues/392)) ([a29bf91](https://github.com/ryo-ebata/cc-audit/commit/a29bf91470636cbf8d7ef91e6dc1a4c0f00ec783))
+* **rules:** close multilingual injection review gaps ([#390](https://github.com/ryo-ebata/cc-audit/issues/390)) ([9805b4b](https://github.com/ryo-ebata/cc-audit/commit/9805b4b71f8ffd2bd32d339bd06dfb0ff5231be9))
+
 ## [3.22.5](https://github.com/ryo-ebata/cc-audit/compare/v3.22.4...v3.22.5) (2026-09-15)
 
 

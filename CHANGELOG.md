@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.5](https://github.com/ryo-ebata/cc-audit/compare/v3.22.4...v3.22.5) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ci:** checkout source before homebrew release lookup ([#387](https://github.com/ryo-ebata/cc-audit/issues/387)) ([5a7fbe8](https://github.com/ryo-ebata/cc-audit/commit/5a7fbe8e1c8ad1ce9d056070ca9d652639200866))
+* **cve:** update CVE database (v3.22.4) ([#380](https://github.com/ryo-ebata/cc-audit/issues/380)) ([389edfc](https://github.com/ryo-ebata/cc-audit/commit/389edfc8d27afc8f145a730860bac24817e72b29))
+
 ## [3.22.4](https://github.com/ryo-ebata/cc-audit/compare/v3.22.3...v3.22.4) (2026-09-15)
 
 

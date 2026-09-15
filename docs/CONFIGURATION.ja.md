@@ -83,7 +83,8 @@ profile:
   load: null
   save: null
 # 選択したプロファイルのrecursiveが設定ファイルの値を置き換える。
-# CLIの--no-recursive指定が最優先となる。
+# CLIの--no-recursive指定が最優先となる。deep_scanなどの有効化フラグは、
+# CLI・設定ファイル・選択したプロファイルのいずれかがtrueなら有効になる。
 
 # ウォッチモード設定
 watch:

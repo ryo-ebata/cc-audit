@@ -233,6 +233,7 @@ impl Profile {
         config.skip_comments = config.skip_comments || self.skip_comments;
         config.fix_hint = config.fix_hint || self.fix_hint;
         config.no_malware_scan = config.no_malware_scan || self.no_malware_scan;
+        config.deep_scan = config.deep_scan || self.deep_scan;
 
         if !self.min_confidence.is_empty() && config.min_confidence.is_none() {
             config.min_confidence = Some(self.min_confidence.clone());
@@ -450,6 +451,42 @@ mod tests {
         profile.apply_to_config(&mut config);
 
         assert!(config.no_malware_scan);
+    }
+
+    #[test]
+    fn test_apply_to_config_deep_scan_preserves_enablement() {
+        let mut profile = Profile::default_profile();
+        let mut config = ScanConfig::default();
+
+        profile.apply_to_config(&mut config);
+        assert!(!config.deep_scan);
+
+        profile.deep_scan = true;
+        profile.apply_to_config(&mut config);
+        assert!(config.deep_scan);
+
+        profile.deep_scan = false;
+        config.deep_scan = true;
+        profile.apply_to_config(&mut config);
+        assert!(config.deep_scan);
+    }
+
+    #[test]
+    fn test_saved_deep_scan_profile_applies_after_reload() {
+        use crate::CheckArgs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let args = CheckArgs {
+            deep_scan: true,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("saved_deep_scan", &args, false);
+        profile.save_in_dir(temp_dir.path()).unwrap();
+
+        let loaded = Profile::load_in_dir("saved_deep_scan", temp_dir.path()).unwrap();
+        let mut config = ScanConfig::default();
+        loaded.apply_to_config(&mut config);
+        assert!(config.deep_scan);
     }
 
     #[test]

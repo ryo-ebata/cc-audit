@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.21.1](https://github.com/ryo-ebata/cc-audit/compare/v3.21.0...v3.21.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ignore:** preserve patterns when adding filters ([18bdaab](https://github.com/ryo-ebata/cc-audit/commit/18bdaab2ed3e472a212d99dfc24ae287b382b835))
+* **ignore:** preserve patterns when adding filters ([5c1970d](https://github.com/ryo-ebata/cc-audit/commit/5c1970d67e6f6b3570178a0748fa5571ada909d8))
+
 ## [3.21.0](https://github.com/ryo-ebata/cc-audit/compare/v3.20.0...v3.21.0) (2026-09-14)
 
 

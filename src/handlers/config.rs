@@ -47,10 +47,23 @@ pub fn handle_init_config(path: &Path) -> ExitCode {
 
 /// Handle --save-profile command.
 pub fn handle_save_profile(args: &CheckArgs, profile_name: &str, verbose: bool) -> ExitCode {
+    handle_save_profile_in_dir(args, profile_name, verbose, None)
+}
+
+pub(crate) fn handle_save_profile_in_dir(
+    args: &CheckArgs,
+    profile_name: &str,
+    verbose: bool,
+    profiles_dir: Option<&Path>,
+) -> ExitCode {
     // Create profile from current check args
     let profile = profile_from_check_args(profile_name, args, verbose);
 
-    match profile.save() {
+    let result = match profiles_dir {
+        Some(dir) => profile.save_in_dir(dir),
+        None => profile.save(),
+    };
+    match result {
         Ok(path) => {
             println!("Profile '{}' saved to {}", profile_name, path.display());
             println!("\nUse --profile {} to load these settings.", profile_name);

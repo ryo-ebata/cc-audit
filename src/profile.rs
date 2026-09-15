@@ -1,7 +1,7 @@
 use crate::error::{AuditError, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A named scan profile containing preset configurations
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,13 +124,17 @@ impl Profile {
 
     /// Load a profile from the profiles directory
     pub fn load(name: &str) -> Result<Self> {
+        Self::load_in_dir(name, &Self::get_profiles_dir()?)
+    }
+
+    pub(crate) fn load_in_dir(name: &str, profiles_dir: &Path) -> Result<Self> {
         // First try built-in profiles
         if let Some(profile) = Self::builtin(name) {
             return Ok(profile);
         }
 
         // Then try user profiles
-        let profile_path = Self::get_profile_path(name)?;
+        let profile_path = profiles_dir.join(format!("{}.yaml", name));
 
         if !profile_path.exists() {
             return Err(AuditError::FileNotFound(format!(
@@ -153,7 +157,11 @@ impl Profile {
     /// Save a profile to the profiles directory
     pub fn save(&self) -> Result<PathBuf> {
         let profiles_dir = Self::get_profiles_dir()?;
-        fs::create_dir_all(&profiles_dir).map_err(|e| AuditError::ReadError {
+        self.save_in_dir(&profiles_dir)
+    }
+
+    pub(crate) fn save_in_dir(&self, profiles_dir: &Path) -> Result<PathBuf> {
+        fs::create_dir_all(profiles_dir).map_err(|e| AuditError::ReadError {
             path: profiles_dir.display().to_string(),
             source: e,
         })?;
@@ -175,6 +183,10 @@ impl Profile {
 
     /// List all available profiles (built-in and user)
     pub fn list_all() -> Vec<String> {
+        Self::list_all_in_dir(&Self::get_profiles_dir().unwrap_or_default())
+    }
+
+    pub(crate) fn list_all_in_dir(profiles_dir: &Path) -> Vec<String> {
         let mut profiles = vec![
             "default".to_string(),
             "strict".to_string(),
@@ -183,9 +195,7 @@ impl Profile {
         ];
 
         // Add user profiles
-        if let Ok(dir) = Self::get_profiles_dir()
-            && let Ok(entries) = fs::read_dir(dir)
-        {
+        if let Ok(entries) = fs::read_dir(profiles_dir) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.path().file_stem()
                     && let Some(name_str) = name.to_str()
@@ -205,11 +215,6 @@ impl Profile {
         })?;
 
         Ok(home.join(".config").join("cc-audit").join("profiles"))
-    }
-
-    fn get_profile_path(name: &str) -> Result<PathBuf> {
-        let profiles_dir = Self::get_profiles_dir()?;
-        Ok(profiles_dir.join(format!("{}.yaml", name)))
     }
 
     /// Apply profile settings to effective config
@@ -273,6 +278,7 @@ pub fn profile_from_check_args(name: &str, args: &crate::CheckArgs, verbose: boo
 mod tests {
     use super::*;
     use crate::config::ScanConfig;
+    use tempfile::TempDir;
 
     #[test]
     fn test_builtin_profiles() {
@@ -448,9 +454,9 @@ mod tests {
 
     #[test]
     fn test_get_profile_path() {
-        let result = Profile::get_profile_path("test_profile");
-        assert!(result.is_ok());
-        let path = result.unwrap();
+        let path = Profile::get_profiles_dir()
+            .unwrap()
+            .join("test_profile.yaml");
         assert!(path.ends_with("test_profile.yaml"));
     }
 
@@ -522,8 +528,7 @@ mod tests {
 
     #[test]
     fn test_profile_save_and_load() {
-        // This test creates a temp profile and verifies it can be saved and loaded
-        // Note: This writes to the user's config directory
+        let temp_dir = TempDir::new().unwrap();
         let profile = Profile {
             name: "test_save_load_unique_12345".to_string(),
             description: "Test profile for save/load".to_string(),
@@ -542,13 +547,13 @@ mod tests {
         };
 
         // Save the profile
-        let save_result = profile.save();
+        let save_result = profile.save_in_dir(temp_dir.path());
         assert!(save_result.is_ok());
         let saved_path = save_result.unwrap();
         assert!(saved_path.exists());
 
         // Load the profile back
-        let loaded = Profile::load("test_save_load_unique_12345");
+        let loaded = Profile::load_in_dir("test_save_load_unique_12345", temp_dir.path());
         assert!(loaded.is_ok());
         let loaded_profile = loaded.unwrap();
         assert_eq!(loaded_profile.name, "test_save_load_unique_12345");
@@ -556,8 +561,7 @@ mod tests {
         assert!(loaded_profile.deep_scan);
         assert_eq!(loaded_profile.format, Some("json".to_string()));
 
-        // Clean up
-        let _ = fs::remove_file(saved_path);
+        assert!(saved_path.starts_with(temp_dir.path()));
     }
 
     #[test]
@@ -659,7 +663,7 @@ mod tests {
 
     #[test]
     fn test_list_all_includes_user_profiles() {
-        // Save a user profile
+        let temp_dir = TempDir::new().unwrap();
         let profile = Profile {
             name: "test_user_profile_list_all".to_string(),
             description: "Test user profile".to_string(),
@@ -677,21 +681,20 @@ mod tests {
             disabled_rules: vec![],
         };
 
-        let save_result = profile.save();
+        let save_result = profile.save_in_dir(temp_dir.path());
         assert!(save_result.is_ok());
         let saved_path = save_result.unwrap();
 
         // list_all should include the user profile
-        let profiles = Profile::list_all();
+        let profiles = Profile::list_all_in_dir(temp_dir.path());
         assert!(profiles.contains(&"test_user_profile_list_all".to_string()));
 
-        // Clean up
-        let _ = fs::remove_file(saved_path);
+        assert!(saved_path.starts_with(temp_dir.path()));
     }
 
     #[test]
     fn test_load_user_profile_from_file() {
-        // Save a user profile
+        let temp_dir = TempDir::new().unwrap();
         let profile = Profile {
             name: "test_load_user_profile".to_string(),
             description: "Test for loading".to_string(),
@@ -709,12 +712,12 @@ mod tests {
             disabled_rules: vec!["PE-001".to_string()],
         };
 
-        let save_result = profile.save();
+        let save_result = profile.save_in_dir(temp_dir.path());
         assert!(save_result.is_ok());
         let saved_path = save_result.unwrap();
 
         // Load the profile back
-        let loaded = Profile::load("test_load_user_profile");
+        let loaded = Profile::load_in_dir("test_load_user_profile", temp_dir.path());
         assert!(loaded.is_ok());
         let loaded_profile = loaded.unwrap();
 
@@ -732,8 +735,35 @@ mod tests {
         assert_eq!(loaded_profile.scan_type, Some("docker".to_string()));
         assert_eq!(loaded_profile.disabled_rules, vec!["PE-001".to_string()]);
 
-        // Clean up
-        let _ = fs::remove_file(saved_path);
+        assert!(saved_path.starts_with(temp_dir.path()));
+    }
+
+    #[test]
+    fn test_profile_stores_are_isolated_for_same_name() {
+        let first_dir = TempDir::new().unwrap();
+        let second_dir = TempDir::new().unwrap();
+        let mut first = Profile::default_profile();
+        first.name = "shared".to_string();
+        first.description = "first store".to_string();
+        let mut second = Profile::default_profile();
+        second.name = "shared".to_string();
+        second.description = "second store".to_string();
+
+        first.save_in_dir(first_dir.path()).unwrap();
+        second.save_in_dir(second_dir.path()).unwrap();
+
+        assert_eq!(
+            Profile::load_in_dir("shared", first_dir.path())
+                .unwrap()
+                .description,
+            "first store"
+        );
+        assert_eq!(
+            Profile::load_in_dir("shared", second_dir.path())
+                .unwrap()
+                .description,
+            "second store"
+        );
     }
 
     #[test]

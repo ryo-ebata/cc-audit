@@ -133,7 +133,7 @@ impl CveDatabase {
         self.entries
             .iter()
             .filter(|entry| {
-                !entry.severity.eq_ignore_ascii_case("none")
+                !(entry.severity.eq_ignore_ascii_case("none") && entry.cvss_score == Some(0.0))
                     && entry.affected_products.iter().any(|p| {
                         p.vendor.eq_ignore_ascii_case(vendor)
                             && p.product.eq_ignore_ascii_case(product)
@@ -194,7 +194,7 @@ impl CveDatabase {
         self.entries
             .iter()
             .filter(|entry| {
-                !entry.severity.eq_ignore_ascii_case("none")
+                !(entry.severity.eq_ignore_ascii_case("none") && entry.cvss_score == Some(0.0))
                     && entry.affected_products.iter().any(|p| {
                         p.product.eq_ignore_ascii_case(product)
                             && Self::version_matches(&p.version_affected, version)

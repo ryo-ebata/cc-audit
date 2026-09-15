@@ -425,6 +425,38 @@ mod tests {
                 .is_empty()
         );
         assert!(db.check_product_by_name("claude-code", "1.0.0").is_empty());
+
+        let invalid_json = json
+            .to_string()
+            .replace("\"cvss_score\":0.0", "\"cvss_score\":9.0");
+        let invalid_db = CveDatabase::from_json(&invalid_json).unwrap();
+        assert_eq!(
+            invalid_db
+                .check_product("anthropic", "claude-code", "1.0.0")
+                .len(),
+            1
+        );
+        assert_eq!(
+            invalid_db
+                .check_product_by_name("claude-code", "1.0.0")
+                .len(),
+            1
+        );
+
+        let missing_score_json = json.to_string().replace(",\"cvss_score\":0.0", "");
+        let missing_score_db = CveDatabase::from_json(&missing_score_json).unwrap();
+        assert_eq!(
+            missing_score_db
+                .check_product("anthropic", "claude-code", "1.0.0")
+                .len(),
+            1
+        );
+        assert_eq!(
+            missing_score_db
+                .check_product_by_name("claude-code", "1.0.0")
+                .len(),
+            1
+        );
     }
 
     #[test]

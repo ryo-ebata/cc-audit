@@ -43,27 +43,35 @@ impl FileWatcher {
         Self::wait_for_change_from_receiver(
             &self.receiver,
             self.debounce_duration,
-            Instant::now() + Duration::from_secs(60 * 60),
+            Duration::from_secs(60 * 60),
+            None,
         )
     }
 
     fn wait_for_change_from_receiver(
         receiver: &Receiver<Result<notify::Event, notify::Error>>,
         debounce_duration: Duration,
-        deadline: Instant,
+        idle_timeout: Duration,
+        deadline: Option<Instant>,
     ) -> bool {
         // Simple debounce: collect events for debounce_duration
         let mut has_change = false;
 
         loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return has_change;
-            }
-            let wait = if has_change {
-                debounce_duration.min(remaining)
-            } else {
-                remaining
+            let wait = match deadline {
+                Some(deadline) => {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        return has_change;
+                    }
+                    if has_change {
+                        debounce_duration.min(remaining)
+                    } else {
+                        remaining
+                    }
+                }
+                None if has_change => debounce_duration,
+                None => idle_timeout,
             };
             match receiver.recv_timeout(wait) {
                 Ok(Ok(event)) => {
@@ -80,7 +88,10 @@ impl FileWatcher {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Debounce period complete or timeout
-                    return has_change;
+                    if has_change || deadline.is_some() {
+                        return has_change;
+                    }
+                    // The production watcher keeps waiting after an idle hour.
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     return false;
@@ -162,7 +173,7 @@ mod tests {
     #[test]
     fn test_watch_file_change() {
         use std::thread;
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
 
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.md");
@@ -181,7 +192,8 @@ mod tests {
         let result = FileWatcher::wait_for_change_from_receiver(
             &watcher.receiver,
             watcher.debounce_duration,
-            Instant::now() + Duration::from_secs(2),
+            Duration::from_secs(1),
+            Some(Instant::now() + Duration::from_secs(2)),
         );
         handle.join().unwrap();
         assert!(result, "modify event was not observed before deadline");
@@ -198,7 +210,7 @@ mod tests {
 
         // Spawn a thread to create a new file
         let test_file = temp_dir.path().join("new_file.txt");
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             thread::sleep(Duration::from_millis(100));
             fs::write(&test_file, "new content").unwrap();
         });
@@ -207,8 +219,10 @@ mod tests {
         let result = FileWatcher::wait_for_change_from_receiver(
             &watcher.receiver,
             watcher.debounce_duration,
-            Instant::now() + Duration::from_secs(2),
+            Duration::from_secs(1),
+            Some(Instant::now() + Duration::from_secs(2)),
         );
+        handle.join().unwrap();
         assert!(result, "create event was not observed before deadline");
         assert!(result);
     }
@@ -227,7 +241,7 @@ mod tests {
 
         // Spawn a thread to remove the file
         let test_file_clone = test_file.clone();
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             thread::sleep(Duration::from_millis(100));
             fs::remove_file(&test_file_clone).unwrap();
         });
@@ -236,8 +250,10 @@ mod tests {
         let result = FileWatcher::wait_for_change_from_receiver(
             &watcher.receiver,
             watcher.debounce_duration,
-            Instant::now() + Duration::from_secs(2),
+            Duration::from_secs(1),
+            Some(Instant::now() + Duration::from_secs(2)),
         );
+        handle.join().unwrap();
         assert!(result, "remove event was not observed before deadline");
         assert!(result);
     }
@@ -251,7 +267,8 @@ mod tests {
         assert!(!FileWatcher::wait_for_change_from_receiver(
             &rx,
             Duration::from_millis(10),
-            Instant::now() + Duration::from_secs(1),
+            Duration::from_millis(10),
+            Some(Instant::now() + Duration::from_secs(1)),
         ));
     }
 
@@ -263,7 +280,8 @@ mod tests {
         assert!(!FileWatcher::wait_for_change_from_receiver(
             &rx,
             Duration::from_millis(10),
-            Instant::now() + Duration::from_millis(20),
+            Duration::from_millis(10),
+            Some(Instant::now() + Duration::from_millis(20)),
         ));
     }
 
@@ -276,7 +294,8 @@ mod tests {
         assert!(!FileWatcher::wait_for_change_from_receiver(
             &rx,
             Duration::from_millis(10),
-            Instant::now() + Duration::from_millis(20),
+            Duration::from_millis(10),
+            Some(Instant::now() + Duration::from_millis(20)),
         ));
     }
 
@@ -292,8 +311,54 @@ mod tests {
         assert!(FileWatcher::wait_for_change_from_receiver(
             &rx,
             Duration::from_millis(10),
-            Instant::now() + Duration::from_secs(1),
+            Duration::from_millis(10),
+            Some(Instant::now() + Duration::from_secs(1)),
         ));
+    }
+
+    #[test]
+    fn test_wait_helper_returns_for_each_meaningful_event_kind() {
+        use std::time::{Duration, Instant};
+
+        for kind in [
+            EventKind::Create(notify::event::CreateKind::File),
+            EventKind::Modify(notify::event::ModifyKind::Any),
+            EventKind::Remove(notify::event::RemoveKind::File),
+        ] {
+            let (tx, rx) = channel();
+            tx.send(Ok(notify::Event::new(kind))).unwrap();
+            assert!(FileWatcher::wait_for_change_from_receiver(
+                &rx,
+                Duration::from_millis(10),
+                Duration::from_millis(10),
+                Some(Instant::now() + Duration::from_secs(1)),
+            ));
+        }
+    }
+
+    #[test]
+    fn test_wait_helper_uses_absolute_deadline_for_irrelevant_events() {
+        use std::thread;
+        use std::time::{Duration, Instant};
+
+        let (tx, rx) = channel();
+        let sender = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_millis(100);
+            while Instant::now() < deadline {
+                tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+                thread::sleep(Duration::from_millis(1));
+            }
+        });
+        let started = Instant::now();
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Duration::from_millis(10),
+            Some(started + Duration::from_millis(20)),
+        );
+        sender.join().unwrap();
+        assert!(!result);
+        assert!(started.elapsed() < Duration::from_millis(200));
     }
 
     #[test]
@@ -306,8 +371,29 @@ mod tests {
         assert!(!FileWatcher::wait_for_change_from_receiver(
             &rx,
             Duration::from_millis(10),
-            Instant::now() + Duration::from_millis(20),
+            Duration::from_millis(10),
+            Some(Instant::now() + Duration::from_millis(20)),
         ));
+    }
+
+    #[test]
+    fn test_wait_helper_does_not_exit_on_idle_timeout_without_deadline() {
+        use std::thread;
+        use std::time::Duration;
+
+        let (tx, rx) = channel();
+        let sender = thread::spawn(move || {
+            tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+            thread::sleep(Duration::from_millis(50));
+        });
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Duration::from_millis(10),
+            None,
+        );
+        sender.join().unwrap();
+        assert!(!result);
     }
 
     #[test]
@@ -319,7 +405,7 @@ mod tests {
     #[test]
     fn test_wait_for_change_with_modify_event() {
         use std::thread;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
 
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("existing.txt");
@@ -330,14 +416,20 @@ mod tests {
 
         // Spawn a thread to modify the file
         let test_file_clone = test_file.clone();
-        thread::spawn(move || {
+        let handle = thread::spawn(move || {
             thread::sleep(Duration::from_millis(100));
             fs::write(&test_file_clone, "modified").unwrap();
         });
 
         // wait_for_change should return true on file modification
-        let result = watcher.wait_for_change();
-        assert!(result);
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &watcher.receiver,
+            watcher.debounce_duration,
+            Duration::from_secs(1),
+            Some(Instant::now() + Duration::from_secs(2)),
+        );
+        handle.join().unwrap();
+        assert!(result, "modify event was not observed before deadline");
     }
 
     #[test]

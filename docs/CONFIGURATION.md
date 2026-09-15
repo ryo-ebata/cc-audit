@@ -83,7 +83,8 @@ profile:
   load: null
   save: null
 # A selected profile replaces the config-file recursive value. The explicit
-# CLI --no-recursive flag has highest priority.
+# CLI --no-recursive flag has highest priority. Boolean enable flags such as
+# deep_scan remain enabled when true in the CLI, config file, or selected profile.
 
 # Watch mode settings
 watch:

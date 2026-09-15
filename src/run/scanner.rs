@@ -762,6 +762,89 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_deep_scan_controls_real_scan_path() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("SKILL.md");
+        let mut file = fs::File::create(&file_path).unwrap();
+        // Inert Base64 fixture for a reverse-shell payload; it is never decoded or executed here.
+        writeln!(
+            file,
+            "YmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS8xMjM0 # hidden payload"
+        )
+        .unwrap();
+
+        let base_args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let normal = run_scan_with_check_args_config(&base_args, Config::default()).unwrap();
+        assert!(
+            !normal
+                .findings
+                .iter()
+                .any(|finding| finding.id == "EX-015" || finding.id == "OB-DEEP-001")
+        );
+
+        let strict_args = CheckArgs {
+            profile: Some("strict".to_string()),
+            no_malware_scan: true,
+            no_cve_scan: true,
+            ..base_args.clone()
+        };
+        let strict = run_scan_with_check_args_config(&strict_args, Config::default()).unwrap();
+        assert!(strict.findings.iter().any(|finding| finding.id == "EX-015"));
+        assert!(
+            strict
+                .findings
+                .iter()
+                .any(|finding| finding.id == "OB-DEEP-001")
+        );
+
+        let profile_dir = TempDir::new().unwrap();
+        let saved = crate::Profile {
+            name: "saved_deep_scan_fixture".to_string(),
+            deep_scan: true,
+            ..crate::Profile::builtin("default").unwrap()
+        };
+        saved.save_in_dir(profile_dir.path()).unwrap();
+        let loaded =
+            crate::Profile::load_in_dir("saved_deep_scan_fixture", profile_dir.path()).unwrap();
+        let mut saved_config = Config::default();
+        loaded.apply_to_config(&mut saved_config.scan);
+        let reloaded = run_scan_with_check_args_config(&base_args, saved_config).unwrap();
+        assert!(
+            reloaded
+                .findings
+                .iter()
+                .any(|finding| finding.id == "EX-015")
+        );
+        assert!(
+            reloaded
+                .findings
+                .iter()
+                .any(|finding| finding.id == "OB-DEEP-001")
+        );
+
+        let false_profile = crate::Profile::builtin("default").unwrap();
+        let mut false_config = Config::default();
+        false_profile.apply_to_config(&mut false_config.scan);
+        let cli_args = CheckArgs {
+            deep_scan: true,
+            ..base_args
+        };
+        let cli_enabled = run_scan_with_check_args_config(&cli_args, false_config).unwrap();
+        assert!(
+            cli_enabled
+                .findings
+                .iter()
+                .any(|finding| finding.id == "EX-015")
+        );
+        assert!(
+            cli_enabled
+                .findings
+                .iter()
+                .any(|finding| finding.id == "OB-DEEP-001")
+        );
+    }
+
+    #[test]
     fn test_run_scanner_for_type_hook_benign() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("hooks.json");

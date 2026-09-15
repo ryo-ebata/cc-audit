@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.21.5](https://github.com/ryo-ebata/cc-audit/compare/v3.21.4...v3.21.5) (2026-09-15)
+
+
+### Bug Fixes
+
+* **release:** retry crates.io publishing safely ([#361](https://github.com/ryo-ebata/cc-audit/issues/361)) ([b96eca9](https://github.com/ryo-ebata/cc-audit/commit/b96eca9eb9fb7f9a2183c36b40e21a507e251bc1))
+
 ## [3.21.4](https://github.com/ryo-ebata/cc-audit/compare/v3.21.3...v3.21.4) (2026-09-15)
 
 

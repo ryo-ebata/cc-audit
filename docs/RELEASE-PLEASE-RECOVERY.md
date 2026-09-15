@@ -26,17 +26,26 @@ Set the expected tag locally, then perform read-only checks:
 
 ```bash
 TAG=vX.Y.Z
+gh repo view --json nameWithOwner
+git remote get-url origin
 git ls-remote --tags origin "$TAG"
 gh release view "$TAG" --json tagName,url,isDraft,isPrerelease,publishedAt
 ```
+
+Before interpreting the results, confirm that `gh repo view` and `origin` refer
+to the same repository. If either query fails, or the repository cannot be
+verified, the release state is unknown. Stop without rerunning or modifying a
+release.
 
 Interpret the results separately:
 
 - A tag or GitHub Release exists: pass 1 may have completed. Inspect the
   release, assets, and downstream workflow runs. Do not blindly rerun Release
   Please or recreate the tag/release.
-- Neither exists: this does not prove that pass 1 ran. Confirm the failed step
-  and its logs before deciding whether a single manually approved rerun is safe.
+- The tag query succeeds with no tag and the release query returns an explicit
+  404/not-found: the release state is known to be absent, but this does not
+  prove that pass 1 ran. Confirm the failed step and its logs before deciding
+  whether a single manually approved rerun is safe.
 - `release_created` is missing or unavailable because the job failed: treat it
   as an unavailable output, not as proof that no release was created.
 
@@ -50,6 +59,11 @@ Fail without retry for authentication, authorization, repository access,
 validation, malformed query, or unknown errors. The workflow's current action
 has an exception retry path that covers HTTP 502 only; an HTTP 200 GraphQL
 response containing `errors` is not covered by that path.
+
+This behavior was verified in the exact action commit
+[`45996ed`](https://github.com/googleapis/release-please-action/blob/45996ed1f6d02564a971a2fa1b5860e934307cf7/src/index.ts), whose
+`package.json` pins `release-please` 17.6.0
+([immutable package metadata](https://github.com/googleapis/release-please-action/blob/45996ed1f6d02564a971a2fa1b5860e934307cf7/package.json)).
 
 Do not add `continue-on-error` to make the workflow green. Do not use an
 unbounded retry or rerun a release merely because `release_created` is absent.

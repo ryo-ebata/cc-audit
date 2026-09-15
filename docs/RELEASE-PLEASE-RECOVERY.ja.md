@@ -24,16 +24,23 @@ tokenの値である。workflowの`RELEASE_PLEASE_TOKEN`のquotaや権限を証�
 
 ```bash
 TAG=vX.Y.Z
+gh repo view --json nameWithOwner
+git remote get-url origin
 git ls-remote --tags origin "$TAG"
 gh release view "$TAG" --json tagName,url,isDraft,isPrerelease,publishedAt
 ```
+
+結果を解釈する前に、`gh repo view`と`origin`が同じrepositoryを指すことを確認
+する。どちらかの照会が失敗する、またはrepositoryを検証できない場合、release状態
+はunknownである。再実行やrelease変更をせず停止する。
 
 結果は分けて解釈する。
 
 - tagまたはGitHub Releaseが存在する場合、pass 1は完了している可能性がある。
   release、asset、後続workflowを確認し、Release Pleaseを無条件に再実行したり
   tag/releaseを作り直したりしない。
-- どちらも存在しない場合でも、pass 1が実行されなかったとは限らない。失敗stepと
+- tagの照会が成功してtagなし、かつreleaseの照会が明示的な404/not-foundを返す場合、
+  releaseがないことは確定するが、pass 1が実行されなかった証拠ではない。失敗stepと
   ログを確認してから、手動で1回だけ再実行して安全か判断する。
 - job失敗により`release_created`が欠落・利用不能な場合、release未作成の証拠とは
   扱わない。
@@ -47,6 +54,11 @@ gh release view "$TAG" --json tagName,url,isDraft,isPrerelease,publishedAt
 認証、認可、repository access、validation、query不正、原因不明のエラーは再試行
 せず失敗として扱う。現行actionの例外retry対象はHTTP 502だけであり、HTTP 200の
 GraphQL response内に`errors`がある場合はこの経路の対象外である。
+
+この挙動は実行時の固定action commit
+[`45996ed`](https://github.com/googleapis/release-please-action/blob/45996ed1f6d02564a971a2fa1b5860e934307cf7/src/index.ts)で確認済みで、
+`package.json`は`release-please` 17.6.0を固定している
+([immutableな依存情報](https://github.com/googleapis/release-please-action/blob/45996ed1f6d02564a971a2fa1b5860e934307cf7/package.json))。
 
 `continue-on-error`でworkflowを成功扱いにしない。無制限retryや、
 `release_created`欠落だけを理由にしたrelease再実行も行わない。

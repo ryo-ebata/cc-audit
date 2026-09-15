@@ -64,6 +64,11 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Verify npm publisher identity before publish
+        run: bash .github/scripts/npm-publish-preflight.sh
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Download release artifact
         run: |
           ARTIFACT="cc-audit-${{ steps.release.outputs.tag }}-${{ matrix.artifact_suffix }}"
@@ -111,6 +116,11 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify npm publisher identity before publish
+        run: bash .github/scripts/npm-publish-preflight.sh
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Update version in package.json
         run: |

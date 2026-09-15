@@ -108,6 +108,12 @@ curl https://api.example.com/data
 "#
         );
         create_skill_file(temp_dir.path(), &format!("skill_{i}"), &content);
+
+        // Include scripts/ so the benchmark exercises the directory walk that
+        // previously traversed this subtree twice.
+        let scripts_dir = temp_dir.path().join(format!("skill_{i}")).join("scripts");
+        fs::create_dir_all(&scripts_dir).unwrap();
+        fs::write(scripts_dir.join("setup.sh"), "echo setup").unwrap();
     }
 
     temp_dir

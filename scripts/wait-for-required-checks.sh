@@ -59,7 +59,11 @@ classify_outcome() {
       printf '%s' "${conclusion}"
     fi
   else
-    printf '%s' "${state}"
+    if [ "${state}" = "PENDING" ]; then
+      printf 'PENDING:PENDING'
+    else
+      printf '%s' "${state}"
+    fi
   fi
 }
 

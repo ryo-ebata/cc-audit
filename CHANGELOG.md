@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.21.2](https://github.com/ryo-ebata/cc-audit/compare/v3.21.1...v3.21.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ci:** pin Codecov action to verified commit ([#355](https://github.com/ryo-ebata/cc-audit/issues/355)) ([0e7d6c2](https://github.com/ryo-ebata/cc-audit/commit/0e7d6c2af1ad651a557c956b5c38ba2e5509c94b))
+
 ## [3.21.1](https://github.com/ryo-ebata/cc-audit/compare/v3.21.0...v3.21.1) (2026-09-15)
 
 

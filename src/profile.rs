@@ -124,15 +124,20 @@ impl Profile {
 
     /// Load a profile from the profiles directory
     pub fn load(name: &str) -> Result<Self> {
-        Self::load_in_dir(name, &Self::get_profiles_dir()?)
+        Self::load_with_profiles_dir(name, Self::get_profiles_dir)
     }
 
-    pub(crate) fn load_in_dir(name: &str, profiles_dir: &Path) -> Result<Self> {
-        // First try built-in profiles
+    fn load_with_profiles_dir<F>(name: &str, resolve_dir: F) -> Result<Self>
+    where
+        F: FnOnce() -> Result<PathBuf>,
+    {
         if let Some(profile) = Self::builtin(name) {
             return Ok(profile);
         }
+        Self::load_in_dir(name, &resolve_dir()?)
+    }
 
+    pub(crate) fn load_in_dir(name: &str, profiles_dir: &Path) -> Result<Self> {
         // Then try user profiles
         let profile_path = profiles_dir.join(format!("{}.yaml", name));
 
@@ -326,7 +331,8 @@ mod tests {
 
     #[test]
     fn test_list_all_includes_builtins() {
-        let profiles = Profile::list_all();
+        let temp_dir = TempDir::new().unwrap();
+        let profiles = Profile::list_all_in_dir(temp_dir.path());
         assert!(profiles.contains(&"default".to_string()));
         assert!(profiles.contains(&"strict".to_string()));
         assert!(profiles.contains(&"ci".to_string()));
@@ -358,8 +364,20 @@ mod tests {
     }
 
     #[test]
+    fn test_builtin_profile_does_not_resolve_user_directory() {
+        let profile = Profile::load_with_profiles_dir("default", || {
+            Err(AuditError::FileNotFound(
+                "resolver must not run".to_string(),
+            ))
+        })
+        .unwrap();
+        assert_eq!(profile.name, "default");
+    }
+
+    #[test]
     fn test_load_nonexistent_profile() {
-        let result = Profile::load("nonexistent_profile_xyz");
+        let temp_dir = TempDir::new().unwrap();
+        let result = Profile::load_in_dir("nonexistent_profile_xyz", temp_dir.path());
         assert!(result.is_err());
     }
 
@@ -752,6 +770,10 @@ mod tests {
         first.save_in_dir(first_dir.path()).unwrap();
         second.save_in_dir(second_dir.path()).unwrap();
 
+        let mut second_only = second.clone();
+        second_only.name = "second-only".to_string();
+        second_only.save_in_dir(second_dir.path()).unwrap();
+
         assert_eq!(
             Profile::load_in_dir("shared", first_dir.path())
                 .unwrap()
@@ -764,6 +786,8 @@ mod tests {
                 .description,
             "second store"
         );
+        assert!(Profile::list_all_in_dir(first_dir.path()).contains(&"shared".to_string()));
+        assert!(!Profile::list_all_in_dir(first_dir.path()).contains(&"second-only".to_string()));
     }
 
     #[test]

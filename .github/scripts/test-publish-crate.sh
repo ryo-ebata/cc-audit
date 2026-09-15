@@ -40,10 +40,13 @@ exit 0
 EOF
 chmod +x "$test_dir/curl" "$test_dir/cargo" "$test_dir/noop-sleep"
 
+idempotent_calls_file="$test_dir/idempotent-calls"
+printf '0' >"$idempotent_calls_file"
 PATH="$test_dir:$PATH" CARGO_REGISTRY_TOKEN=test-token \
-  FAKE_CURL_STATUS=200 CRATES_IO_USER_AGENT=cc-audit-test PUBLISH_SLEEP_COMMAND=noop-sleep \
+  FAKE_CURL_STATUS=200 FAKE_CARGO_CALLS_FILE="$idempotent_calls_file" CRATES_IO_USER_AGENT=cc-audit-test PUBLISH_SLEEP_COMMAND=noop-sleep \
   .github/scripts/publish-crate.sh cc-audit 1.2.3 >"$test_dir/idempotent.out"
 grep -Fq 'already published' "$test_dir/idempotent.out"
+test "$(cat "$idempotent_calls_file")" = 0
 
 count_file="$test_dir/count"
 calls_file="$test_dir/transient-calls"

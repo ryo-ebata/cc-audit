@@ -116,7 +116,9 @@ If crates.io returns the explicit daily quota error (`too many versions ... in
 the last 24 hours`), `publish-crate.sh` stops without retrying. Confirm that the
 target version is still absent, wait for the rolling window to recover, and
 rerun the same release/tag/version once so downstream publication workflows can
-aggregate. Do not create a replacement version or repeatedly rerun the job.
+run. Group unrelated release changes into a small number of releases to avoid
+needless quota consumption. Do not create a replacement version or repeatedly
+rerun the job.
 
 ### 2. GitHub Release
 

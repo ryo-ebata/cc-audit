@@ -149,34 +149,37 @@ impl CveDatabase {
             return true;
         }
 
-        let (operator, required_version) = if let Some(rest) = requirement.strip_prefix("<=") {
-            ("<=", rest.trim())
-        } else if let Some(rest) = requirement.strip_prefix(">=") {
-            (">=", rest.trim())
-        } else if let Some(rest) = requirement.strip_prefix('<') {
-            ("<", rest.trim())
-        } else if let Some(rest) = requirement.strip_prefix('>') {
-            (">", rest.trim())
-        } else if let Some(rest) = requirement.strip_prefix('=') {
-            ("=", rest.trim())
-        } else {
-            ("=", requirement)
-        };
-
-        let Ok(required_version) = semver::Version::parse(required_version) else {
-            return false;
-        };
         let Ok(version) = semver::Version::parse(version.trim()) else {
             return false;
         };
 
-        match operator {
-            "<" => version < required_version,
-            "<=" => version <= required_version,
-            ">" => version > required_version,
-            ">=" => version >= required_version,
-            _ => version == required_version,
-        }
+        requirement.split(',').all(|constraint| {
+            let constraint = constraint.trim();
+            let (operator, required_version) = if let Some(rest) = constraint.strip_prefix("<=") {
+                ("<=", rest.trim())
+            } else if let Some(rest) = constraint.strip_prefix(">=") {
+                (">=", rest.trim())
+            } else if let Some(rest) = constraint.strip_prefix('<') {
+                ("<", rest.trim())
+            } else if let Some(rest) = constraint.strip_prefix('>') {
+                (">", rest.trim())
+            } else if let Some(rest) = constraint.strip_prefix('=') {
+                ("=", rest.trim())
+            } else {
+                ("=", constraint)
+            };
+
+            let Ok(required_version) = semver::Version::parse(required_version) else {
+                return false;
+            };
+            match operator {
+                "<" => version < required_version,
+                "<=" => version <= required_version,
+                ">" => version > required_version,
+                ">=" => version >= required_version,
+                _ => version == required_version,
+            }
+        })
     }
 
     /// Check a product/version against all CVEs, ignoring vendor.
@@ -523,6 +526,35 @@ mod tests {
         assert!(CveDatabase::version_matches(">= 1.5.0", "2.0.0"));
         assert!(!CveDatabase::version_matches(">= 1.5.0", "1.4.9"));
         assert!(!CveDatabase::version_matches(">= 1.5.0", "1.4.0"));
+    }
+
+    #[test]
+    fn test_python_generated_cpe_constraints() {
+        let db =
+            CveDatabase::from_file(Path::new("tests/fixtures/cve-python-generated.json")).unwrap();
+
+        let cases = [
+            ("exact", "1.5.0", true),
+            ("exact", "1.5.1", false),
+            ("lower-inclusive", "1.5.0", true),
+            ("lower-inclusive", "1.4.9", false),
+            ("lower-exclusive", "1.5.0", false),
+            ("lower-exclusive", "1.5.1", true),
+            ("upper-inclusive", "2.0.0", true),
+            ("upper-inclusive", "2.0.1", false),
+            ("upper-exclusive", "2.0.0", false),
+            ("upper-exclusive", "1.9.9", true),
+            ("compound", "1.4.9", false),
+            ("compound", "1.5.0", true),
+            ("compound", "1.9.9", true),
+            ("compound", "2.0.0", false),
+            ("legacy-wildcard", "99.0.0", true),
+        ];
+
+        for (product, version, expected) in cases {
+            let matched = !db.check_product_by_name(product, version).is_empty();
+            assert_eq!(matched, expected, "{product} {version}");
+        }
     }
 
     #[test]

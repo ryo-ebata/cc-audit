@@ -33,6 +33,7 @@ jobs:
       - run: bash .github/scripts/test-npm-publish-workflow.sh
       - run: bash .github/scripts/test-npm-publish-preflight.sh
       - run: bash .github/scripts/test-homebrew-workflow.sh
+      - run: bash .github/scripts/test-update-cve-database.sh
 
   changes:
     name: Detect Changes

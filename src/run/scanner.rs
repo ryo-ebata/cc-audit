@@ -193,7 +193,7 @@ fn run_scan_with_check_args_internal(
         // Run deep scan with deobfuscation if enabled
         if effective.deep_scan {
             let ignore_filter = create_ignore_filter(path);
-            let deep_findings = run_deep_scan(path, &ignore_filter);
+            let deep_findings = run_deep_scan(path, &ignore_filter, effective.recursive);
             all_findings.extend(deep_findings);
         }
 
@@ -528,7 +528,12 @@ fn filter_and_process_findings_internal(
 ///
 /// The `ignore_filter` parameter is used to skip files/directories that match
 /// the ignore patterns configured in `.cc-audit.yaml`.
-pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Finding> {
+/// Directory scans honor `recursive`; explicit file targets are always scanned.
+pub(crate) fn run_deep_scan(
+    path: &Path,
+    ignore_filter: &IgnoreFilter,
+    recursive: bool,
+) -> Vec<Finding> {
     let mut findings = Vec::new();
     let deobfuscator = Deobfuscator::new();
 
@@ -546,7 +551,11 @@ pub(crate) fn run_deep_scan(path: &Path, ignore_filter: &IgnoreFilter) -> Vec<Fi
         }
     } else if path.is_dir() {
         debug!(path = %path.display(), "Running deep scan on directory");
-        let walker = DirectoryWalker::new(WalkConfig::default());
+        let walker = if recursive {
+            DirectoryWalker::new(WalkConfig::default())
+        } else {
+            DirectoryWalker::new(WalkConfig::default().with_max_depth(1))
+        };
         for file_path in walker.walk_single(path) {
             if !ignore_filter.is_ignored(&file_path)
                 && is_text_file(&file_path)
@@ -726,7 +735,7 @@ mod tests {
         writeln!(file, "# Normal content without obfuscation").unwrap();
 
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(&file_path, &filter);
+        let findings = run_deep_scan(&file_path, &filter, true);
         assert!(findings.is_empty());
     }
 
@@ -739,7 +748,7 @@ mod tests {
         writeln!(file, "# Normal content").unwrap();
 
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(temp_dir.path(), &filter);
+        let findings = run_deep_scan(temp_dir.path(), &filter, true);
         assert!(findings.is_empty());
     }
 
@@ -842,6 +851,105 @@ mod tests {
                 .iter()
                 .any(|finding| finding.id == "OB-DEEP-001")
         );
+    }
+
+    #[test]
+    fn test_deep_scan_honors_non_recursive_profile_and_cli_settings() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_dir = temp_dir.path().join("nested");
+        fs::create_dir_all(&nested_dir).unwrap();
+        let payload = "YmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS8xMjM0 # hidden payload";
+        fs::write(temp_dir.path().join("SKILL.md"), payload).unwrap();
+        let nested_file = nested_dir.join("SKILL.md");
+        fs::write(&nested_file, payload).unwrap();
+
+        let base_args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
+        let mut cli_false_args = base_args.clone();
+        cli_false_args.deep_scan = true;
+        cli_false_args.no_recursive = true;
+        let cli_false =
+            run_scan_with_check_args_config(&cli_false_args, Config::default()).unwrap();
+        assert!(cli_false.findings.iter().any(|finding| {
+            finding.id == "EX-015" && finding.location.file.ends_with("SKILL.md:decoded:base64")
+        }));
+        assert!(
+            !cli_false
+                .findings
+                .iter()
+                .any(|finding| finding.location.file.contains("nested"))
+        );
+
+        let profile_dir = TempDir::new().unwrap();
+        let profile_args = CheckArgs {
+            deep_scan: true,
+            no_recursive: true,
+            ..Default::default()
+        };
+        let saved =
+            crate::profile_from_check_args("saved_non_recursive_deep", &profile_args, false);
+        saved.save_in_dir(profile_dir.path()).unwrap();
+        let loaded =
+            crate::Profile::load_in_dir("saved_non_recursive_deep", profile_dir.path()).unwrap();
+        let mut profile_config = Config::default();
+        loaded.apply_to_config(&mut profile_config.scan);
+        let profile_scan = run_scan_with_check_args_config(&base_args, profile_config).unwrap();
+        assert!(profile_scan.findings.iter().any(|finding| {
+            finding.id == "EX-015" && finding.location.file.ends_with("SKILL.md:decoded:base64")
+        }));
+        assert!(
+            !profile_scan
+                .findings
+                .iter()
+                .any(|finding| finding.location.file.contains("nested"))
+        );
+
+        let mut recursive_config = Config::default();
+        recursive_config.scan.deep_scan = true;
+        recursive_config.scan.recursive = true;
+        let recursive = run_scan_with_check_args_config(&base_args, recursive_config).unwrap();
+        assert_eq!(
+            recursive
+                .findings
+                .iter()
+                .filter(|finding| finding.id == "EX-015")
+                .count(),
+            2
+        );
+
+        let nested_args = create_test_check_args(vec![nested_file]);
+        let mut nested_file_args = nested_args;
+        nested_file_args.deep_scan = true;
+        nested_file_args.no_recursive = true;
+        let explicit_file =
+            run_scan_with_check_args_config(&nested_file_args, Config::default()).unwrap();
+        assert!(
+            explicit_file
+                .findings
+                .iter()
+                .any(|finding| finding.id == "EX-015")
+        );
+    }
+
+    #[test]
+    fn test_non_recursive_deep_scan_respects_ignore_patterns() {
+        let temp_dir = TempDir::new().unwrap();
+        let root_file = temp_dir.path().join("root-fixture.md");
+        fs::write(
+            &root_file,
+            "YmFzaCAtaSA+JiAvZGV2L3RjcC9ldmlsLmNvbS8xMjM0 # hidden payload",
+        )
+        .unwrap();
+
+        let empty_filter = IgnoreFilter::from_config(&Default::default());
+        let findings = run_deep_scan(temp_dir.path(), &empty_filter, false);
+        assert!(findings.iter().any(|finding| finding.id == "EX-015"));
+
+        let ignore_config = crate::config::IgnoreConfig {
+            patterns: vec!["**/root-fixture.md".to_string()],
+        };
+        let ignore_filter = IgnoreFilter::from_config(&ignore_config);
+        let ignored_findings = run_deep_scan(temp_dir.path(), &ignore_filter, false);
+        assert!(ignored_findings.is_empty());
     }
 
     #[test]
@@ -1515,7 +1623,7 @@ mod tests {
     #[test]
     fn test_run_deep_scan_nonexistent_path() {
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter);
+        let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter, true);
         assert!(findings.is_empty());
     }
 
@@ -1537,7 +1645,7 @@ mod tests {
             patterns: vec!["**/node_modules/**".to_string()],
         };
         let filter = IgnoreFilter::from_config(&config);
-        let findings = run_deep_scan(temp_dir.path(), &filter);
+        let findings = run_deep_scan(temp_dir.path(), &filter, true);
 
         // Should be empty because node_modules is ignored
         assert!(findings.is_empty());

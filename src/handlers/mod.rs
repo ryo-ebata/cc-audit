@@ -453,14 +453,19 @@ mod tests {
 
     #[test]
     fn test_handle_save_profile_and_load() {
+        let temp_dir = TempDir::new().unwrap();
         let args = create_test_check_args(vec![PathBuf::from(".")]);
-        let result = handle_save_profile(&args, "test_profile_handlers_123", false);
+        let result = config::handle_save_profile_in_dir(
+            &args,
+            "test_profile_handlers_123",
+            false,
+            Some(temp_dir.path()),
+        );
         assert_eq!(result, ExitCode::SUCCESS);
 
-        // Clean up
-        if let Ok(profile_path) = crate::Profile::load("test_profile_handlers_123") {
-            let _ = profile_path;
-        }
+        let profile =
+            crate::Profile::load_in_dir("test_profile_handlers_123", temp_dir.path()).unwrap();
+        assert_eq!(profile.name, "test_profile_handlers_123");
     }
 
     #[test]

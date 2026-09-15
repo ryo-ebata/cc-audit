@@ -1631,5 +1631,27 @@ mod tests {
         loaded.apply_to_config(&mut profile_config.scan);
         let effective = EffectiveConfig::from_check_args_and_config(&profile_args, &profile_config);
         assert!(!effective.recursive);
+        let findings = run_scanner_for_type(
+            &ScanType::Skill,
+            temp_dir.path(),
+            &ignore_fn,
+            false,
+            false,
+            false,
+            effective.recursive,
+            &[],
+            create_noop_progress_callback(),
+        )
+        .unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.location.file == top_level.display().to_string())
+        );
+        assert!(
+            !findings
+                .iter()
+                .any(|f| f.location.file == deep_level.display().to_string())
+        );
     }
 }

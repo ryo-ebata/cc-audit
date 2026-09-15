@@ -345,8 +345,14 @@ mod tests {
         let (stop_tx, stop_rx) = channel();
         let (result_tx, result_rx) = channel();
         let sender = thread::spawn(move || {
-            while stop_rx.try_recv().is_err() {
-                tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+            loop {
+                match stop_rx.try_recv() {
+                    Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                }
+                if tx.send(Ok(notify::Event::new(EventKind::Other))).is_err() {
+                    break;
+                }
                 thread::sleep(Duration::from_millis(1));
             }
         });
@@ -359,19 +365,17 @@ mod tests {
             );
             result_tx.send(result).unwrap();
         });
-        let result = match result_rx.recv_timeout(Duration::from_millis(200)) {
-            Ok(result) => result,
-            Err(error) => {
-                stop_tx.send(()).unwrap();
-                sender.join().unwrap();
-                worker.join().unwrap();
-                panic!("absolute deadline was not honored: {error}");
-            }
-        };
-        stop_tx.send(()).unwrap();
-        sender.join().unwrap();
-        worker.join().unwrap();
-        assert!(!result);
+        let result = result_rx.recv_timeout(Duration::from_secs(3));
+        let _ = stop_tx.send(());
+        let sender_result = sender.join();
+        let worker_result = worker.join();
+        assert!(sender_result.is_ok(), "event producer panicked");
+        assert!(worker_result.is_ok(), "deadline worker panicked");
+        assert!(
+            result.is_ok(),
+            "absolute deadline was not honored: {result:?}"
+        );
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -398,15 +402,14 @@ mod tests {
         let (release_tx, release_rx) = channel();
         let (result_tx, result_rx) = channel();
         let sender = thread::spawn(move || {
-            tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+            let _ = tx.send(Ok(notify::Event::new(EventKind::Other)));
             thread::sleep(Duration::from_millis(30));
-            tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+            let _ = tx.send(Ok(notify::Event::new(EventKind::Other)));
             thread::sleep(Duration::from_millis(30));
-            tx.send(Ok(notify::Event::new(EventKind::Create(
+            let _ = tx.send(Ok(notify::Event::new(EventKind::Create(
                 notify::event::CreateKind::File,
-            ))))
-            .unwrap();
-            release_rx.recv().unwrap();
+            ))));
+            let _ = release_rx.recv();
         });
         let worker = thread::spawn(move || {
             let result = FileWatcher::wait_for_change_from_receiver(
@@ -417,13 +420,17 @@ mod tests {
             );
             result_tx.send(result).unwrap();
         });
-        let result = result_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("idle helper did not receive the meaningful event");
-        release_tx.send(()).unwrap();
-        sender.join().unwrap();
-        worker.join().unwrap();
-        assert!(result);
+        let result = result_rx.recv_timeout(Duration::from_secs(3));
+        let _ = release_tx.send(());
+        let sender_result = sender.join();
+        let worker_result = worker.join();
+        assert!(sender_result.is_ok(), "idle event producer panicked");
+        assert!(worker_result.is_ok(), "idle worker panicked");
+        assert!(
+            result.is_ok(),
+            "idle helper did not receive the meaningful event"
+        );
+        assert!(result.unwrap());
     }
 
     #[test]

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.0](https://github.com/ryo-ebata/cc-audit/compare/v3.21.5...v3.22.0) (2026-09-15)
+
+
+### Features
+
+* **injection:** detect Italian Turkish and Polish overrides ([#363](https://github.com/ryo-ebata/cc-audit/issues/363)) ([df61f20](https://github.com/ryo-ebata/cc-audit/commit/df61f204e4b39a2d838173ceb22845545fc0f1bb))
+
+
+### Bug Fixes
+
+* **release:** identify crates.io preflight requests ([#365](https://github.com/ryo-ebata/cc-audit/issues/365)) ([f98b477](https://github.com/ryo-ebata/cc-audit/commit/f98b477d3459c695f1a1df3fb6dd2a7ebc68c27d))
+
 ## [3.21.5](https://github.com/ryo-ebata/cc-audit/compare/v3.21.4...v3.21.5) (2026-09-15)
 
 

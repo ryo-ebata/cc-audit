@@ -15,6 +15,10 @@ EOF
 cat >"$test_dir/cargo" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "${FAKE_CARGO_OUTPUT:-published}"
+if [[ -n "${FAKE_CARGO_QUOTA:-}" ]]; then
+  echo 'error: 429 Too Many Requests: You have published too many versions of this crate in the last 24 hours' >&2
+  exit 1
+fi
 if [[ -n "${FAKE_CARGO_FAILURES:-}" ]]; then
   count_file=${FAKE_CARGO_COUNT_FILE:?}
   count=$(cat "$count_file")
@@ -44,5 +48,19 @@ PATH="$test_dir:$PATH" CARGO_REGISTRY_TOKEN=test-token \
   .github/scripts/publish-crate.sh cc-audit 1.2.4 >"$test_dir/retry.out" 2>"$test_dir/retry.err"
 test "$(cat "$count_file")" = 3
 grep -Fq 'retrying' "$test_dir/retry.err"
+
+set +e
+PATH="$test_dir:$PATH" CARGO_REGISTRY_TOKEN=test-token \
+  FAKE_CURL_STATUS=404 FAKE_CARGO_QUOTA=1 CRATES_IO_USER_AGENT=cc-audit-test \
+  PUBLISH_SLEEP_COMMAND=noop-sleep .github/scripts/publish-crate.sh cc-audit 1.2.5 \
+  >"$test_dir/quota.out" 2>"$test_dir/quota.err"
+quota_status=$?
+set -e
+test "$quota_status" -ne 0
+grep -Fq 'daily publish quota reached' "$test_dir/quota.err"
+if grep -Fq 'retrying' "$test_dir/quota.err"; then
+  echo 'quota failure must not be retried' >&2
+  exit 1
+fi
 
 echo 'publish-crate tests passed'

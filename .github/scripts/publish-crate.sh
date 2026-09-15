@@ -7,6 +7,7 @@ crate_version=${2:?crate version is required}
 max_attempts=${PUBLISH_MAX_ATTEMPTS:-4}
 initial_backoff=${PUBLISH_INITIAL_BACKOFF:-30}
 crates_io_api=${CRATES_IO_API:-https://crates.io/api/v1}
+crates_io_user_agent=${CRATES_IO_USER_AGENT:-cc-audit-release/$crate_version (+https://github.com/ryo-ebata/cc-audit)}
 
 if ! [[ "$max_attempts" =~ ^[1-9][0-9]*$ && "$initial_backoff" =~ ^[0-9]+$ ]]; then
   echo "PUBLISH_MAX_ATTEMPTS and PUBLISH_INITIAL_BACKOFF must be non-negative integers" >&2
@@ -14,7 +15,7 @@ if ! [[ "$max_attempts" =~ ^[1-9][0-9]*$ && "$initial_backoff" =~ ^[0-9]+$ ]]; t
 fi
 
 version_url="$crates_io_api/crates/$crate_name/$crate_version"
-version_status=$(curl -sS -o /dev/null -w '%{http_code}' "$version_url" || echo 000)
+version_status=$(curl -sS -A "$crates_io_user_agent" -H 'Accept: application/json' -o /dev/null -w '%{http_code}' "$version_url" || echo 000)
 if [[ "$version_status" == 200 ]]; then
   echo "$crate_name $crate_version is already published; treating as success"
   exit 0
@@ -33,7 +34,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   fi
 
   cat "$log_file" >&2
-  post_status=$(curl -sS -o /dev/null -w '%{http_code}' "$version_url" || echo 000)
+  post_status=$(curl -sS -A "$crates_io_user_agent" -H 'Accept: application/json' -o /dev/null -w '%{http_code}' "$version_url" || echo 000)
   if [[ "$post_status" == 200 ]]; then
     echo "$crate_name $crate_version became available after publish; treating as success"
     rm -f "$log_file"

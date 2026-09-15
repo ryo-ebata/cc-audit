@@ -36,6 +36,7 @@ jobs:
       - run: bash .github/scripts/test-update-cve-database.sh
       - run: bash .github/scripts/test-update-cve-fetch-errors.sh
       - run: bash .github/scripts/test-update-cve-pagination.sh
+      - run: bash .github/scripts/test-update-cve-merge-updates.sh
 
   changes:
     name: Detect Changes

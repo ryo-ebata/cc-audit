@@ -70,6 +70,13 @@ cc-audit calculates a risk score (0-100) based on findings:
 | PI-001 | Ignore instructions pattern | High | Detects "ignore previous instructions" |
 | PI-002 | Hidden HTML instructions | High | Detects instructions in HTML comments |
 | PI-003 | Invisible Unicode characters | High | Detects zero-width characters |
+| PI-007 | Markdown comment injection | High | Detects hidden instructions in Markdown comments |
+| PI-008 | MCP tool shadowing | Critical | Detects tool descriptions that hide actions or hijack tool precedence |
+
+PI-001, PI-007, and PI-008 include multilingual coverage for English, Japanese,
+Simplified Chinese, Spanish, Russian, Portuguese, Korean, Hindi, French, German,
+Italian, Turkish, Polish, and Arabic. Language-specific patterns require
+instruction verbs and targets together where practical to reduce benign matches.
 
 ## Overpermission (OP)
 

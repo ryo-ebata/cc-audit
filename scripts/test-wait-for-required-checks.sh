@@ -111,7 +111,7 @@ run_case() {
 
 write_rollup delayed-1 "dependency"$'\tStatusContext\t\t\tSUCCESS'
 write_rollup delayed-2 "dependency"$'\tStatusContext\t\t\tSUCCESS' "Result"$'\tCheckRun\tCOMPLETED\tSUCCESS\t'
-run_case delayed 0 bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
+run_case delayed 0 env MOCK_DATE_MODE=delayed bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
 
 write_rollup pending-1 "Result"$'\tCheckRun\tQUEUED\tSUCCESS\t'
 write_rollup pending-2 "Result"$'\tCheckRun\tIN_PROGRESS\tSUCCESS\t'

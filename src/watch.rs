@@ -2,7 +2,7 @@ use crate::config::WatchConfig;
 use notify::{Config, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::sync::mpsc::{Receiver, channel};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::warn;
 
 pub struct FileWatcher {
@@ -40,15 +40,32 @@ impl FileWatcher {
     }
 
     pub fn wait_for_change(&self) -> bool {
+        Self::wait_for_change_from_receiver(
+            &self.receiver,
+            self.debounce_duration,
+            Instant::now() + Duration::from_secs(60 * 60),
+        )
+    }
+
+    fn wait_for_change_from_receiver(
+        receiver: &Receiver<Result<notify::Event, notify::Error>>,
+        debounce_duration: Duration,
+        deadline: Instant,
+    ) -> bool {
         // Simple debounce: collect events for debounce_duration
         let mut has_change = false;
 
         loop {
-            match self.receiver.recv_timeout(if has_change {
-                self.debounce_duration
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return has_change;
+            }
+            let wait = if has_change {
+                debounce_duration.min(remaining)
             } else {
-                Duration::from_secs(60 * 60) // 1 hour timeout when waiting for first event
-            }) {
+                remaining
+            };
+            match receiver.recv_timeout(wait) {
                 Ok(Ok(event)) => {
                     // Only react to meaningful changes
                     if matches!(
@@ -63,10 +80,7 @@ impl FileWatcher {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     // Debounce period complete or timeout
-                    if has_change {
-                        return true;
-                    }
-                    // Continue waiting if no change yet
+                    return has_change;
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     return false;
@@ -148,7 +162,7 @@ mod tests {
     #[test]
     fn test_watch_file_change() {
         use std::thread;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
 
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.md");
@@ -164,25 +178,19 @@ mod tests {
             fs::write(&test_file_clone, "modified content").unwrap();
         });
 
-        // Wait for change (with timeout via recv_timeout)
-        // We use a separate thread to avoid blocking forever
-        let (tx, _rx) = channel();
-        let watcher_receiver = watcher.receiver;
-        thread::spawn(move || {
-            let result = watcher_receiver.recv_timeout(Duration::from_secs(2));
-            let _ = tx.send(result.is_ok());
-        });
-
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &watcher.receiver,
+            watcher.debounce_duration,
+            Instant::now() + Duration::from_secs(2),
+        );
         handle.join().unwrap();
-
-        // Give the watcher some time to process
-        thread::sleep(Duration::from_millis(500));
+        assert!(result, "modify event was not observed before deadline");
     }
 
     #[test]
     fn test_wait_for_change_with_create_event() {
         use std::thread;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
 
         let temp_dir = TempDir::new().unwrap();
         let mut watcher = FileWatcher::new().unwrap();
@@ -196,14 +204,19 @@ mod tests {
         });
 
         // wait_for_change should return true on file creation
-        let result = watcher.wait_for_change();
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &watcher.receiver,
+            watcher.debounce_duration,
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert!(result, "create event was not observed before deadline");
         assert!(result);
     }
 
     #[test]
     fn test_wait_for_change_with_remove_event() {
         use std::thread;
-        use std::time::Duration;
+        use std::time::{Duration, Instant};
 
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("to_remove.txt");
@@ -220,34 +233,81 @@ mod tests {
         });
 
         // wait_for_change should return true on file removal
-        let result = watcher.wait_for_change();
+        let result = FileWatcher::wait_for_change_from_receiver(
+            &watcher.receiver,
+            watcher.debounce_duration,
+            Instant::now() + Duration::from_secs(2),
+        );
+        assert!(result, "remove event was not observed before deadline");
         assert!(result);
     }
 
     #[test]
-    fn test_wait_for_change_disconnected() {
-        use std::thread;
-        use std::time::Duration;
+    fn test_wait_helper_disconnected() {
+        use std::time::{Duration, Instant};
 
-        // Create a watcher but manually drop the sender to simulate disconnection
         let (tx, rx) = channel::<Result<notify::Event, notify::Error>>();
+        drop(tx);
+        assert!(!FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Instant::now() + Duration::from_secs(1),
+        ));
+    }
 
-        // Create a minimal watcher struct with the receiver
-        // We need to simulate the disconnection scenario
-        let watcher_handle = thread::spawn(move || {
-            // This tests the Disconnected branch
-            // Drop the sender to disconnect
-            drop(tx);
-        });
+    #[test]
+    fn test_wait_helper_times_out_without_event() {
+        use std::time::{Duration, Instant};
 
-        // Small delay to ensure sender is dropped
-        thread::sleep(Duration::from_millis(50));
+        let (_tx, rx) = channel::<Result<notify::Event, notify::Error>>();
+        assert!(!FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Instant::now() + Duration::from_millis(20),
+        ));
+    }
 
-        // Now try to receive - should get disconnected error
-        let result = rx.recv_timeout(Duration::from_millis(100));
-        assert!(result.is_err());
+    #[test]
+    fn test_wait_helper_ignores_irrelevant_event_and_times_out() {
+        use std::time::{Duration, Instant};
 
-        watcher_handle.join().unwrap();
+        let (tx, rx) = channel();
+        tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+        assert!(!FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Instant::now() + Duration::from_millis(20),
+        ));
+    }
+
+    #[test]
+    fn test_wait_helper_returns_on_meaningful_event() {
+        use std::time::{Duration, Instant};
+
+        let (tx, rx) = channel();
+        tx.send(Ok(notify::Event::new(EventKind::Create(
+            notify::event::CreateKind::File,
+        ))))
+        .unwrap();
+        assert!(FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Instant::now() + Duration::from_secs(1),
+        ));
+    }
+
+    #[test]
+    fn test_wait_helper_continues_after_error_until_deadline() {
+        use std::time::{Duration, Instant};
+
+        let (tx, rx) = channel();
+        tx.send(Err(notify::Error::generic("synthetic watch error")))
+            .unwrap();
+        assert!(!FileWatcher::wait_for_change_from_receiver(
+            &rx,
+            Duration::from_millis(10),
+            Instant::now() + Duration::from_millis(20),
+        ));
     }
 
     #[test]

@@ -64,6 +64,15 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Verify npm publisher identity and package access
+        run: |
+          NPM_USER=$(npm whoami --registry=https://registry.npmjs.org)
+          test -n "$NPM_USER"
+          echo "npm authentication succeeded for user $NPM_USER"
+          npm view @cc-audit/linux-x64 name version --registry=https://registry.npmjs.org
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Download release artifact
         run: |
           ARTIFACT="cc-audit-${{ steps.release.outputs.tag }}-${{ matrix.artifact_suffix }}"

@@ -595,15 +595,24 @@ mod tests {
         }"#;
 
         for (label, content) in [("plain", plain), ("escaped", escaped)] {
+            assert!(
+                serde_json::from_str::<serde_json::Value>(content).is_ok(),
+                "{label} input must be valid JSON"
+            );
             let scanner = McpScanner::new();
             let findings = scanner.scan_content(content, "test.json").unwrap();
             let pi004: Vec<_> = findings.iter().filter(|f| f.id == "PI-004").collect();
 
             assert_eq!(pi004.len(), 1, "{label} input must produce one PI-004");
             assert_eq!(pi004[0].location.line, 3, "{label} location");
+            assert_eq!(
+                pi004[0].code,
+                content.lines().nth(2).unwrap().trim(),
+                "{label} snippet must preserve the trimmed source line"
+            );
             assert!(
-                pi004[0].code.contains("description"),
-                "{label} snippet must preserve the source line"
+                findings.iter().all(|f| f.id != "SC-PARSE-001"),
+                "{label} valid JSON must not produce a parse finding"
             );
         }
 
@@ -615,6 +624,9 @@ mod tests {
             .scan_content(benign_quoted_with_sibling_payload, "test.json")
             .unwrap();
         assert!(
+            serde_json::from_str::<serde_json::Value>(benign_quoted_with_sibling_payload).is_ok()
+        );
+        assert!(
             findings.iter().all(|f| f.id != "PI-004"),
             "PI-004 must not cross the description's closing quote into a sibling field"
         );
@@ -625,6 +637,7 @@ mod tests {
         let findings = McpScanner::new()
             .scan_content(even_backslash, "test.json")
             .unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(even_backslash).is_ok());
         assert!(
             findings.iter().all(|f| f.id != "PI-004"),
             "PI-004 must respect an even escaped-backslash sequence"

@@ -18,7 +18,7 @@ jobs:
       - name: Resolve release tag
         id: release
         run: |
-          TAG=$(gh api "repos/${{ github.repository }}/git/refs/tags" --paginate --jq '.[] | select(.object.sha == env.HEAD_SHA) | .ref' | sed 's#refs/tags/##')
+          TAG=$(bash .github/scripts/resolve-release-tag.sh "$HEAD_SHA" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git")
           test -n "$TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
         env:

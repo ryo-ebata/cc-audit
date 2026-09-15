@@ -23,6 +23,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  release-tag-resolution:
+    name: Release tag resolution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash .github/scripts/test-resolve-release-tag.sh
+
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest

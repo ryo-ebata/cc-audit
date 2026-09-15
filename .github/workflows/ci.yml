@@ -35,6 +35,7 @@ jobs:
       - run: bash .github/scripts/test-homebrew-workflow.sh
       - run: bash .github/scripts/test-update-cve-database.sh
       - run: bash .github/scripts/test-update-cve-fetch-errors.sh
+      - run: bash .github/scripts/test-update-cve-pagination.sh
 
   changes:
     name: Detect Changes

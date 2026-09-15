@@ -34,6 +34,11 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
   fi
 
   cat "$log_file" >&2
+  if grep -Eiq 'too many versions.*last 24 hours|last 24 hours.*too many versions' "$log_file"; then
+    echo "crates.io daily publish quota reached; stopping without retry. Wait for the rolling 24-hour window to recover, then rerun this release once." >&2
+    rm -f "$log_file"
+    exit 1
+  fi
   post_status=$(curl -sS -A "$crates_io_user_agent" -H 'Accept: application/json' -o /dev/null -w '%{http_code}' "$version_url" || echo 000)
   if [[ "$post_status" == 200 ]]; then
     echo "$crate_name $crate_version became available after publish; treating as success"

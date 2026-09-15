@@ -8,6 +8,15 @@ api_root="repos/${GITHUB_REPOSITORY}"
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+# The rulesets endpoint requires the GitHub App installation to have
+# Administration: Read. Fail with an actionable message instead of exposing
+# only gh's generic 403/422 response when the installation is misconfigured.
+if ! gh api "$api_root/rulesets" --silent >/dev/null 2>"$tmp_dir/rulesets-error"; then
+  echo "::error::Unable to read repository rulesets. Grant the GitHub App installation Administration: Read for ${GITHUB_REPOSITORY}, then update the installation and rerun this workflow." >&2
+  cat "$tmp_dir/rulesets-error" >&2
+  exit 1
+fi
+
 mapfile -t ruleset_ids < <(
   gh api --paginate "$api_root/rulesets" \
     --jq '.[] | select(.target == "branch" and .enforcement == "active") | .id'
@@ -19,7 +28,11 @@ if [ "${#ruleset_ids[@]}" -eq 0 ]; then
 fi
 
 for ruleset_id in "${ruleset_ids[@]}"; do
-  gh api "$api_root/rulesets/$ruleset_id" > "$tmp_dir/$ruleset_id.json"
+  if ! gh api "$api_root/rulesets/$ruleset_id" > "$tmp_dir/$ruleset_id.json" 2>"$tmp_dir/ruleset-$ruleset_id-error"; then
+    echo "::error::Unable to read active ruleset ${ruleset_id}. Confirm the GitHub App installation has Administration: Read, then update the installation and rerun this workflow." >&2
+    cat "$tmp_dir/ruleset-$ruleset_id-error" >&2
+    exit 1
+  fi
 done
 
 required_checks=$(

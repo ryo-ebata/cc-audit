@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.15](https://github.com/ryo-ebata/cc-audit/compare/v3.22.14...v3.22.15) (2026-09-15)
+
+
+### Bug Fixes
+
+* **rules:** fold fullwidth PI-001 input ([#420](https://github.com/ryo-ebata/cc-audit/issues/420)) ([e68fb97](https://github.com/ryo-ebata/cc-audit/commit/e68fb9741809cb7b079d904e6c465d2f4a72b2e6))
+
 ## [3.22.14](https://github.com/ryo-ebata/cc-audit/compare/v3.22.13...v3.22.14) (2026-09-15)
 
 

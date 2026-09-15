@@ -38,6 +38,7 @@ jobs:
       - run: bash .github/scripts/test-update-cve-pagination.sh
       - run: bash .github/scripts/test-update-cve-merge-updates.sh
       - run: bash .github/scripts/test-update-cve-cpe-vulnerable.sh
+      - run: bash .github/scripts/test-update-cve-version-constraints.sh
 
   changes:
     name: Detect Changes

@@ -338,16 +338,23 @@ mod tests {
 
     #[test]
     fn test_wait_helper_uses_absolute_deadline_for_irrelevant_events() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
         use std::thread;
         use std::time::{Duration, Instant};
 
         let (tx, rx) = channel();
+        let producer_done = Arc::new(AtomicBool::new(false));
+        let producer_done_clone = Arc::clone(&producer_done);
         let sender = thread::spawn(move || {
             let deadline = Instant::now() + Duration::from_millis(100);
             while Instant::now() < deadline {
                 tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
                 thread::sleep(Duration::from_millis(1));
             }
+            producer_done_clone.store(true, Ordering::SeqCst);
         });
         let started = Instant::now();
         let result = FileWatcher::wait_for_change_from_receiver(
@@ -356,6 +363,7 @@ mod tests {
             Duration::from_millis(10),
             Some(started + Duration::from_millis(20)),
         );
+        assert!(!producer_done.load(Ordering::SeqCst));
         sender.join().unwrap();
         assert!(!result);
         assert!(started.elapsed() < Duration::from_millis(200));
@@ -384,7 +392,14 @@ mod tests {
         let (tx, rx) = channel();
         let sender = thread::spawn(move || {
             tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
-            thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(30));
+            tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
+            thread::sleep(Duration::from_millis(30));
+            tx.send(Ok(notify::Event::new(EventKind::Create(
+                notify::event::CreateKind::File,
+            ))))
+            .unwrap();
+            thread::sleep(Duration::from_millis(30));
         });
         let result = FileWatcher::wait_for_change_from_receiver(
             &rx,
@@ -393,7 +408,7 @@ mod tests {
             None,
         );
         sender.join().unwrap();
-        assert!(!result);
+        assert!(result);
     }
 
     #[test]

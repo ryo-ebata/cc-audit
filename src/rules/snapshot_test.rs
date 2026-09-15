@@ -78,15 +78,7 @@ pub fn scan_with_rule(rule: &Rule, content: &str) -> Vec<SnapshotFinding> {
             continue;
         }
 
-        // Check if any pattern matches
-        let pattern_match = rule.patterns.iter().any(|p| p.is_match(line));
-        if !pattern_match {
-            continue;
-        }
-
-        // Check if any exclusion matches
-        let excluded = rule.exclusions.iter().any(|e| e.is_match(line));
-        if excluded {
+        if !crate::rules::RuleEngine::matches_rule_line(rule, line) {
             continue;
         }
 

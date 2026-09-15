@@ -30,6 +30,7 @@ jobs:
       - uses: actions/checkout@v7
       - run: bash .github/scripts/test-resolve-release-tag.sh
       - run: bash .github/scripts/test-npm-publish-workflow.sh
+      - run: bash .github/scripts/test-npm-publish-preflight.sh
 
   changes:
     name: Detect Changes

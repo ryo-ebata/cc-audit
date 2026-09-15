@@ -64,12 +64,8 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Verify npm publisher identity and package access
-        run: |
-          NPM_USER=$(npm whoami --registry=https://registry.npmjs.org)
-          test -n "$NPM_USER"
-          echo "npm authentication succeeded for user $NPM_USER"
-          npm view @cc-audit/linux-x64 name version --registry=https://registry.npmjs.org
+      - name: Verify npm publisher identity before publish
+        run: bash .github/scripts/npm-publish-preflight.sh
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -203,20 +203,25 @@ impl RuleEngine {
         let lines: Vec<&str> = content.lines().collect();
         let suppressed = self.pi001_suppressed_lines(&lines);
         let mut fenced = false;
-        let mut fence_char = None;
+        let mut fence = None;
         let mut eligible = vec![false; lines.len()];
         for (index, line) in lines.iter().enumerate() {
             if let Some(marker) = Self::markdown_fence_marker(line) {
-                if fenced && fence_char == Some(marker) {
-                    fenced = false;
-                    fence_char = None;
-                } else if !fenced {
+                if let Some((fence_char, fence_len)) = fence {
+                    if marker.0 == fence_char && marker.1 >= fence_len && marker.2.trim().is_empty()
+                    {
+                        fenced = false;
+                        fence = None;
+                    }
+                } else {
                     fenced = true;
-                    fence_char = Some(marker);
+                    fence = Some((marker.0, marker.1));
                 }
                 continue;
             }
-            eligible[index] = !fenced && !Self::is_pi001_markdown_boundary(line);
+            eligible[index] = !(fenced
+                || Self::is_pi001_markdown_boundary(line)
+                || self.skip_comments && Self::is_comment_line(line));
         }
 
         let mut findings = Vec::new();
@@ -251,10 +256,11 @@ impl RuleEngine {
                             .count();
                     let original_span = lines[matched_start..=matched_end].join("\n");
                     let normalized_span = Self::fold_pi001_width(&original_span);
+                    let exclusion_view = normalized_span.replace('\n', " ");
                     if rule
                         .exclusions
                         .iter()
-                        .any(|exclusion| exclusion.is_match(normalized_span.as_ref()))
+                        .any(|exclusion| exclusion.is_match(&exclusion_view))
                     {
                         continue;
                     }
@@ -306,6 +312,9 @@ impl RuleEngine {
                 next_line_suppression = Some(suppression);
                 continue;
             }
+            if self.skip_comments && Self::is_comment_line(line) {
+                continue;
+            }
             let current = next_line_suppression
                 .take()
                 .or_else(|| parse_inline_suppression(line))
@@ -315,12 +324,14 @@ impl RuleEngine {
         result
     }
 
-    fn markdown_fence_marker(line: &str) -> Option<char> {
+    fn markdown_fence_marker(line: &str) -> Option<(char, usize, &str)> {
         let trimmed = line.trim_start();
-        ['`', '~'].into_iter().find(|marker| {
-            let marker_text = marker.to_string().repeat(3);
-            trimmed.starts_with(&marker_text)
-        })
+        let marker = trimmed.chars().next()?;
+        if marker != '`' && marker != '~' {
+            return None;
+        }
+        let length = trimmed.chars().take_while(|ch| *ch == marker).count();
+        (length >= 3).then(|| (marker, length, &trimmed[marker.len_utf8() * length..]))
     }
 
     fn is_pi001_markdown_boundary(line: &str) -> bool {
@@ -654,6 +665,8 @@ mod tests {
     fn test_pi001_multiline_does_not_cross_markdown_boundaries() {
         let content = concat!(
             "```text\nignore previous\ninstructions\n```\n",
+            "````text\nignore previous\ninstructions\n```\nignore previous\ninstructions\n````\n",
+            "~~~text\nignore previous\ninstructions\n~~~\n",
             "ignore previous\n# heading\ninstructions\n",
             "ignore previous\n- list item\ninstructions\n",
             "ignore previous\n| warning | text |\ninstructions\n",
@@ -666,6 +679,22 @@ mod tests {
             .filter(|finding| finding.id == "PI-001")
             .collect();
         assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_pi001_multiline_applies_exclusions_to_minimal_original_span() {
+        let content = concat!(
+            "warning: ignore this example\nignore previous\ninstructions\n",
+            "\"ignore previous\ninstructions\"\n",
+        );
+        let findings: Vec<_> = RuleEngine::new()
+            .check_content(content, "SKILL.md")
+            .into_iter()
+            .filter(|finding| finding.id == "PI-001")
+            .collect();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].location.line, 2);
+        assert_eq!(findings[0].code, "ignore previous\ninstructions");
     }
 
     #[test]
@@ -685,6 +714,7 @@ mod tests {
 
         let suppressed = concat!(
             "# cc-audit-ignore-next-line:PI-001\n",
+            "# explanatory comment\n",
             "ignore previous\ninstructions\n",
             "# cc-audit-disable:PI-001\n",
             "ignore previous\ninstructions\n",
@@ -693,12 +723,13 @@ mod tests {
         );
         let findings: Vec<_> = RuleEngine::new()
             .with_inline_suppression(true)
+            .with_skip_comments(true)
             .check_content(suppressed, "SKILL.md")
             .into_iter()
             .filter(|finding| finding.id == "PI-001")
             .collect();
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].location.line, 8);
+        assert_eq!(findings[0].location.line, 9);
     }
 
     #[test]

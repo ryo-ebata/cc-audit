@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.1](https://github.com/ryo-ebata/cc-audit/compare/v3.22.0...v3.22.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **ci:** diagnose CVE app push authorization ([#372](https://github.com/ryo-ebata/cc-audit/issues/372)) ([c5b8432](https://github.com/ryo-ebata/cc-audit/commit/c5b8432785fe3f9d01fa51a5b133dd3ad3b19ee2))
+
 ## [3.22.0](https://github.com/ryo-ebata/cc-audit/compare/v3.21.5...v3.22.0) (2026-09-15)
 
 

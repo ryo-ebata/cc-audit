@@ -133,11 +133,12 @@ impl CveDatabase {
         self.entries
             .iter()
             .filter(|entry| {
-                entry.affected_products.iter().any(|p| {
-                    p.vendor.eq_ignore_ascii_case(vendor)
-                        && p.product.eq_ignore_ascii_case(product)
-                        && Self::version_matches(&p.version_affected, version)
-                })
+                !entry.severity.eq_ignore_ascii_case("none")
+                    && entry.affected_products.iter().any(|p| {
+                        p.vendor.eq_ignore_ascii_case(vendor)
+                            && p.product.eq_ignore_ascii_case(product)
+                            && Self::version_matches(&p.version_affected, version)
+                    })
             })
             .collect()
     }
@@ -193,10 +194,11 @@ impl CveDatabase {
         self.entries
             .iter()
             .filter(|entry| {
-                entry.affected_products.iter().any(|p| {
-                    p.product.eq_ignore_ascii_case(product)
-                        && Self::version_matches(&p.version_affected, version)
-                })
+                !entry.severity.eq_ignore_ascii_case("none")
+                    && entry.affected_products.iter().any(|p| {
+                        p.product.eq_ignore_ascii_case(product)
+                            && Self::version_matches(&p.version_affected, version)
+                    })
             })
             .collect()
     }
@@ -395,6 +397,34 @@ mod tests {
         let matches = db.check_product("anthropic", "claude-code-vscode", "1.4.0");
         assert!(!matches.is_empty());
         assert!(matches.iter().any(|e| e.id == "CVE-2025-52882"));
+    }
+
+    #[test]
+    fn test_none_severity_is_not_reported_as_medium() {
+        let json = serde_json::json!({
+            "version": "1.0.0",
+            "updated_at": "2026-09-16T00:00:00Z",
+            "entries": [{
+                "id": "CVE-TEST-NONE",
+                "title": "No impact",
+                "description": "No impact vulnerability.",
+                "severity": "none",
+                "cvss_score": 0.0,
+                "affected_products": [{
+                    "vendor": "anthropic",
+                    "product": "claude-code",
+                    "version_affected": "*"
+                }],
+                "published_at": "2026-09-16"
+            }]
+        });
+        let db = CveDatabase::from_json(&json.to_string()).unwrap();
+
+        assert!(
+            db.check_product("anthropic", "claude-code", "1.0.0")
+                .is_empty()
+        );
+        assert!(db.check_product_by_name("claude-code", "1.0.0").is_empty());
     }
 
     #[test]

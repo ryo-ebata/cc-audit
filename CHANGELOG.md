@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.16](https://github.com/ryo-ebata/cc-audit/compare/v3.22.15...v3.22.16) (2026-09-15)
+
+
+### Bug Fixes
+
+* **rules:** detect split PI-001 phrases ([#423](https://github.com/ryo-ebata/cc-audit/issues/423)) ([4f72293](https://github.com/ryo-ebata/cc-audit/commit/4f722933421af82828b8ab9d6ec6c4e005dbd712))
+
 ## [3.22.15](https://github.com/ryo-ebata/cc-audit/compare/v3.22.14...v3.22.15) (2026-09-15)
 
 

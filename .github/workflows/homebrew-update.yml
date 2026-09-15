@@ -12,19 +12,35 @@ jobs:
   update-formula:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
-    # Only run if Release workflow succeeded and was triggered by a tag
-    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    # Resolve the release tag from the completed Release run SHA.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
+      - name: Resolve release tag
+        id: release
+        run: |
+          TAG=$(bash .github/scripts/resolve-release-tag.sh "$HEAD_SHA" "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git")
+          test -n "$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Verify GitHub release
+        run: |
+          test "$(gh release view "${{ steps.release.outputs.tag }}" --repo "${{ github.repository }}" --json tagName --jq .tagName)" = "${{ steps.release.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Get release version
         id: version
         run: |
-          VERSION="${{ github.event.workflow_run.head_branch }}"
+          VERSION="${{ steps.release.outputs.tag }}"
           echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "tag=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Download SHA256 checksums
         run: |
-          gh release download ${{ github.event.workflow_run.head_branch }} \
+          gh release download ${{ steps.release.outputs.tag }} \
             --repo ${{ github.repository }} \
             --pattern "*.sha256" \
             --dir ./checksums

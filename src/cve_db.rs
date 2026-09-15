@@ -430,6 +430,7 @@ mod tests {
             .to_string()
             .replace("\"cvss_score\":0.0", "\"cvss_score\":9.0");
         let invalid_db = CveDatabase::from_json(&invalid_json).unwrap();
+        assert_eq!(invalid_db.entries[0].cvss_score, Some(9.0));
         assert_eq!(
             invalid_db
                 .check_product("anthropic", "claude-code", "1.0.0")
@@ -443,8 +444,14 @@ mod tests {
             1
         );
 
-        let missing_score_json = json.to_string().replace(",\"cvss_score\":0.0", "");
+        let mut missing_score_value = json;
+        missing_score_value["entries"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("cvss_score");
+        let missing_score_json = missing_score_value.to_string();
         let missing_score_db = CveDatabase::from_json(&missing_score_json).unwrap();
+        assert_eq!(missing_score_db.entries[0].cvss_score, None);
         assert_eq!(
             missing_score_db
                 .check_product("anthropic", "claude-code", "1.0.0")

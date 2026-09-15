@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.13](https://github.com/ryo-ebata/cc-audit/compare/v3.22.12...v3.22.13) (2026-09-15)
+
+
+### Bug Fixes
+
+* **cve:** read CVSS v2 severity from metric ([#414](https://github.com/ryo-ebata/cc-audit/issues/414)) ([28f2037](https://github.com/ryo-ebata/cc-audit/commit/28f203773a417d2f6961a7ec03c20cabd2b42b70))
+
 ## [3.22.12](https://github.com/ryo-ebata/cc-audit/compare/v3.22.11...v3.22.12) (2026-09-15)
 
 

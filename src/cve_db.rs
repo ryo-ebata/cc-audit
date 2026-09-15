@@ -558,6 +558,24 @@ mod tests {
     }
 
     #[test]
+    fn test_compound_constraint_boundaries_and_invalid_values() {
+        for (requirement, version, expected) in [
+            (">= 1.0.0, <= 2.0.0", "1.0.0", true),
+            (">= 1.0.0, <= 2.0.0", "2.0.0", true),
+            ("> 1.0.0, <= 2.0.0", "1.0.0", false),
+            ("> 1.0.0, <= 2.0.0", "2.0.0", true),
+            (">= 1.0.0, < 2.0.0", "1.0.0", true),
+            (">= 1.0.0, < 2.0.0", "2.0.0", false),
+            ("> 1.0.0, < 2.0.0", "1.0.0", false),
+            ("> 1.0.0, < 2.0.0", "1.5.0", true),
+            ("= 1.5", "1.5.0", false),
+            (">= nope", "1.5.0", false),
+        ] {
+            assert_eq!(CveDatabase::version_matches(requirement, version), expected);
+        }
+    }
+
+    #[test]
     fn test_version_comparison_exact_match_no_operator() {
         // Test default exact match without operator (line 148)
         assert!(CveDatabase::version_matches("1.5.0", "1.5.0"));

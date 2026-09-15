@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.18](https://github.com/ryo-ebata/cc-audit/compare/v3.22.17...v3.22.18) (2026-09-15)
+
+
+### Bug Fixes
+
+* honor recursive setting from profiles ([#433](https://github.com/ryo-ebata/cc-audit/issues/433)) ([d4392b4](https://github.com/ryo-ebata/cc-audit/commit/d4392b48ff3b7a043c9834df49b49ff54252dfba))
+
 ## [3.22.17](https://github.com/ryo-ebata/cc-audit/compare/v3.22.16...v3.22.17) (2026-09-15)
 
 

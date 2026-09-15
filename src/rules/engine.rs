@@ -342,8 +342,13 @@ impl RuleEngine {
         if trimmed.contains('|') {
             return true;
         }
-        if trimmed.starts_with('#') {
-            return trimmed.as_bytes().get(1).is_some_and(|byte| *byte == b' ');
+        let heading_length = trimmed.bytes().take_while(|byte| *byte == b'#').count();
+        if (1..=6).contains(&heading_length) {
+            return trimmed.len() == heading_length
+                || trimmed[heading_length..]
+                    .chars()
+                    .next()
+                    .is_some_and(char::is_whitespace);
         }
         if trimmed.len() >= 3
             && (trimmed.chars().all(|ch| ch == '-') || trimmed.chars().all(|ch| ch == '='))
@@ -667,7 +672,7 @@ mod tests {
             "```text\nignore previous\ninstructions\n```\n",
             "````text\nignore previous\ninstructions\n```\nignore previous\ninstructions\n````\n",
             "~~~text\nignore previous\ninstructions\n~~~\n",
-            "ignore previous\n# heading\ninstructions\n",
+            "## ignore previous\ninstructions\n",
             "ignore previous\n- list item\ninstructions\n",
             "ignore previous\n| warning | text |\ninstructions\n",
             "ignore previous\ntitle\n---\ninstructions\n",

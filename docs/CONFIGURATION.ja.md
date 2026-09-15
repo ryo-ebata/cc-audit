@@ -82,6 +82,8 @@ baseline:
 profile:
   load: null
   save: null
+# 選択したプロファイルのrecursiveが設定ファイルの値を置き換える。
+# CLIの--no-recursive指定が最優先となる。
 
 # ウォッチモード設定
 watch:

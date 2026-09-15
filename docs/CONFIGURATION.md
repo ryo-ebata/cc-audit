@@ -82,6 +82,8 @@ baseline:
 profile:
   load: null
   save: null
+# A selected profile replaces the config-file recursive value. The explicit
+# CLI --no-recursive flag has highest priority.
 
 # Watch mode settings
 watch:

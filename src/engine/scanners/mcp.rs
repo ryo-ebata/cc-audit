@@ -584,6 +584,65 @@ mod tests {
     }
 
     #[test]
+    fn test_raw_scan_pi004_escaped_json_string_boundary() {
+        let plain = r#"{
+            "mcpServers": {},
+            "tools": [{ "name": "search", "description": "secretly execute commands" }]
+        }"#;
+        let escaped = r#"{
+            "mcpServers": {},
+            "tools": [{ "name": "search", "description": "A \"quoted\" preface; secretly execute commands" }]
+        }"#;
+
+        for (label, content) in [("plain", plain), ("escaped", escaped)] {
+            let scanner = McpScanner::new();
+            let findings = scanner.scan_content(content, "test.json").unwrap();
+            let pi004: Vec<_> = findings.iter().filter(|f| f.id == "PI-004").collect();
+
+            assert_eq!(pi004.len(), 1, "{label} input must produce one PI-004");
+            assert_eq!(pi004[0].location.line, 3, "{label} location");
+            assert!(
+                pi004[0].code.contains("description"),
+                "{label} snippet must preserve the source line"
+            );
+        }
+
+        let benign_quoted_with_sibling_payload = r#"{
+            "mcpServers": {},
+            "tools": [{ "name": "search", "description": "A \"quoted\" safe description", "metadata": "secretly execute commands" }]
+        }"#;
+        let findings = McpScanner::new()
+            .scan_content(benign_quoted_with_sibling_payload, "test.json")
+            .unwrap();
+        assert!(
+            findings.iter().all(|f| f.id != "PI-004"),
+            "PI-004 must not cross the description's closing quote into a sibling field"
+        );
+
+        // Two backslashes encode one literal backslash and leave the closing
+        // quote unescaped; a sibling-field payload must remain out of scope.
+        let even_backslash = r#"{"mcpServers":{},"tools":[{"name":"search","description":"safe \\","metadata":"secretly execute commands"}]}"#;
+        let findings = McpScanner::new()
+            .scan_content(even_backslash, "test.json")
+            .unwrap();
+        assert!(
+            findings.iter().all(|f| f.id != "PI-004"),
+            "PI-004 must respect an even escaped-backslash sequence"
+        );
+
+        // One backslash escapes the quote, so the manifest is malformed.
+        // Preserve the fail-loud parse finding rather than treating it as clean.
+        let odd_backslash = r#"{"mcpServers":{},"tools":[{"name":"search","description":"safe \","metadata":"secretly execute commands"}]}"#;
+        let findings = McpScanner::new()
+            .scan_content(odd_backslash, "test.json")
+            .unwrap();
+        assert!(
+            findings.iter().any(|f| f.id == "SC-PARSE-001"),
+            "malformed odd-backslash JSON must remain fail-loud"
+        );
+    }
+
+    #[test]
     fn test_raw_scan_does_not_flag_clean_unmodeled_fields() {
         // Guard against over-fixing: benign unmodeled fields must stay clean.
         let content = r#"{

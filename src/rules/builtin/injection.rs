@@ -365,7 +365,7 @@ fn pi_004() -> Rule {
             .expect("PI-004: invalid regex"),
             // French
             Regex::new(
-                r#"(?i)"description"\s*:\s*"[^"]*(?:(?:ignor(?:e|ez|er|ons|ent)|oubli(?:e|ez|er|ons|ent)|contourn(?:e|ez|er|ons|ent)|bypass(?:e|ez|er)|remplac(?:e|ez|er|ons|ent))[^\"]{0,20}(?:instruction|règle|consigne|sécurité)|(?:instruction|règle|consigne|sécurité)[^\"]{0,20}(?:ignor(?:e|ez|er|ons|ent)|oubli(?:e|ez|er|ons|ent)|contourn(?:e|ez|er|ons|ent)|bypass(?:e|ez|er)|remplac(?:e|ez|er|ons|ent)))"#,
+                r#"(?i)"description"\s*:\s*"(?:\\.|[^"\\])*(?:(?:ignor(?:e|ez|er|ons|ent)|oubli(?:e|ez|er|ons|ent)|contourn(?:e|ez|er|ons|ent)|bypass(?:e|ez|er)|remplac(?:e|ez|er|ons|ent))(?:\\.|[^"\\]){0,20}(?:instruction|règle|consigne|sécurité)|(?:instruction|règle|consigne|sécurité)(?:\\.|[^"\\]){0,20}(?:ignor(?:e|ez|er|ons|ent)|oubli(?:e|ez|er|ons|ent)|contourn(?:e|ez|er|ons|ent)|bypass(?:e|ez|er)|remplac(?:e|ez|er|ons|ent)))"#,
             )
             .expect("PI-004: invalid regex"),
             Regex::new(

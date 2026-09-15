@@ -338,35 +338,40 @@ mod tests {
 
     #[test]
     fn test_wait_helper_uses_absolute_deadline_for_irrelevant_events() {
-        use std::sync::{
-            Arc,
-            atomic::{AtomicBool, Ordering},
-        };
         use std::thread;
         use std::time::{Duration, Instant};
 
         let (tx, rx) = channel();
-        let producer_done = Arc::new(AtomicBool::new(false));
-        let producer_done_clone = Arc::clone(&producer_done);
+        let (stop_tx, stop_rx) = channel();
+        let (result_tx, result_rx) = channel();
         let sender = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_millis(100);
-            while Instant::now() < deadline {
+            while stop_rx.try_recv().is_err() {
                 tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
                 thread::sleep(Duration::from_millis(1));
             }
-            producer_done_clone.store(true, Ordering::SeqCst);
         });
-        let started = Instant::now();
-        let result = FileWatcher::wait_for_change_from_receiver(
-            &rx,
-            Duration::from_millis(10),
-            Duration::from_millis(10),
-            Some(started + Duration::from_millis(20)),
-        );
-        assert!(!producer_done.load(Ordering::SeqCst));
+        let worker = thread::spawn(move || {
+            let result = FileWatcher::wait_for_change_from_receiver(
+                &rx,
+                Duration::from_millis(10),
+                Duration::from_millis(10),
+                Some(Instant::now() + Duration::from_millis(20)),
+            );
+            result_tx.send(result).unwrap();
+        });
+        let result = match result_rx.recv_timeout(Duration::from_millis(200)) {
+            Ok(result) => result,
+            Err(error) => {
+                stop_tx.send(()).unwrap();
+                sender.join().unwrap();
+                worker.join().unwrap();
+                panic!("absolute deadline was not honored: {error}");
+            }
+        };
+        stop_tx.send(()).unwrap();
         sender.join().unwrap();
+        worker.join().unwrap();
         assert!(!result);
-        assert!(started.elapsed() < Duration::from_millis(200));
     }
 
     #[test]
@@ -390,6 +395,8 @@ mod tests {
         use std::time::Duration;
 
         let (tx, rx) = channel();
+        let (release_tx, release_rx) = channel();
+        let (result_tx, result_rx) = channel();
         let sender = thread::spawn(move || {
             tx.send(Ok(notify::Event::new(EventKind::Other))).unwrap();
             thread::sleep(Duration::from_millis(30));
@@ -399,15 +406,23 @@ mod tests {
                 notify::event::CreateKind::File,
             ))))
             .unwrap();
-            thread::sleep(Duration::from_millis(30));
+            release_rx.recv().unwrap();
         });
-        let result = FileWatcher::wait_for_change_from_receiver(
-            &rx,
-            Duration::from_millis(10),
-            Duration::from_millis(10),
-            None,
-        );
+        let worker = thread::spawn(move || {
+            let result = FileWatcher::wait_for_change_from_receiver(
+                &rx,
+                Duration::from_millis(10),
+                Duration::from_millis(10),
+                None,
+            );
+            result_tx.send(result).unwrap();
+        });
+        let result = result_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("idle helper did not receive the meaningful event");
+        release_tx.send(()).unwrap();
         sender.join().unwrap();
+        worker.join().unwrap();
         assert!(result);
     }
 

@@ -33,18 +33,21 @@ gh release view "$TAG" --json tagName,url,isDraft,isPrerelease,publishedAt
 ```
 
 Before interpreting the results, confirm that `gh repo view` and `origin` refer
-to the same repository. If either query fails, or the repository cannot be
-verified, the release state is unknown. Stop without rerunning or modifying a
-release.
+to the same repository. If the repository or tag query fails, or the repository
+cannot be verified, the release state is unknown. Stop without rerunning or
+modifying a release. After repository access is verified, only an explicit
+not-found response from the Release query means that the Release is absent;
+authentication, permission, network, and 5xx errors are unknown state.
 
 Interpret the results separately:
 
 - A tag or GitHub Release exists: pass 1 may have completed. Inspect the
   release, assets, and downstream workflow runs. Do not blindly rerun Release
   Please or recreate the tag/release.
-- The tag query succeeds with no tag and the release query returns an explicit
-  404/not-found: the release state is known to be absent, but this does not
-  prove that pass 1 ran. Confirm the failed step and its logs before deciding
+- The tag query succeeds with no tag and, after repository access is verified,
+  the release query returns an explicit 404/not-found: the release state is
+  known to be absent, but absence alone does not show whether pass 1 ran or how
+  far it progressed. Confirm the failed step and its logs before deciding
   whether a single manually approved rerun is safe.
 - `release_created` is missing or unavailable because the job failed: treat it
   as an unavailable output, not as proof that no release was created.

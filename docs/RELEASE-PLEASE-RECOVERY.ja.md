@@ -31,17 +31,20 @@ gh release view "$TAG" --json tagName,url,isDraft,isPrerelease,publishedAt
 ```
 
 結果を解釈する前に、`gh repo view`と`origin`が同じrepositoryを指すことを確認
-する。どちらかの照会が失敗する、またはrepositoryを検証できない場合、release状態
-はunknownである。再実行やrelease変更をせず停止する。
+する。repositoryまたはtagの照会が失敗する、またはrepositoryを検証できない場合、
+release状態はunknownである。再実行やrelease変更をせず停止する。repository access
+確認後、release照会の明示的なnot-foundだけをrelease不存在と扱い、それ以外の認証、
+権限、通信、5xxエラーはunknown stateとする。
 
 結果は分けて解釈する。
 
 - tagまたはGitHub Releaseが存在する場合、pass 1は完了している可能性がある。
   release、asset、後続workflowを確認し、Release Pleaseを無条件に再実行したり
   tag/releaseを作り直したりしない。
-- tagの照会が成功してtagなし、かつreleaseの照会が明示的な404/not-foundを返す場合、
-  releaseがないことは確定するが、pass 1が実行されなかった証拠ではない。失敗stepと
-  ログを確認してから、手動で1回だけ再実行して安全か判断する。
+- tagの照会が成功してtagなし、かつrepository access確認後のrelease照会が明示的な
+  404/not-foundを返す場合、releaseがないことは確定する。ただし不存在だけでは
+  pass 1が実行されたか、どこまで進んだかは分からない。失敗stepとログを確認してから、
+  手動で1回だけ再実行して安全か判断する。
 - job失敗により`release_created`が欠落・利用不能な場合、release未作成の証拠とは
   扱わない。
 

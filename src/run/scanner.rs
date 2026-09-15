@@ -712,7 +712,6 @@ mod tests {
             "---\nname: test\ndescription: Test skill\n---\n# Test"
         )
         .unwrap();
-
         let args = create_test_check_args(vec![temp_dir.path().to_path_buf()]);
         let result = run_scan_with_check_args(&args);
         assert!(result.is_some());
@@ -1524,6 +1523,170 @@ mod tests {
             filtered_no_filter.len(),
             1,
             "Without min_rule_severity filter, warning should be included"
+        );
+    }
+
+    #[test]
+    fn test_profile_recursive_controls_nested_skill_scan_and_cli_override() {
+        let temp_dir = TempDir::new().unwrap();
+        let top_level = temp_dir.path().join("SKILL.md");
+        let deep_dir = temp_dir.path().join("a/b/c/d");
+        let deep_level = deep_dir.join("SKILL.md");
+        fs::create_dir_all(&deep_dir).unwrap();
+        fs::write(
+            &top_level,
+            "# Top level\nsudo rm -rf / is a scanner fixture, never execute it.\n",
+        )
+        .unwrap();
+        fs::write(
+            &deep_level,
+            "# Deep level\nsudo rm -rf / is a scanner fixture, never execute it.\n",
+        )
+        .unwrap();
+
+        let path_matches = |actual: &str, expected: &Path| {
+            // Normalize only this assertion so platform-specific separators
+            // do not hide whether the expected file was actually detected.
+            actual.replace('\\', "/") == expected.display().to_string().replace('\\', "/")
+        };
+
+        let profile_args = CheckArgs {
+            paths: vec![temp_dir.path().to_path_buf()],
+            scan_type: ScanType::Skill,
+            ..Default::default()
+        };
+        let profile =
+            crate::profile::profile_from_check_args("recursive_scan", &profile_args, false);
+        profile.save_in_dir(temp_dir.path()).unwrap();
+        let loaded = crate::Profile::load_in_dir("recursive_scan", temp_dir.path()).unwrap();
+
+        let mut config = Config::default();
+        config.scan.recursive = false;
+        loaded.apply_to_config(&mut config.scan);
+        let effective = EffectiveConfig::from_check_args_and_config(&profile_args, &config);
+        assert!(effective.recursive);
+
+        let ignore_fn = |_path: &Path| IgnoreFilter::from_config(&Default::default());
+        let findings = run_scanner_for_type(
+            &ScanType::Skill,
+            temp_dir.path(),
+            &ignore_fn,
+            false,
+            false,
+            false,
+            effective.recursive,
+            &[],
+            create_noop_progress_callback(),
+        )
+        .unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
+        );
+
+        let cli_no_recursive = CheckArgs {
+            no_recursive: true,
+            paths: vec![temp_dir.path().to_path_buf()],
+            scan_type: ScanType::Skill,
+            ..Default::default()
+        };
+        let effective = EffectiveConfig::from_check_args_and_config(&cli_no_recursive, &config);
+        assert!(!effective.recursive);
+        let findings = run_scanner_for_type(
+            &ScanType::Skill,
+            temp_dir.path(),
+            &ignore_fn,
+            false,
+            false,
+            false,
+            effective.recursive,
+            &[],
+            create_noop_progress_callback(),
+        )
+        .unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            !findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
+        );
+
+        let non_recursive_args = CheckArgs {
+            no_recursive: true,
+            ..Default::default()
+        };
+        let non_recursive_profile = crate::profile::profile_from_check_args(
+            "non_recursive_scan",
+            &non_recursive_args,
+            false,
+        );
+        non_recursive_profile.save_in_dir(temp_dir.path()).unwrap();
+        let loaded = crate::Profile::load_in_dir("non_recursive_scan", temp_dir.path()).unwrap();
+        let mut profile_config = Config::default();
+        loaded.apply_to_config(&mut profile_config.scan);
+        let effective = EffectiveConfig::from_check_args_and_config(&profile_args, &profile_config);
+        assert!(!effective.recursive);
+        let findings = run_scanner_for_type(
+            &ScanType::Skill,
+            temp_dir.path(),
+            &ignore_fn,
+            false,
+            false,
+            false,
+            effective.recursive,
+            &[],
+            create_noop_progress_callback(),
+        )
+        .unwrap();
+        assert!(
+            findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &top_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            !findings
+                .iter()
+                .any(|f| path_matches(&f.location.file, &deep_level)),
+            "finding paths: {:?}",
+            findings
+                .iter()
+                .map(|f| &f.location.file)
+                .collect::<Vec<_>>()
         );
     }
 }

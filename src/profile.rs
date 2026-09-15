@@ -225,7 +225,9 @@ impl Profile {
     /// Apply profile settings to effective config
     pub fn apply_to_config(&self, config: &mut crate::config::ScanConfig) {
         config.strict = config.strict || self.strict;
-        config.recursive = config.recursive || self.recursive;
+        // A selected profile replaces the config-file value. The explicit
+        // CLI --no-recursive flag is applied later by EffectiveConfig.
+        config.recursive = self.recursive;
         config.ci = config.ci || self.ci;
         config.verbose = config.verbose || self.verbose;
         config.skip_comments = config.skip_comments || self.skip_comments;
@@ -594,6 +596,42 @@ mod tests {
 
         // Profile has recursive=true, so it should be true after apply
         assert!(config.recursive);
+    }
+
+    #[test]
+    fn test_apply_to_config_recursive_profile_value_wins_both_directions() {
+        let mut profile = Profile::default_profile();
+        profile.recursive = false;
+        let mut config = ScanConfig {
+            recursive: true,
+            ..Default::default()
+        };
+        profile.apply_to_config(&mut config);
+        assert!(!config.recursive);
+
+        profile.recursive = true;
+        config.recursive = false;
+        profile.apply_to_config(&mut config);
+        assert!(config.recursive);
+    }
+
+    #[test]
+    fn test_saved_no_recursive_profile_applies_after_reload() {
+        use crate::CheckArgs;
+
+        let temp_dir = TempDir::new().unwrap();
+        let args = CheckArgs {
+            no_recursive: true,
+            ..Default::default()
+        };
+        let profile = profile_from_check_args("saved_non_recursive", &args, false);
+        assert!(!profile.recursive);
+        profile.save_in_dir(temp_dir.path()).unwrap();
+
+        let loaded = Profile::load_in_dir("saved_non_recursive", temp_dir.path()).unwrap();
+        let mut config = ScanConfig::default();
+        loaded.apply_to_config(&mut config);
+        assert!(!config.recursive);
     }
 
     #[test]

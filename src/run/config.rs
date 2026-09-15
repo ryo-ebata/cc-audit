@@ -192,9 +192,9 @@ impl EffectiveConfig {
             .min_rule_severity
             .or_else(|| parse_rule_severity(config.scan.min_rule_severity.as_deref()));
 
-        // Note: args.no_recursive means NOT recursive (default false = recursive)
-        // If CLI says --no-recursive, disable recursion regardless of config
-        // Otherwise, use config value
+        // Note: args.no_recursive means NOT recursive (default false = recursive).
+        // A selected profile has already replaced config.scan.recursive; the
+        // explicit CLI flag remains the highest-priority disable switch.
         let recursive = !args.no_recursive && config.scan.recursive;
 
         Self {
@@ -350,5 +350,28 @@ mod tests {
         assert_eq!(parse_badge_format(Some("url")), Some(BadgeFormat::Url));
         assert_eq!(parse_badge_format(Some("invalid")), None);
         assert_eq!(parse_badge_format(None), None);
+    }
+
+    #[test]
+    fn test_recursive_cli_override_wins_over_profile_or_config() {
+        let args = CheckArgs {
+            no_recursive: true,
+            ..Default::default()
+        };
+        let mut config = Config::default();
+        config.scan.recursive = true;
+
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
+        assert!(!effective.recursive);
+    }
+
+    #[test]
+    fn test_recursive_config_value_is_used_without_cli_override() {
+        let args = CheckArgs::default();
+        let mut config = Config::default();
+        config.scan.recursive = false;
+
+        let effective = EffectiveConfig::from_check_args_and_config(&args, &config);
+        assert!(!effective.recursive);
     }
 }

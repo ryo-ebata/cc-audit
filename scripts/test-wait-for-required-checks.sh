@@ -55,6 +55,9 @@ if [ -f "${count_file}" ]; then count=$(cat "${count_file}"); fi
 count=$((count + 1))
 echo "${count}" > "${count_file}"
   case "${MOCK_DATE_MODE:-stable}:${count}" in
+    delayed:1) echo 0 ;;
+    delayed:2) echo 301 ;;
+    delayed:*) echo 302 ;;
     pending:1) echo 0 ;;
     pending:2) echo 301 ;;
     pending:*) echo 302 ;;
@@ -78,8 +81,8 @@ run_case() {
   local deadline=20
   shift 2
   case "${name}" in
-    context-pending | missing) deadline=7 ;;
-    pending) deadline=1500 ;;
+    missing) deadline=7 ;;
+    delayed | pending) deadline=1500 ;;
   esac
   rm -f "${TEST_ROOT}/head-count" "${TEST_ROOT}/rollup-count" "${TEST_ROOT}/date-count" "${TEST_ROOT}/merged"
   set +e
@@ -97,6 +100,13 @@ run_case() {
     echo "${name}: unexpectedly invoked merge" >&2
     exit 1
   fi
+  if [ "${expected_status}" -eq 0 ]; then
+    if [ ! -f "${TEST_ROOT}/merged" ]; then
+      echo "${name}: expected merge was not invoked" >&2
+      exit 1
+    fi
+    grep -q -- '--match-head-commit abc' "${TEST_ROOT}/merged"
+  fi
 }
 
 write_rollup delayed-1 "dependency"$'\tStatusContext\t\t\tSUCCESS'
@@ -108,8 +118,9 @@ write_rollup pending-2 "Result"$'\tCheckRun\tIN_PROGRESS\tSUCCESS\t'
 write_rollup pending-3 "Result"$'\tCheckRun\tCOMPLETED\tSUCCESS\t'
 run_case pending 0 env MOCK_DATE_MODE=pending bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
 
-write_rollup context-pending "Result"$'\tStatusContext\t\t\tPENDING'
-run_case context-pending 1 env MOCK_DATE_MODE=timeout bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
+write_rollup context-pending-1 "Result"$'\tStatusContext\t\t\tPENDING'
+write_rollup context-pending-2 "Result"$'\tStatusContext\t\t\tSUCCESS'
+run_case context-pending 0 bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
 
 write_rollup missing
 run_case missing 1 env MOCK_DATE_MODE=timeout bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
@@ -130,9 +141,4 @@ Result"
 write_rollup retry "Result"$'\tCheckRun\tCOMPLETED\tSUCCESS\t'
 run_case retry 0 env MOCK_STATUS_FAIL_ONCE=1 bash "${SCRIPT_DIR}/wait-for-required-checks.sh" 383 Result
 
-if [ ! -f "${TEST_ROOT}/merged" ]; then
-  echo "success cases did not invoke a SHA-pinned merge" >&2
-  exit 1
-fi
-grep -q -- '--match-head-commit abc' "${TEST_ROOT}/merged"
 echo "wait-for-required-checks regression tests passed"

@@ -14,6 +14,8 @@ use tracing::warn;
 pub struct IgnoreFilter {
     /// Compiled glob patterns for ignoring paths.
     globset: Option<GlobSet>,
+    /// Original valid patterns, retained so add_pattern can rebuild cumulatively.
+    patterns: Vec<String>,
 }
 
 impl Default for IgnoreFilter {
@@ -25,7 +27,10 @@ impl Default for IgnoreFilter {
 impl IgnoreFilter {
     /// Create a new empty IgnoreFilter.
     pub fn new() -> Self {
-        Self { globset: None }
+        Self {
+            globset: None,
+            patterns: Vec::new(),
+        }
     }
 
     /// Create IgnoreFilter from config.
@@ -35,10 +40,12 @@ impl IgnoreFilter {
         }
 
         let mut builder = GlobSetBuilder::new();
+        let mut patterns = Vec::new();
         for pattern in &config.patterns {
             match Glob::new(pattern) {
                 Ok(glob) => {
                     builder.add(glob);
+                    patterns.push(pattern.clone());
                 }
                 Err(e) => {
                     warn!(pattern = %pattern, error = %e, "Invalid ignore pattern");
@@ -54,18 +61,24 @@ impl IgnoreFilter {
             }
         };
 
-        Self { globset }
+        Self { globset, patterns }
     }
 
     /// Add a glob pattern to the filter.
     pub fn add_pattern(&mut self, pattern: &str) -> Result<(), globset::Error> {
-        let glob = Glob::new(pattern)?;
+        Glob::new(pattern)?;
 
-        // Rebuild the globset with the new pattern
+        // Rebuild the globset with all existing patterns plus the new one.
+        let mut patterns = self.patterns.clone();
+        patterns.push(pattern.to_string());
         let mut builder = GlobSetBuilder::new();
-        builder.add(glob);
+        for existing in &patterns {
+            builder.add(Glob::new(existing)?);
+        }
 
-        self.globset = Some(builder.build()?);
+        let globset = builder.build()?;
+        self.globset = Some(globset);
+        self.patterns = patterns;
 
         Ok(())
     }
@@ -157,6 +170,16 @@ mod tests {
         filter.add_pattern("**/node_modules/**").unwrap();
 
         assert!(filter.is_ignored(Path::new("/project/node_modules/pkg")));
+    }
+
+    #[test]
+    fn test_add_pattern_preserves_existing_patterns() {
+        let mut filter = IgnoreFilter::new();
+        filter.add_pattern("**/node_modules/**").unwrap();
+        filter.add_pattern("**/target/**").unwrap();
+
+        assert!(filter.is_ignored(Path::new("/project/node_modules/pkg")));
+        assert!(filter.is_ignored(Path::new("/project/target/debug")));
     }
 
     #[test]

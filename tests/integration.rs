@@ -73,6 +73,13 @@ fn create_fake_git(dir: &std::path::Path, readme: &str) -> std::path::PathBuf {
 printf '%s\n' "$*" >> "$FAKE_GIT_LOG"
 if [ "$1" = "--version" ]; then exit 0; fi
 if [ "$1" = "clone" ]; then
+  if [ -n "$EXPECTED_AUTH_TOKEN" ]; then
+    if [ -n "$GIT_ASKPASS" ] && [ -x "$GIT_ASKPASS" ] && [ "$("$GIT_ASKPASS" Password)" = "$EXPECTED_AUTH_TOKEN" ]; then
+      printf '%s\n' AUTH_OK >> "$FAKE_GIT_LOG"
+    else
+      printf '%s\n' AUTH_MISSING_OR_INVALID >> "$FAKE_GIT_LOG"
+    fi
+  fi
   last=""
   for arg in "$@"; do last="$arg"; done
   mkdir -p "$last"
@@ -115,6 +122,7 @@ fn remote_cli_dispatch_propagates_ref_and_auth_without_network() {
         .arg("secret-token")
         .env("PATH", path)
         .env("FAKE_GIT_LOG", &log)
+        .env("EXPECTED_AUTH_TOKEN", "secret-token")
         .env("HOME", dir.path())
         .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
         .timeout(std::time::Duration::from_secs(5))
@@ -124,6 +132,7 @@ fn remote_cli_dispatch_propagates_ref_and_auth_without_network() {
 
     assert!(output.status.success());
     assert!(git_log.contains("--branch test-ref"));
+    assert!(git_log.contains("AUTH_OK"));
     assert!(!git_log.contains("secret-token"));
 }
 

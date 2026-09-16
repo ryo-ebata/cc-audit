@@ -295,7 +295,18 @@ fn sc_007() -> Rule {
             Regex::new(r"(?m)^\s*(?:RUN\s+)?podman\s+pull\s+[a-zA-Z0-9][^@\s]*(?:\s|$)")
                 .expect("SC-007: invalid regex"),
             // kubernetes image without digest
-            Regex::new(r"image:\s*[^@]+:[a-zA-Z0-9._-]+\s*$").expect("SC-007: invalid regex"),
+            Regex::new(r"(?m)^\s*(?:-\s*)?image:\s*[^@]+:[a-zA-Z0-9._-]+\s*$")
+                .expect("SC-007: invalid regex"),
+            // Kubernetes image without a tag (including namespaced images)
+            Regex::new(
+                r"(?m)^\s*(?:-\s*)?image:\s*(?:[a-zA-Z0-9._-]+/)*[a-zA-Z0-9._-]+\s*$",
+            )
+                .expect("SC-007: invalid regex"),
+            // Kubernetes image without a tag when the registry includes a port
+            Regex::new(
+                r"(?m)^\s*(?:-\s*)?image:\s*[a-zA-Z0-9._-]+:\d+/(?:[a-zA-Z0-9._-]+/)*[a-zA-Z0-9._-]+\s*$",
+            )
+            .expect("SC-007: invalid regex"),
         ],
         exclusions: vec![
             // Digest-pinned images
@@ -475,6 +486,52 @@ mod tests {
             assert!(
                 !matched || excluded,
                 "Should not detect safe input: {input}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sc_007_detects_tagless_kubernetes_images() {
+        let rule = sc_007();
+        let detected = [
+            "image: nginx",
+            "image: acme/worker",
+            "image: ghcr.io/acme/worker",
+            "image: registry.example.com:5000/acme/worker",
+            "- image: nginx",
+            "  - image: registry.example.com:5000/acme/worker",
+            "image: nginx:latest",
+            "image: acme/worker:v1",
+            "image: registry.example.com:5000/acme/worker:stable",
+            "- image: nginx:latest",
+        ];
+        let safe = [
+            "image: nginx@sha256:0123456789abcdef",
+            "image: localhost/acme/worker",
+            "image: localhost:5000/acme/worker",
+            "image: 127.0.0.1/acme/worker",
+            "- image: nginx@sha256:0123456789abcdef",
+            "- image: localhost/acme/worker",
+            "image:",
+            "# image: nginx:latest",
+            "# - image: nginx:latest",
+            "otherimage: nginx",
+        ];
+
+        for input in detected {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                matched && !excluded,
+                "Should detect unpinned image: {input}"
+            );
+        }
+        for input in safe {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                !matched || excluded,
+                "Should not detect safe image: {input}"
             );
         }
     }

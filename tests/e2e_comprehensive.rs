@@ -103,6 +103,63 @@ fn test_sc007_tagless_container_pull_cli_regression() {
         .arg(&safe_dockerfile)
         .assert()
         .success();
+
+    let manifest_dir = TempDir::new().unwrap();
+    create_config(manifest_dir.path());
+    let compose_file = manifest_dir.path().join("compose.yaml");
+    fs::write(
+        &compose_file,
+        "services:\n  worker:\n    image: ghcr.io/acme/worker\n  api:\n    image: registry.example.com:5000/acme/api\n  tagged:\n    image: ghcr.io/acme/tagged:1.0\n",
+    )
+    .unwrap();
+
+    let output = check_cmd()
+        .current_dir(manifest_dir.path())
+        .args([
+            "--type",
+            "docker",
+            "--format",
+            "json",
+            "--no-cve-scan",
+            "--no-malware-scan",
+        ])
+        .arg(&compose_file)
+        .assert()
+        .failure()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(
+        report["findings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|finding| finding["id"] == "SC-007")
+            .count(),
+        3
+    );
+
+    let safe_manifest = manifest_dir.path().join("safe-compose.yaml");
+    fs::write(
+        &safe_manifest,
+        "services:\n  local:\n    image: localhost:5000/acme/worker\n  pinned:\n    image: nginx@sha256:0123456789abcdef\n  # image: nginx\n",
+    )
+    .unwrap();
+    check_cmd()
+        .current_dir(manifest_dir.path())
+        .args([
+            "--type",
+            "docker",
+            "--format",
+            "json",
+            "--no-cve-scan",
+            "--no-malware-scan",
+        ])
+        .arg(&safe_manifest)
+        .assert()
+        .success();
 }
 
 #[test]

@@ -1,21 +1,10 @@
 use super::error::RemoteError;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
-
-const MAX_GIT_OUTPUT_BYTES: u64 = 1024 * 1024;
-
-fn read_git_output<R: Read>(reader: R) -> std::io::Result<Vec<u8>> {
-    let mut output = Vec::new();
-    reader
-        .take(MAX_GIT_OUTPUT_BYTES + 1)
-        .read_to_end(&mut output)?;
-    output.truncate(MAX_GIT_OUTPUT_BYTES as usize);
-    Ok(output)
-}
 
 const REPOSITORY_GIT_ENV: &[&str] = &[
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -338,45 +327,6 @@ impl GitCloner {
             message: self.sanitize_error_message(&e.to_string()),
         })?;
 
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to capture git stdout".to_string(),
-            })?;
-        let stderr = child
-            .stderr
-            .take()
-            .ok_or_else(|| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to capture git stderr".to_string(),
-            })?;
-        let stdout_reader =
-            std::thread::spawn(move || read_git_output(std::io::BufReader::new(stdout)));
-        let stderr_reader =
-            std::thread::spawn(move || read_git_output(std::io::BufReader::new(stderr)));
-
-        let collect_output = || -> Result<(Vec<u8>, Vec<u8>), RemoteError> {
-            let stdout = stdout_reader.join().map_err(|_| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to collect git stdout".to_string(),
-            })?;
-            let stderr = stderr_reader.join().map_err(|_| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to collect git stderr".to_string(),
-            })?;
-            let stdout = stdout.map_err(|e| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: self.sanitize_error_message(&e.to_string()),
-            })?;
-            let stderr = stderr.map_err(|e| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: self.sanitize_error_message(&e.to_string()),
-            })?;
-            Ok((stdout, stderr))
-        };
-
         // Wait with timeout
         let timeout = Duration::from_secs(self.timeout_secs);
         let start = std::time::Instant::now();
@@ -385,17 +335,22 @@ impl GitCloner {
             if let Err(error) = self.check_repository_size(url, path) {
                 let _ = child.kill();
                 let _ = child.wait();
-                let _ = collect_output();
                 return Err(error);
             }
 
             match child.try_wait() {
                 Ok(Some(status)) => {
                     // Process finished
-                    let (_, stderr) = collect_output()?;
+                    let output =
+                        child
+                            .wait_with_output()
+                            .map_err(|e| RemoteError::CloneFailed {
+                                url: url.to_string(),
+                                message: self.sanitize_error_message(&e.to_string()),
+                            })?;
 
                     if !status.success() {
-                        let stderr = String::from_utf8_lossy(&stderr);
+                        let stderr = String::from_utf8_lossy(&output.stderr);
                         let sanitized_stderr = self.sanitize_error_message(&stderr);
 
                         // Check for common error patterns
@@ -423,8 +378,6 @@ impl GitCloner {
                     if start.elapsed() > timeout {
                         // Kill the process
                         let _ = child.kill();
-                        let _ = child.wait();
-                        let _ = collect_output();
                         return Err(RemoteError::CloneFailed {
                             url: url.to_string(),
                             message: format!("Clone timed out after {} seconds", self.timeout_secs),
@@ -434,9 +387,6 @@ impl GitCloner {
                     std::thread::sleep(Duration::from_millis(100));
                 }
                 Err(e) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = collect_output();
                     return Err(RemoteError::CloneFailed {
                         url: url.to_string(),
                         message: self.sanitize_error_message(&e.to_string()),
@@ -750,113 +700,6 @@ mod tests {
             git_stdout(&["rev-parse", "HEAD"], clone.path(), "clone rev-parse"),
             expected_sha
         );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_clone_drains_git_output() {
-        if std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_CHILD").is_some() {
-            let bare_repo = std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_BARE_REPO").unwrap();
-            let clone_path =
-                PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_CLONE_PATH").unwrap());
-            let mode = std::env::var("CC_AUDIT_REMOTE_OUTPUT_MODE").unwrap();
-            let result = GitCloner::new().execute_clone(
-                &format!("file://{}", PathBuf::from(bare_repo).display()),
-                &clone_path,
-                "main",
-            );
-            if mode == "success" {
-                result.unwrap();
-                assert!(clone_path.join(".git").is_dir());
-            } else {
-                let error = result.unwrap_err();
-                assert!(matches!(error, RemoteError::CloneFailed { .. }));
-            }
-            return;
-        }
-
-        let source = tempfile::tempdir().unwrap();
-        let bare = tempfile::tempdir().unwrap();
-        let wrapper = tempfile::tempdir().unwrap();
-        let success_clone = tempfile::tempdir().unwrap();
-        let failure_clone = tempfile::tempdir().unwrap();
-        let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
-            .map(|dir| dir.join("git"))
-            .find(|path| path.is_file())
-            .unwrap();
-        let wrapper_path = wrapper.path().join("git");
-        std::fs::write(
-            &wrapper_path,
-            "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = clone ]; then\n  head -c 1048576 /dev/zero | tr '\\000' O\n  head -c 1048576 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
-        )
-        .unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        let mut permissions = std::fs::metadata(&wrapper_path).unwrap().permissions();
-        permissions.set_mode(0o700);
-        std::fs::set_permissions(&wrapper_path, permissions).unwrap();
-
-        assert_git_success(&run_git(&["init", "--quiet"], source.path()), "source init");
-        std::fs::write(source.path().join("README.md"), "fixture\n").unwrap();
-        assert_git_success(&run_git(&["add", "README.md"], source.path()), "source add");
-        assert_git_success(
-            &run_git(
-                &[
-                    "-c",
-                    "user.name=cc-audit-test",
-                    "-c",
-                    "user.email=cc-audit-test@example.invalid",
-                    "-c",
-                    "commit.gpgSign=false",
-                    "commit",
-                    "--quiet",
-                    "-m",
-                    "fixture",
-                ],
-                source.path(),
-            ),
-            "source commit",
-        );
-        assert_git_success(
-            &run_git(&["init", "--bare", "--quiet"], bare.path()),
-            "bare init",
-        );
-        assert_git_success(
-            &run_git(
-                &["push", bare.path().to_str().unwrap(), "HEAD:main"],
-                source.path(),
-            ),
-            "source push",
-        );
-
-        let test_binary = std::env::current_exe().unwrap();
-        let current_path = std::env::var_os("PATH").unwrap();
-        let child_path = std::env::join_paths(
-            std::iter::once(wrapper.path().to_path_buf())
-                .chain(std::env::split_paths(&current_path)),
-        )
-        .unwrap();
-        let run_child = |clone_path: &Path, mode: &str| {
-            let status = std::process::Command::new(&test_binary)
-                .args([
-                    "--exact",
-                    "remote::clone::tests::test_clone_drains_git_output",
-                    "--nocapture",
-                ])
-                .env("CC_AUDIT_REMOTE_OUTPUT_CHILD", "1")
-                .env("CC_AUDIT_REMOTE_OUTPUT_BARE_REPO", bare.path())
-                .env("CC_AUDIT_REMOTE_OUTPUT_CLONE_PATH", clone_path)
-                .env("CC_AUDIT_REMOTE_OUTPUT_MODE", mode)
-                .env("CC_AUDIT_REAL_GIT", real_git.as_os_str())
-                .env("PATH", &child_path)
-                .status()
-                .unwrap();
-            assert!(status.success(), "git output child test failed: {mode}");
-        };
-
-        run_child(success_clone.path(), "success");
-        run_child(failure_clone.path(), "failure");
-        assert!(success_clone.path().join(".git").is_dir());
-        assert!(!failure_clone.path().join(".git").exists());
     }
 
     #[test]

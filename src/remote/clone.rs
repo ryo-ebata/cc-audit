@@ -1090,14 +1090,76 @@ mod tests {
                     async move { stderr_writer.write_all(&vec![b'E'; 2 * 1024 * 1024]).await },
                 );
 
-            let (stdout, stderr) = tokio::join!(
-                read_git_output_async(stdout_reader),
-                read_git_output_async(stderr_reader),
-            );
-            assert_eq!(stdout.unwrap().len(), MAX_GIT_OUTPUT_BYTES as usize);
-            assert_eq!(stderr.unwrap().len(), MAX_GIT_OUTPUT_BYTES as usize);
+            let result = tokio::time::timeout(Duration::from_secs(3), async {
+                let (stdout, stderr) = tokio::join!(
+                    read_git_output_async(stdout_reader),
+                    read_git_output_async(stderr_reader),
+                );
+                Ok::<_, String>((
+                    stdout.map_err(|error| error.to_string())?,
+                    stderr.map_err(|error| error.to_string())?,
+                ))
+            })
+            .await;
+            match result {
+                Ok(Ok((stdout, stderr))) => {
+                    assert_eq!(stdout.len(), MAX_GIT_OUTPUT_BYTES as usize);
+                    assert_eq!(stderr.len(), MAX_GIT_OUTPUT_BYTES as usize);
+                    stdout_writer_task.await.unwrap().unwrap();
+                    stderr_writer_task.await.unwrap().unwrap();
+                }
+                Ok(Err(error)) => panic!("portable reader test failed: {error}"),
+                Err(_) => {
+                    stdout_writer_task.abort();
+                    stderr_writer_task.abort();
+                    let _ = stdout_writer_task.await;
+                    let _ = stderr_writer_task.await;
+                    panic!("portable reader test timed out");
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn test_collect_git_output_timeout_is_bounded_and_non_panicking() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            use tokio::io::AsyncWriteExt;
+
+            let (mut stdout_writer, stdout_reader) = tokio::io::duplex(8192);
+            let (mut stderr_writer, stderr_reader) = tokio::io::duplex(8192);
+            let stdout_writer_task =
+                tokio::spawn(async move { stdout_writer.write_all(b"stdout complete").await });
+            let stderr_writer_task = tokio::spawn(async move {
+                stderr_writer.write_all(b"stderr retained").await?;
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                Ok::<_, std::io::Error>(())
+            });
+            let (stdout_task, stdout_output) = spawn_git_reader(stdout_reader);
+            let (stderr_task, stderr_output) = spawn_git_reader(stderr_reader);
+            let result = tokio::time::timeout(
+                Duration::from_secs(3),
+                GitCloner::new().collect_git_output(
+                    "test://clone",
+                    GitOutputReaders {
+                        stdout_task,
+                        stderr_task,
+                        stdout_output,
+                        stderr_output,
+                    },
+                ),
+            )
+            .await
+            .expect("collection watchdog expired")
+            .unwrap_err();
+            assert!(matches!(
+                result,
+                RemoteError::CloneFailed { message, .. }
+                    if message.contains("Timed out collecting git output")
+            ));
             stdout_writer_task.await.unwrap().unwrap();
-            stderr_writer_task.await.unwrap().unwrap();
+            stderr_writer_task.abort();
+            let _ = stderr_writer_task.await;
         });
     }
 

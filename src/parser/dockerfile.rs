@@ -15,21 +15,36 @@ impl DockerfileParser {
 
     /// Return the escape character declared by the first Dockerfile parser
     /// directive. Docker defaults to a backslash; a backtick directive is
-    /// commonly used for Windows-compatible Dockerfiles. Directives that
-    /// appear after the first line are instructions or comments, not parser
-    /// directives.
+    /// commonly used for Windows-compatible Dockerfiles. Docker reads a
+    /// contiguous block of recognized parser directives at the top; an empty
+    /// line, ordinary comment, or instruction ends that block.
     pub fn escape_character(content: &str) -> char {
-        let Some(first_line) = content.lines().next() else {
-            return '\\';
-        };
-        let trimmed = first_line.trim();
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                break;
+            }
 
-        if let Some(value) = trimmed.strip_prefix("# escape=") {
-            return match value.trim() {
-                "`" => '`',
-                "\\" => '\\',
-                _ => '\\',
+            let Some(comment) = trimmed.strip_prefix('#') else {
+                break;
             };
+            let Some(equal_index) = comment.find('=') else {
+                break;
+            };
+            let key = comment[..equal_index].trim();
+            let value = comment[equal_index + 1..].trim();
+
+            if key.eq_ignore_ascii_case("escape") {
+                return match value {
+                    "`" => '`',
+                    "\\" => '\\',
+                    _ => '\\',
+                };
+            }
+
+            if !key.eq_ignore_ascii_case("syntax") && !key.eq_ignore_ascii_case("check") {
+                break;
+            }
         }
 
         '\\'
@@ -247,6 +262,14 @@ RUN npm install && \
     }
 
     #[test]
+    fn test_escape_after_syntax_directive_is_honored() {
+        let content = "# syntax=docker/dockerfile:1\n#\tescape =`\nFROM alpine\nRUN echo safe `\n    && echo safe\n";
+
+        assert_eq!(DockerfileParser::escape_character(content), '`');
+        assert!(DockerfileParser::normalize_continuations(content).contains("safe \\\n"));
+    }
+
+    #[test]
     fn test_late_escape_directive_does_not_change_default() {
         let content = "FROM alpine\n# escape=`\nRUN echo safe `\n    && echo still-safe\n";
 
@@ -257,6 +280,15 @@ RUN npm install && \
     #[test]
     fn test_escape_directive_after_leading_blank_line_does_not_apply() {
         let content = "\n# escape=`\nFROM alpine\nRUN echo safe `\n    && echo still-safe\n";
+
+        assert_eq!(DockerfileParser::escape_character(content), '\\');
+        assert_eq!(DockerfileParser::normalize_continuations(content), content);
+    }
+
+    #[test]
+    fn test_escape_directive_after_comment_does_not_apply() {
+        let content =
+            "# About this Dockerfile\n# escape=`\nFROM alpine\nRUN echo safe `\n    && echo safe\n";
 
         assert_eq!(DockerfileParser::escape_character(content), '\\');
         assert_eq!(DockerfileParser::normalize_continuations(content), content);

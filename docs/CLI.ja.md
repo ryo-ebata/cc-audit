@@ -133,7 +133,7 @@ cc-audit check [OPTIONS] <PATHS>...
 | `--remote-auth <TOKEN>` | 認証用GitHubトークン（または`GITHUB_TOKEN`環境変数を使用） |
 | `--remote-list <FILE>` | スキャンするリポジトリURLのリストファイル（1行に1URL） |
 | `--awesome-claude-code` | awesome-claude-codeの全リポジトリをスキャン |
-| `--parallel-clones <N>` | 並列クローンの最大数（デフォルト: 4） |
+| `--parallel-clones <N>` | 並列クローンの最大数（デフォルト: 4、`0`は1として扱う） |
 
 ### MCPピンニング（ラグプル検出）
 

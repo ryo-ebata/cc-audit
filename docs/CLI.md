@@ -133,7 +133,7 @@ cc-audit check [OPTIONS] <PATHS>...
 | `--remote-auth <TOKEN>` | GitHub token for authentication (or use `GITHUB_TOKEN` env var) |
 | `--remote-list <FILE>` | File containing list of repository URLs to scan (one per line) |
 | `--awesome-claude-code` | Scan all repositories from awesome-claude-code |
-| `--parallel-clones <N>` | Maximum number of parallel repository clones (default: 4) |
+| `--parallel-clones <N>` | Maximum number of parallel repository clones (default: 4; `0` is treated as 1) |
 
 ### MCP Pinning (Rug-Pull Detection)
 

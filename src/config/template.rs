@@ -120,7 +120,7 @@ scan:
   # GitHub authentication token (also reads from GITHUB_TOKEN env var)
   # remote_auth: ghp_xxxxxxxxxxxx
 
-  # Number of parallel clones for batch scanning
+  # Number of parallel clones for batch scanning (0 uses one worker)
   # parallel_clones: 4
 
   # ---------------------------------------------------------------------------

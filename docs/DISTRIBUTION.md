@@ -51,7 +51,7 @@ Triggers on tag push (`v*`). Builds binaries for all platforms and uploads to Gi
 
 #### 2. npm-publish.yml
 
-Triggers on release published. Downloads binaries from GitHub Release and publishes to npm.
+Triggered when the `Release` workflow completes; the publish job runs only when that workflow succeeds. It downloads binaries from the GitHub Release and publishes them to npm.
 
 **Packages:**
 - `@cc-audit/cc-audit` - Main wrapper package
@@ -66,7 +66,7 @@ Triggers on release published. Downloads binaries from GitHub Release and publis
 
 #### 3. homebrew-update.yml
 
-Triggers on release published. Updates the Homebrew formula with new version and SHA256 checksums.
+Triggered when the `Release` workflow completes; the update job runs only when that workflow succeeds. It updates the Homebrew formula with the new version and SHA256 checksums.
 
 **Required Secret:** `HOMEBREW_TAP_TOKEN` (PAT with repo access to homebrew-tap)
 

@@ -945,10 +945,10 @@ mod tests {
                 result.unwrap();
                 assert!(clone_path.join(".git").is_dir());
             } else if mode == "size" {
-                // Size enforcement is expected to win over cleanup/output errors.
-                // Keep the actual result in the failure message so runner-only
-                // races (for example, a descendant retaining a pipe) are
-                // diagnosable instead of appearing as a bare mode mismatch.
+                // This fixture has no descendant retaining the output pipes, so
+                // cleanup and output collection should succeed before the size
+                // error is asserted. Keep the actual result in the failure
+                // message to diagnose runner-only races.
                 let actual_result = format!("{result:?}");
                 assert!(
                     matches!(result, Err(RemoteError::RepositoryTooLarge { .. })),

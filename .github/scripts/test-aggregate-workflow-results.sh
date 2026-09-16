@@ -40,6 +40,15 @@ run_case 1 semver pull_request success empty true success success
 run_case 1 semver pull_request failure false false success skipped
 run_case 1 semver pull_request success false empty success skipped
 
+run_case 0 terraform success false '[]' cancelled skipped failure
+run_case 0 terraform success true '[]' cancelled skipped failure
+run_case 0 terraform success true '["infra/a"]' success success success success
+run_case 1 terraform success true '["infra/a"]' success cancelled success success
+run_case 1 terraform success true '' success success success success
+run_case 1 terraform success true '{}' success success success success
+run_case 1 terraform failure false '[]' success success success success
+run_case 1 terraform success false '["infra/a"]' success success success success
+
 run_case 0 unconditional success
 run_case 1 unconditional cancelled
 run_case 1 unconditional skipped
@@ -70,6 +79,7 @@ check_result_job_wiring semver semver 'needs: [changes, semver-check, changelog-
 check_result_job_wiring npm-install-test unconditional 'needs: [npm-install-test]' 'needs.npm-install-test.result'
 check_result_job_wiring cargo-install-test unconditional 'needs: [cargo-install-test]' 'needs.cargo-install-test.result'
 check_result_job_wiring self-audit unconditional 'needs: [self-audit]' 'needs.self-audit.result'
+check_result_job_wiring terraform terraform 'needs: [changes, fmt, validate, tflint, tfsec]' 'needs.changes.outputs.directories'
 grep -Fq 'needs.release-tag-resolution.result' .github/workflows/ci.yml
 
 output_file="$(mktemp)"
@@ -83,6 +93,23 @@ fi
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter empty true
 grep -Fq 'rust=false' "$output_file"
 
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter false ""
+grep -Fq 'infra=false' "$output_file"
+grep -Fq 'directories=[]' "$output_file"
+if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true ""; then
+  echo "missing Terraform directories must fail"
+  exit 1
+fi
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '[]'
+grep -Fq 'infra=true' "$output_file"
+grep -Fq 'directories=[]' "$output_file"
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '["infra/a"]'
+grep -Fq 'directories=["infra/a"]' "$output_file"
+if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter invalid ""; then
+  echo "invalid Terraform infra output must fail"
+  exit 1
+fi
+
 grep -Fq 'check-aggregate-workflow-results.sh ci' .github/workflows/ci.yml
 grep -Fq 'check-aggregate-workflow-results.sh conditional' .github/workflows/msrv.yml
 grep -Fq 'check-aggregate-workflow-results.sh security' .github/workflows/security.yml
@@ -91,5 +118,7 @@ grep -Fq 'check-aggregate-workflow-results.sh semver' .github/workflows/semver.y
 grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/npm-install-test.yml
 grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/cargo-install-test.yml
 grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/self-audit.yml
+grep -Fq 'check-aggregate-workflow-results.sh terraform' .github/workflows/terraform.yml
+grep -Fq 'check-aggregate-workflow-results.sh terraform-filter' .github/workflows/terraform.yml
 
 echo "aggregate workflow result checks passed"

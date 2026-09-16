@@ -151,8 +151,12 @@ fn dk_005() -> Rule {
         category: Category::SupplyChain,
         confidence: Confidence::Certain,
         patterns: vec![
-            Regex::new(r"(?m)^FROM\s+[^:]+:latest\s*$").expect("DK-005: invalid regex"),
-            Regex::new(r"(?m)^FROM\s+[^\s:]+\s*$").expect("DK-005: invalid regex"), // No tag = latest
+            // Allow a registry port while matching only the final image tag.
+            Regex::new(r"(?m)^FROM\s+(?:[^/\s]+/)*[^:@\s]+:latest\s*$")
+                .expect("DK-005: invalid regex"),
+            // No tag = latest. A port is valid in any path component, but not
+            // in the final component where a tag would be expected.
+            Regex::new(r"(?m)^FROM\s+(?:[^/\s]+/)*[^:/@\s]+\s*$").expect("DK-005: invalid regex"),
             Regex::new(r#"image:\s*[^:]+:latest\s*$"#).expect("DK-005: invalid regex"),
         ],
         exclusions: vec![Regex::new(r"scratch").expect("DK-005: invalid regex")],
@@ -393,6 +397,32 @@ RUN apt-get update
 "#;
         let matched = rule.patterns.iter().any(|p| p.is_match(dockerfile_content));
         assert!(matched, "Should detect USER root in Dockerfile");
+    }
+
+    #[test]
+    fn test_dk_005_handles_registry_ports_and_tags() {
+        let rule = dk_005();
+        let test_cases = vec![
+            // Should detect latest and tagless references, including registry ports.
+            ("FROM alpine:latest", true),
+            ("FROM registry.example.com:5000/acme/app:latest", true),
+            ("FROM registry.example.com:5000/acme/app", true),
+            ("FROM registry.example.com/acme/app", true),
+            // Should not detect pinned tags or digests.
+            ("FROM registry.example.com:5000/acme/app:3.20", false),
+            (
+                "FROM registry.example.com:5000/acme/app@sha256:0123456789abcdef",
+                false,
+            ),
+            ("FROM scratch", false),
+        ];
+
+        for (input, should_match) in test_cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            let result = matched && !excluded;
+            assert_eq!(result, should_match, "DK-005: failed for input: {input}");
+        }
     }
 
     // Snapshot tests

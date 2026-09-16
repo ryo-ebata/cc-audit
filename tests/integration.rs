@@ -525,6 +525,44 @@ mod scan_types {
     }
 
     #[test]
+    fn test_scan_docker_latest_with_registry_port() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let dockerfile = dir.path().join("Dockerfile");
+
+        fs::write(
+            &dockerfile,
+            "FROM registry.example.com:5000/acme/app:latest\n",
+        )
+        .unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("docker")
+            .arg("--format")
+            .arg("json")
+            .arg(&dockerfile)
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("DK-005"));
+
+        fs::write(
+            &dockerfile,
+            "FROM registry.example.com:5000/acme/app:3.20\n",
+        )
+        .unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("docker")
+            .arg("--format")
+            .arg("json")
+            .arg(&dockerfile)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"findings\": []"));
+    }
+
+    #[test]
     fn test_scan_command_type() {
         let dir = TempDir::new().unwrap();
         create_test_config(dir.path());

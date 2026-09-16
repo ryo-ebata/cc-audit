@@ -153,6 +153,10 @@ mod overpermission_scan {
             "---\nallowed-tools: Bash\n---",
             "---\nallowed-tools: Read, Bash\n---\n",
             "---\nallowed-tools: Read, Bash\n---",
+            "---\nallowed-tools: \"Bash\"\n---\n",
+            "---\nallowed-tools: [Bash]\n---\n",
+            "---\nallowed-tools: [\"Bash\"]\n---\n",
+            "---\nallowed-tools: [Read, Bash]\n---\n",
         ] {
             fs::write(&skill_md, content).unwrap();
             check_cmd()

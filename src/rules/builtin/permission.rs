@@ -119,7 +119,7 @@ fn op_004() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r#"Bash\s*[=:]\s*\*"#).expect("OP-004: invalid regex"),
-            Regex::new(r#"allowed-tools:.*\bBash\b(?:\s*,|\s*$|\s+[^\s(])"#)
+            Regex::new(r#"allowed-tools:.*\bBash\b(?:\s*,|\s*$|\s+[^\s(]|["']|\])"#)
                 .expect("OP-004: invalid regex"),
             Regex::new(r#"shell[_-]?access\s*[=:]\s*(true|yes|\*)"#)
                 .expect("OP-004: invalid regex"),
@@ -392,6 +392,11 @@ mod tests {
             "allowed-tools: Read, Bash",
             "allowed-tools: Bash, Read",
             "allowed-tools: Bash, Bash(npm:*)",
+            "allowed-tools: \"Bash\"",
+            "allowed-tools: 'Bash'",
+            "allowed-tools: [Bash]",
+            "allowed-tools: [\"Bash\"]",
+            "allowed-tools: [Read, Bash]",
         ];
         for input in positive {
             assert!(

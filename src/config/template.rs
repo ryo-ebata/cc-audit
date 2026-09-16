@@ -75,7 +75,7 @@ scan:
   # Path to a custom rules file (YAML format)
   # custom_rules: ./custom-rules.yaml
 
-  # Output file path (for HTML/JSON/SARIF output)
+  # Output file path (for terminal/JSON/SARIF/HTML/Markdown output)
   # output: ./report.html
 
   # Enable deep scan with deobfuscation

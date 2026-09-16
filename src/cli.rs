@@ -260,7 +260,7 @@ pub struct CheckArgs {
     #[arg(long)]
     pub check_drift: bool,
 
-    /// Output file path (for HTML/JSON output)
+    /// Output file path (for terminal, JSON, SARIF, HTML, or Markdown output)
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 

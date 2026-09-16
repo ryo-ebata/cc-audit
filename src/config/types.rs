@@ -91,7 +91,7 @@ pub struct ScanConfig {
     pub malware_db: Option<String>,
     /// Path to a custom rules file (YAML format).
     pub custom_rules: Option<String>,
-    /// Output file path (for HTML/JSON/SARIF output).
+    /// Output file path (for terminal, JSON, SARIF, HTML, or Markdown output).
     pub output: Option<String>,
     /// Enable deep scan with deobfuscation.
     pub deep_scan: bool,

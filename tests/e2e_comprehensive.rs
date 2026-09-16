@@ -401,6 +401,38 @@ mod output_formats {
         let json: serde_json::Value = serde_json::from_str(&content).unwrap();
         assert!(json["summary"]["passed"].as_bool().unwrap());
     }
+
+    #[test]
+    fn test_markdown_and_sarif_output_file_creation() {
+        for (format, extension) in [("markdown", "md"), ("sarif", "sarif")] {
+            let dir = TempDir::new().unwrap();
+            create_config(dir.path());
+            let output_path = dir.path().join(format!("output.{extension}"));
+            let skill_md = dir.path().join("SKILL.md");
+            fs::write(&skill_md, "# Safe content\n").unwrap();
+
+            check_cmd()
+                .arg("--format")
+                .arg(format)
+                .arg("--output")
+                .arg(&output_path)
+                .arg(dir.path())
+                .assert()
+                .success();
+
+            let content = fs::read_to_string(&output_path).unwrap();
+            assert!(
+                !content.is_empty(),
+                "{format} output file must not be empty"
+            );
+            if format == "markdown" {
+                assert!(content.contains("#") || content.contains("**"));
+            } else {
+                let sarif: serde_json::Value = serde_json::from_str(&content).unwrap();
+                assert_eq!(sarif["version"], "2.1.0");
+            }
+        }
+    }
 }
 
 // ============================================================================

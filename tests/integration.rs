@@ -142,7 +142,12 @@ fn remote_cli_dispatch_propagates_ref_and_auth_without_network() {
 #[test]
 fn remote_cli_dispatch_propagates_config_ref_and_auth_without_network() {
     let dir = tempfile::TempDir::new().unwrap();
-    let config = dir.path().join(".cc-audit.yaml");
+    let config = dir.path().join("explicit-config.yaml");
+    fs::write(
+        dir.path().join(".cc-audit.yaml"),
+        "scan:\n  git_ref: wrong-ref\n  remote_auth: wrong-token\n",
+    )
+    .unwrap();
     fs::write(
         &config,
         "scan:\n  git_ref: config-ref\n  remote_auth: config-token\n",
@@ -164,6 +169,7 @@ fn remote_cli_dispatch_propagates_config_ref_and_auth_without_network() {
         .env("PATH", path)
         .env("FAKE_GIT_LOG", &log)
         .env("EXPECTED_AUTH_TOKEN", "config-token")
+        .env_remove("GITHUB_TOKEN")
         .env("HOME", dir.path())
         .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
         .timeout(std::time::Duration::from_secs(5))
@@ -175,6 +181,10 @@ fn remote_cli_dispatch_propagates_config_ref_and_auth_without_network() {
     assert!(git_log.contains("--branch config-ref"));
     assert!(git_log.contains("AUTH_OK"));
     assert!(!git_log.contains("config-token"));
+    assert!(!git_log.contains("wrong-ref"));
+    assert!(!git_log.contains("wrong-token"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("config-token"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("config-token"));
 }
 
 #[cfg(unix)]

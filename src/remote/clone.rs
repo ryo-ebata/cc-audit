@@ -453,6 +453,11 @@ mod tests {
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("GIT_CONFIG_NOSYSTEM", "1");
+        for variable in ["SYSTEMROOT", "TEMP", "TMP"] {
+            if let Some(value) = std::env::var_os(variable) {
+                command.env(variable, value);
+            }
+        }
         command
             .args(args)
             .current_dir(current_dir)
@@ -466,6 +471,12 @@ mod tests {
             "{operation} failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    fn git_stdout(args: &[&str], current_dir: &Path, operation: &str) -> String {
+        let output = run_git(args, current_dir);
+        assert_git_success(&output, operation);
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 
     #[test]
@@ -536,6 +547,8 @@ mod tests {
                     "user.name=cc-audit-test",
                     "-c",
                     "user.email=cc-audit-test@example.invalid",
+                    "-c",
+                    "commit.gpgSign=false",
                     "commit",
                     "--quiet",
                     "-m",
@@ -545,10 +558,7 @@ mod tests {
             ),
             "source commit",
         );
-        let expected_sha =
-            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], source.path()).stdout)
-                .trim()
-                .to_string();
+        let expected_sha = git_stdout(&["rev-parse", "HEAD"], source.path(), "source rev-parse");
         assert_git_success(
             &run_git(&["init", "--bare", "--quiet"], bare.path()),
             "bare init",
@@ -584,10 +594,11 @@ mod tests {
             ),
             "source commit second",
         );
-        let source_current_sha =
-            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], source.path()).stdout)
-                .trim()
-                .to_string();
+        let source_current_sha = git_stdout(
+            &["rev-parse", "HEAD"],
+            source.path(),
+            "source current rev-parse",
+        );
         assert_ne!(source_current_sha, expected_sha);
 
         let snapshot = |path: &Path| match std::fs::read(path) {
@@ -600,7 +611,8 @@ mod tests {
         let source_index = snapshot(&source.path().join(".git/index"));
         let test_binary = std::env::current_exe().unwrap();
 
-        let status = std::process::Command::new(test_binary)
+        let mut child = std::process::Command::new(test_binary);
+        child
             .args([
                 "--exact",
                 "remote::clone::tests::test_clone_isolates_repository_git_environment",
@@ -617,9 +629,19 @@ mod tests {
             .env("GIT_CONFIG_COUNT", "1")
             .env("GIT_CONFIG_KEY_0", "core.bare")
             .env("GIT_CONFIG_VALUE_0", "true")
-            .env("GIT_INDEX_FILE", source.path().join(".git/index"))
-            .status()
-            .unwrap();
+            .env("GIT_INDEX_FILE", source.path().join(".git/index"));
+        if cfg!(windows) {
+            child
+                .env("Git_Dir", source.path().join(".git"))
+                .env("Git_Work_Tree", clone.path())
+                .env("Git_Common_Dir", source.path().join(".git"))
+                .env("Git_Config", source.path().join(".git/config"))
+                .env("Git_Config_Count", "1")
+                .env("Git_Config_Key_0", "core.bare")
+                .env("Git_Config_Value_0", "true")
+                .env("Git_Index_File", source.path().join(".git/index"));
+        }
+        let status = child.status().unwrap();
         assert!(status.success(), "isolated clone child test failed");
 
         assert_eq!(snapshot(&source.path().join(".git/config")), source_config);
@@ -627,7 +649,7 @@ mod tests {
         assert_eq!(snapshot(&source.path().join(".git/index")), source_index);
         assert!(clone.path().join(".git").is_dir());
         assert_eq!(
-            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], clone.path()).stdout).trim(),
+            git_stdout(&["rev-parse", "HEAD"], clone.path(), "clone rev-parse"),
             expected_sha
         );
     }

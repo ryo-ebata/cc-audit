@@ -154,7 +154,7 @@ pub struct CheckArgs {
     #[arg(long, conflicts_with_all = ["remote", "remote_list"])]
     pub awesome_claude_code: bool,
 
-    /// Maximum number of parallel repository clones
+    /// Maximum number of parallel repository clones (0 uses one worker)
     #[arg(long, default_value = "4")]
     pub parallel_clones: usize,
 

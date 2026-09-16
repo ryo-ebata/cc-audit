@@ -48,7 +48,7 @@ cc-audit check [OPTIONS] <PATHS>...
 | Option | Description |
 |--------|-------------|
 | `-f, --format <FORMAT>` | Output format: `terminal` (default), `json`, `sarif`, `html`, `markdown` |
-| `-o, --output <FILE>` | Output file path (for HTML/JSON output) |
+| `-o, --output <FILE>` | Output file path for the selected format (`terminal`, `json`, `sarif`, `html`, or `markdown`) |
 | `--compact` | Compact output format (traditional style instead of lint-style) |
 | `--ci` | CI mode: non-interactive output |
 | `--badge` | Generate security badge |

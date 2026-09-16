@@ -48,7 +48,7 @@ cc-audit check [OPTIONS] <PATHS>...
 | オプション | 説明 |
 |------------|------|
 | `-f, --format <FORMAT>` | 出力形式: `terminal`（デフォルト）, `json`, `sarif`, `html`, `markdown` |
-| `-o, --output <FILE>` | 出力ファイルパス（HTML/JSON出力用） |
+| `-o, --output <FILE>` | 選択した形式（`terminal`、`json`、`sarif`、`html`、`markdown`）の出力ファイルパス |
 | `--compact` | コンパクト出力形式（lint-styleではなく従来形式） |
 | `--ci` | CIモード: 非インタラクティブ出力 |
 | `--badge` | セキュリティバッジを生成 |

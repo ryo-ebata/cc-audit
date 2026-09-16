@@ -185,7 +185,20 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
     };
 
     // Load config from current directory to get effective settings
-    let config = Config::load(Some(std::path::Path::new(".")));
+    let config = match &args.config {
+        Some(config_path) => match Config::from_file(config_path) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!(
+                    "Error: Failed to load configuration from {}: {}",
+                    config_path.display(),
+                    error
+                );
+                return ExitCode::from(2);
+            }
+        },
+        None => Config::load(Some(std::path::Path::new("."))),
+    };
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Read URLs from file

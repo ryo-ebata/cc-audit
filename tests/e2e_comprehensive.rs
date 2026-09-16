@@ -212,6 +212,7 @@ fn test_ex001_httpx_environment_exfiltration_through_skill_cli() {
         .arg(&requests_skill)
         .assert()
         .failure()
+        .code(1)
         .get_output()
         .stdout
         .clone();

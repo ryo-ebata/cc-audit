@@ -192,7 +192,7 @@ fn sc_004() -> Rule {
             Regex::new(r"uses:\s+[^@]+@main\b").expect("SC-004: invalid regex"),
             Regex::new(r"uses:\s+[^@]+@latest\b").expect("SC-004: invalid regex"),
             // Actions with tag versions (v1, v2, etc.) - less safe than SHA
-            Regex::new(r"uses:\s+[a-z0-9_-]+/[a-z0-9_-]+@v\d+").expect("SC-004: invalid regex"),
+            Regex::new(r"uses:\s+[a-z0-9_-]+/[a-z0-9_.-]+@v\d+").expect("SC-004: invalid regex"),
         ],
         exclusions: vec![
             // Well-known official actions
@@ -566,6 +566,30 @@ mod tests {
         for cmd in safe_commands {
             let matched = rule.patterns.iter().any(|p| p.is_match(cmd));
             assert!(!matched, "Should NOT detect HTTPS source: {}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_sc_004_detects_dotted_action_repositories() {
+        let rule = sc_004();
+        let detected = ["uses: acme/build.action@v1", "uses: acme/build-action@v2"];
+        let safe = [
+            "uses: actions/checkout@v4",
+            "uses: acme/build.action@0123456789abcdef0123456789abcdef01234567",
+        ];
+
+        for input in detected {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                matched && !excluded,
+                "Should detect unpinned action: {input}"
+            );
+        }
+        for input in safe {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(!matched || excluded, "Should allow safe action: {input}");
         }
     }
 

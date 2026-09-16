@@ -580,6 +580,40 @@ mod scan_types {
     }
 
     #[test]
+    fn test_scan_dotted_github_action_repository() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let action_file = dir.path().join("workflow.md");
+
+        fs::write(&action_file, "uses: acme/build.action@v1\n").unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--format")
+            .arg("json")
+            .arg(&action_file)
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("SC-004"));
+
+        fs::write(
+            &action_file,
+            "uses: acme/build.action@0123456789abcdef0123456789abcdef01234567\n",
+        )
+        .unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--format")
+            .arg("json")
+            .arg(&action_file)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"findings\": []"));
+    }
+
+    #[test]
     fn test_scan_rules_type() {
         let dir = TempDir::new().unwrap();
         create_test_config(dir.path());

@@ -141,6 +141,128 @@ mod malicious_skills {
     }
 }
 
+mod compare_cli {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn identical_trees_compare_cleanly() {
+        let left = TempDir::new().unwrap();
+        let right = TempDir::new().unwrap();
+        create_test_config(left.path());
+        create_test_config(right.path());
+        fs::write(left.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(left.path())
+            .arg(right.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+
+    #[test]
+    fn added_same_rule_occurrence_reports_relative_location() {
+        let left = TempDir::new().unwrap();
+        let right = TempDir::new().unwrap();
+        create_test_config(left.path());
+        create_test_config(right.path());
+        fs::write(left.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("extra.md"), "sudo apt install foo\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(left.path())
+            .arg(right.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("extra.md:1"))
+            .stdout(predicate::str::contains("Summary: 0 removed, 2 added"));
+    }
+
+    #[test]
+    fn relative_directory_inputs_compare_cleanly() {
+        let workspace = TempDir::new().unwrap();
+        let left = workspace.path().join("left");
+        let right = workspace.path().join("right");
+        fs::create_dir_all(&left).unwrap();
+        fs::create_dir_all(&right).unwrap();
+        create_test_config(&left);
+        create_test_config(&right);
+        fs::write(left.join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg("left")
+            .arg("right")
+            .current_dir(workspace.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+
+    #[test]
+    fn relative_inputs_do_not_confuse_input_name_with_nested_directory() {
+        let workspace = TempDir::new().unwrap();
+        let left = workspace.path().join("left");
+        let right = workspace.path().join("right");
+        fs::create_dir_all(left.join("left")).unwrap();
+        fs::create_dir_all(right.join("left")).unwrap();
+        create_test_config(&left);
+        create_test_config(&right);
+        fs::write(left.join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(left.join("left/SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("left/SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg("left")
+            .arg("right")
+            .current_dir(workspace.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+
+    #[test]
+    fn renamed_single_file_inputs_compare_cleanly() {
+        let workspace = TempDir::new().unwrap();
+        let old = workspace.path().join("old.md");
+        let new = workspace.path().join("new.md");
+        create_test_config(workspace.path());
+        fs::write(&old, "sudo apt update\n").unwrap();
+        fs::write(&new, "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(&old)
+            .arg(&new)
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+}
+
 mod overpermission_scan {
     use super::*;
     use tempfile::TempDir;

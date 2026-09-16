@@ -285,10 +285,10 @@ fn sc_007() -> Rule {
         confidence: Confidence::Tentative,
         patterns: vec![
             // docker pull without @sha256
-            Regex::new(r"docker\s+pull\s+[^@]+:[a-zA-Z0-9._-]+\s*$")
+            Regex::new(r"(?m)^\s*(?:RUN\s+)?docker\s+pull\s+[^@\s]+(?:\s|$)")
                 .expect("SC-007: invalid regex"),
             // podman pull without @sha256
-            Regex::new(r"podman\s+pull\s+[^@]+:[a-zA-Z0-9._-]+\s*$")
+            Regex::new(r"(?m)^\s*(?:RUN\s+)?podman\s+pull\s+[^@\s]+(?:\s|$)")
                 .expect("SC-007: invalid regex"),
             // kubernetes image without digest
             Regex::new(r"image:\s*[^@]+:[a-zA-Z0-9._-]+\s*$").expect("SC-007: invalid regex"),
@@ -438,6 +438,35 @@ mod tests {
             let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
             let result = matched && !excluded;
             assert_eq!(result, should_match, "Failed for input: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_sc_007_detects_tagless_container_pulls() {
+        let rule = sc_007();
+        let detected = [
+            "docker pull alpine",
+            "RUN docker pull ghcr.io/acme/worker",
+            "podman pull registry.example.com:5000/acme/worker:stable",
+        ];
+        let safe = [
+            "docker pull alpine@sha256:0123456789abcdef",
+            "podman pull localhost:5000/acme/worker",
+            "Documentation: docker pull alpine",
+        ];
+
+        for input in detected {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(matched && !excluded, "Should detect unpinned pull: {input}");
+        }
+        for input in safe {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert!(
+                !matched || excluded,
+                "Should not detect safe input: {input}"
+            );
         }
     }
 

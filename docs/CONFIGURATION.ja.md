@@ -73,7 +73,7 @@ scan:
   sbom_npm: false           # npm依存関係を含める
   sbom_cargo: false         # Cargo依存関係を含める
 
-# Skillディレクトリスキャンで追加認識するテキストファイル
+# Skill・deep scan・malware scanのディレクトリ走査で追加認識するテキストファイル
 text_files:
   extensions: []            # 先頭のドットなしの追加拡張子
   special_names: []         # 追加ファイル名（大文字小文字を区別しない）

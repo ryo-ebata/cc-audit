@@ -106,8 +106,11 @@ pub fn is_text_file(path: &Path) -> bool {
 
 /// Check if a file is a text file using the provided configuration.
 pub fn is_text_file_with_config(path: &Path, config: &crate::config::TextFilesConfig) -> bool {
-    // First try the config-based check
-    if config.is_text_file(path) {
+    static DEFAULT_CONFIG: std::sync::LazyLock<crate::config::TextFilesConfig> =
+        std::sync::LazyLock::new(crate::config::TextFilesConfig::default);
+
+    // Configured entries extend the built-in classifier rather than replacing it.
+    if config.is_text_file(path) || DEFAULT_CONFIG.is_text_file(path) {
         return true;
     }
 
@@ -136,6 +139,8 @@ pub fn is_text_file_with_config(path: &Path, config: &crate::config::TextFilesCo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::TextFilesConfig;
+    use std::collections::HashSet;
 
     #[test]
     fn test_is_text_file_by_extension() {
@@ -210,6 +215,25 @@ mod tests {
     #[test]
     fn test_is_text_file_unknown_no_extension() {
         assert!(!is_text_file(Path::new("unknownfile123")));
+    }
+
+    #[test]
+    fn test_configured_text_files_extend_builtin_classifier() {
+        let config = TextFilesConfig {
+            extensions: HashSet::from(["customext".to_string()]),
+            special_names: HashSet::from(["CUSTOMFILE".to_string()]),
+        };
+
+        assert!(is_text_file_with_config(Path::new("standard.md"), &config));
+        assert!(is_text_file_with_config(
+            Path::new("payload.customext"),
+            &config
+        ));
+        assert!(is_text_file_with_config(Path::new("CUSTOMFILE"), &config));
+        assert!(!is_text_file_with_config(
+            Path::new("unknownfile123"),
+            &config
+        ));
     }
 
     #[test]

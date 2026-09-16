@@ -135,7 +135,7 @@ fn op_004() -> Rule {
             // Documentation context
             Regex::new(r"(?i)example|documentation|readme|docs/").expect("OP-004: invalid regex"),
             // Test context
-            Regex::new(r"(?i)test|spec|mock").expect("OP-004: invalid regex"),
+            Regex::new(r"(?i)\b(?:test|spec|mock)\b").expect("OP-004: invalid regex"),
             // Description of permission (not actual grant)
             Regex::new(r"(?i)requires?|needs?|wants?\s+.*(bash|shell)")
                 .expect("OP-004: invalid regex"),
@@ -373,6 +373,27 @@ mod tests {
             ("allowed-tools: Bash, Bash(npm:*)", true),
             // Restricted only → not flagged.
             ("allowed-tools: Bash(npm:*), Read", false),
+        ];
+        for (input, should_match) in cases {
+            let matched = rule.patterns.iter().any(|p| p.is_match(input));
+            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
+            assert_eq!(matched && !excluded, should_match, "OP-004: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_004_exclusion_requires_fixture_context_word_boundary() {
+        let rule = op_004();
+        let cases = vec![
+            // A substring such as `test` in `latest`, `contest`, or
+            // `inspection` must not hide an unrestricted Bash grant.
+            ("allowed-tools: Bash # latest", true),
+            ("allowed-tools: Bash # contest", true),
+            ("allowed-tools: Bash # inspection", true),
+            // Explicit fixture context remains excluded.
+            ("test fixture: allowed-tools: Bash", false),
+            ("spec fixture: allowed-tools: Bash", false),
+            ("mock fixture: allowed-tools: Bash", false),
         ];
         for (input, should_match) in cases {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));

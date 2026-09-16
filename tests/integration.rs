@@ -100,6 +100,49 @@ mod malicious_skills {
     }
 }
 
+mod overpermission_scan {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_scan_overpermission_detects_bash_despite_incidental_test_substrings() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "---\nallowed-tools: Bash # latest\n---\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--format")
+            .arg("json")
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("OP-004"));
+    }
+
+    #[test]
+    fn test_scan_overpermission_keeps_explicit_fixture_context_excluded() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "test fixture: allowed-tools: Bash\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--format")
+            .arg("json")
+            .arg(dir.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("\"findings\": []"));
+    }
+}
+
 mod benign_skills {
     use super::*;
 

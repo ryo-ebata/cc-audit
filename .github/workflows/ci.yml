@@ -41,12 +41,13 @@ jobs:
       - run: bash .github/scripts/test-update-cve-version-constraints.sh
       - run: bash .github/scripts/test-update-cve-cvss-severity.sh
       - run: bash .github/scripts/test-cargo-profiles.sh
+      - run: bash .github/scripts/test-aggregate-workflow-results.sh
 
   changes:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
+      rust: ${{ steps.validate.outputs.rust }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -59,6 +60,12 @@ jobs:
               - 'Cargo.lock'
               - 'tests/**'
               - '.cargo/**'
+      - name: Validate Rust filter output
+        id: validate
+        env:
+          RAW_RUST: ${{ steps.filter.outputs.rust }}
+        run: |
+          bash .github/scripts/check-aggregate-workflow-results.sh filter "$RAW_RUST" false
 
   fmt:
     name: Format
@@ -135,22 +142,16 @@ jobs:
 
   ci-result:
     name: CI Result
-    needs: [changes, fmt, clippy, test, coverage, doc]
+    needs: [workflow-action-references, release-tag-resolution, changes, fmt, clippy, test, coverage, doc]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
       - name: Check results
         run: |
-          if [[ "${{ needs.changes.outputs.rust }}" != "true" ]]; then
-            echo "No Rust changes detected, skipping CI checks"
-            exit 0
-          fi
-          if [[ "${{ needs.fmt.result }}" == "failure" || \
-                "${{ needs.clippy.result }}" == "failure" || \
-                "${{ needs.test.result }}" == "failure" || \
-                "${{ needs.coverage.result }}" == "failure" || \
-                "${{ needs.doc.result }}" == "failure" ]]; then
-            echo "One or more CI jobs failed"
-            exit 1
-          fi
-          echo "All CI checks passed"
+          bash .github/scripts/check-aggregate-workflow-results.sh ci \
+            "${{ needs.workflow-action-references.result }}" \
+            "${{ needs.release-tag-resolution.result }}" \
+            "${{ needs.changes.result }}" "${{ needs.changes.outputs.rust }}" \
+            "${{ needs.fmt.result }}" "${{ needs.clippy.result }}" \
+            "${{ needs.test.result }}" "${{ needs.coverage.result }}" "${{ needs.doc.result }}"

@@ -79,10 +79,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
       - name: Check results
         run: |
-          if [[ "${{ needs.cargo-install-test.result }}" == "failure" ]]; then
-            echo "Cargo install test failed"
-            exit 1
-          fi
-          echo "Cargo install test passed"
+          bash .github/scripts/check-aggregate-workflow-results.sh unconditional "${{ needs.cargo-install-test.result }}"

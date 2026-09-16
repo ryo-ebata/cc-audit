@@ -73,7 +73,7 @@ scan:
   sbom_npm: false           # Include npm dependencies
   sbom_cargo: false         # Include Cargo dependencies
 
-# Additional text files recognized by skill directory scans.
+# Additional text files recognized by skill, deep, and malware directory scans.
 text_files:
   extensions: []            # Additional extensions, without the leading dot
   special_names: []         # Additional file names, matched case-insensitively

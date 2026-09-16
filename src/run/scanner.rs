@@ -16,8 +16,8 @@ use tracing::{debug, info, warn};
 use super::client::{detect_client_for_path, resolve_scan_paths_from_check_args};
 use super::config::{EffectiveConfig, load_custom_rules_from_effective};
 use super::cve::scan_path_with_cve_db;
-use super::malware::scan_path_with_malware_db;
-use super::text_file::is_text_file;
+use super::malware::scan_path_with_malware_db_with_config;
+use super::text_file::{is_text_file, is_text_file_with_config};
 
 // Orchestrator layer: Coordinates L1-L7, so L7 usage is appropriate here.
 // ScanProgress is created here and converted to ProgressCallback (abstraction)
@@ -187,14 +187,20 @@ fn run_scan_with_check_args_internal(
         // Run malware database scan on files
         if let Some(ref db) = malware_db {
             let ignore_filter = create_ignore_filter(path);
-            let malware_findings = scan_path_with_malware_db(path, db, &ignore_filter);
+            let malware_findings =
+                scan_path_with_malware_db_with_config(path, db, &ignore_filter, &config.text_files);
             all_findings.extend(malware_findings);
         }
 
         // Run deep scan with deobfuscation if enabled
         if effective.deep_scan {
             let ignore_filter = create_ignore_filter(path);
-            let deep_findings = run_deep_scan(path, &ignore_filter, effective.recursive);
+            let deep_findings = run_deep_scan_with_text_files(
+                path,
+                &ignore_filter,
+                effective.recursive,
+                &config.text_files,
+            );
             all_findings.extend(deep_findings);
         }
 
@@ -562,10 +568,23 @@ fn filter_and_process_findings_internal(
 /// The `ignore_filter` parameter is used to skip files/directories that match
 /// the ignore patterns configured in `.cc-audit.yaml`.
 /// Directory scans honor `recursive`; explicit file targets are always scanned.
+#[cfg(test)]
 pub(crate) fn run_deep_scan(
     path: &Path,
     ignore_filter: &IgnoreFilter,
     recursive: bool,
+) -> Vec<Finding> {
+    static DEFAULT_CONFIG: std::sync::LazyLock<TextFilesConfig> =
+        std::sync::LazyLock::new(TextFilesConfig::default);
+
+    run_deep_scan_with_text_files(path, ignore_filter, recursive, &DEFAULT_CONFIG)
+}
+
+fn run_deep_scan_with_text_files(
+    path: &Path,
+    ignore_filter: &IgnoreFilter,
+    recursive: bool,
+    text_files: &TextFilesConfig,
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     let deobfuscator = Deobfuscator::new();
@@ -576,7 +595,7 @@ pub(crate) fn run_deep_scan(
         // the file. The read is capped so an oversized artifact cannot OOM the
         // deep scan (issue #143).
         if !ignore_filter.is_ignored(path)
-            && is_text_file(path)
+            && is_text_file_with_config(path, text_files)
             && let Ok(content) = crate::engine::scanner::read_to_string_capped(path)
         {
             debug!(path = %path.display(), "Running deep scan on file");
@@ -591,7 +610,7 @@ pub(crate) fn run_deep_scan(
         };
         for file_path in walker.walk_single(path) {
             if !ignore_filter.is_ignored(&file_path)
-                && is_text_file(&file_path)
+                && is_text_file_with_config(&file_path, text_files)
                 && let Ok(content) = crate::engine::scanner::read_to_string_capped(&file_path)
             {
                 findings.extend(deobfuscator.deep_scan(&content, &file_path.display().to_string()));

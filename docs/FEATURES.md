@@ -312,19 +312,19 @@ Runtime MCP monitoring with transparent proxy:
 
 ```bash
 # Start proxy
-cc-audit proxy --target localhost:9000
+cc-audit proxy --target 127.0.0.1:9000
 
 # Custom port
-cc-audit proxy --target localhost:9000 --port 8080
+cc-audit proxy --target 127.0.0.1:9000 --port 8080
 
 # With TLS termination
-cc-audit proxy --target localhost:9000 --port 8443 --tls
+cc-audit proxy --target 127.0.0.1:9000 --port 8443 --tls
 
 # Block mode (stop messages with findings)
-cc-audit proxy --target localhost:9000 --block
+cc-audit proxy --target 127.0.0.1:9000 --block
 
 # Log all traffic
-cc-audit proxy --target localhost:9000 --log traffic.jsonl
+cc-audit proxy --target 127.0.0.1:9000 --log traffic.jsonl
 ```
 
 ---

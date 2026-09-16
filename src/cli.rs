@@ -360,8 +360,8 @@ pub struct ProxyArgs {
     #[arg(long, default_value = "8080")]
     pub port: u16,
 
-    /// Target MCP server address (host:port)
-    #[arg(long, required = true, value_name = "HOST:PORT")]
+    /// Target MCP server address (numeric IPv4:port or [IPv6]:port)
+    #[arg(long, required = true, value_name = "IP:PORT")]
     pub target: String,
 
     /// Enable TLS termination in proxy mode
@@ -634,6 +634,24 @@ mod tests {
         let cli = Cli::try_parse_from(["cc-audit", "check", "./skill1/", "./skill2/"]).unwrap();
         if let Some(Commands::Check(args)) = cli.command {
             assert_eq!(args.paths.len(), 2);
+        } else {
+            panic!("Expected Check command");
+        }
+    }
+
+    #[test]
+    fn test_parse_compare_without_scan_paths() {
+        let cli = Cli::try_parse_from([
+            "cc-audit",
+            "check",
+            "--compare",
+            "./skill-v1.0",
+            "./skill-v1.1",
+        ])
+        .unwrap();
+        if let Some(Commands::Check(args)) = cli.command {
+            assert!(args.paths.is_empty());
+            assert_eq!(args.compare.unwrap().len(), 2);
         } else {
             panic!("Expected Check command");
         }
@@ -983,9 +1001,9 @@ mod tests {
 
     #[test]
     fn test_parse_proxy() {
-        let cli = Cli::try_parse_from(["cc-audit", "proxy", "--target", "localhost:9000"]).unwrap();
+        let cli = Cli::try_parse_from(["cc-audit", "proxy", "--target", "127.0.0.1:9000"]).unwrap();
         if let Some(Commands::Proxy(args)) = cli.command {
-            assert_eq!(args.target, "localhost:9000");
+            assert_eq!(args.target, "127.0.0.1:9000");
             assert_eq!(args.port, 8080); // default
             assert!(!args.tls);
             assert!(!args.block);
@@ -1000,7 +1018,7 @@ mod tests {
             "cc-audit",
             "proxy",
             "--target",
-            "localhost:9000",
+            "127.0.0.1:9000",
             "--port",
             "3000",
             "--tls",
@@ -1010,7 +1028,7 @@ mod tests {
         ])
         .unwrap();
         if let Some(Commands::Proxy(args)) = cli.command {
-            assert_eq!(args.target, "localhost:9000");
+            assert_eq!(args.target, "127.0.0.1:9000");
             assert_eq!(args.port, 3000);
             assert!(args.tls);
             assert!(args.block);
@@ -1024,6 +1042,16 @@ mod tests {
     fn test_proxy_requires_target() {
         let result = Cli::try_parse_from(["cc-audit", "proxy"]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_proxy_accepts_bracketed_ipv6_target() {
+        let cli = Cli::try_parse_from(["cc-audit", "proxy", "--target", "[::1]:9000"]).unwrap();
+        if let Some(Commands::Proxy(args)) = cli.command {
+            assert_eq!(args.target, "[::1]:9000");
+        } else {
+            panic!("Expected Proxy command");
+        }
     }
 
     // ===== Test: global verbose flag =====

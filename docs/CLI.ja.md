@@ -41,7 +41,7 @@ cc-audit check [OPTIONS] <PATHS>...
 
 | 引数 | 説明 |
 |------|------|
-| `<PATHS>...` | スキャンするパス（ファイルまたはディレクトリ）。`--remote`、`--remote-list`、`--awesome-claude-code`、`--all-clients`、`--client` を使用しない場合は必須 |
+| `<PATHS>...` | スキャンするパス（ファイルまたはディレクトリ）。`--remote`、`--remote-list`、`--awesome-claude-code`、`--all-clients`、`--client`、`--compare` を使用しない場合は必須 |
 
 ### 出力オプション
 
@@ -264,7 +264,7 @@ MCP 統合の完全なガイドは、[MCP 統合ドキュメント](./MCP.ja.md)
 MCP プロキシとしてランタイム監視を実行します。
 
 ```
-cc-audit proxy [OPTIONS] --target <HOST:PORT>
+cc-audit proxy [OPTIONS] --target <IP:PORT>
 ```
 
 ### オプション
@@ -272,7 +272,7 @@ cc-audit proxy [OPTIONS] --target <HOST:PORT>
 | オプション | 説明 |
 |------------|------|
 | `--port <PORT>` | プロキシリッスンポート（デフォルト: 8080） |
-| `--target <HOST:PORT>` | ターゲットMCPサーバーアドレス（必須） |
+| `--target <IP:PORT>` | 数値IPv4（`127.0.0.1:9000`）または括弧付きIPv6（`[::1]:9000`）のターゲットMCPサーバーアドレス（必須） |
 | `--tls` | プロキシモードでTLS終端を有効化 |
 | `--block` | ブロックモードを有効化（検出結果のあるメッセージをブロック） |
 | `--log <FILE>` | プロキシトラフィックのログファイル（JSONL形式） |
@@ -418,6 +418,6 @@ cc-audit hook remove
 cc-audit serve
 
 # ランタイム監視用にプロキシとして実行
-cc-audit proxy --target localhost:9000
-cc-audit proxy --target localhost:9000 --port 3000 --tls --block
+cc-audit proxy --target 127.0.0.1:9000
+cc-audit proxy --target 127.0.0.1:9000 --port 3000 --tls --block
 ```

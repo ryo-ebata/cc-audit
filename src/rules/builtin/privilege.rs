@@ -53,7 +53,7 @@ fn pe_002() -> Rule {
             Regex::new(r"\brm\s+((?:-[rfRF]+|--recursive|--force)\s+)+\*")
                 .expect("PE-002: invalid regex"),
             // Explicit --no-preserve-root
-            Regex::new(r"\brm\s+[^\n]*\s--no-preserve-root(?:\s|$)")
+            Regex::new(r"\brm\s+(?:--no-preserve-root|[^\n]*\s--no-preserve-root)(?:\s|[;&|]|$)")
                 .expect("PE-002: invalid regex"),
             // rm -rf / followed by command separator (;, &&, ||)
             Regex::new(r"\brm\s+((?:-[rfRF]+|--recursive|--force)\s+)+/\s*(;|&&|\|\|)")
@@ -384,6 +384,7 @@ mod tests {
             ("rm -rf /", true),
             ("rm -rf /*", true),
             ("rm -rf --no-preserve-root /", true),
+            ("rm --no-preserve-root -rf /", true),
             ("rm --recursive --force /", true),
             ("rm --recursive --force /*", true),
             ("rm --force --recursive /etc", true),
@@ -399,6 +400,7 @@ mod tests {
             ("myrm --recursive --force /", false),
             ("rm --recursive --forceful /", false),
             ("rm --no-preserve-rooted /", false),
+            ("rm --no-preserve-root-extra /", false),
             ("rm file.txt", false),
         ];
 

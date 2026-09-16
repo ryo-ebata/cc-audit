@@ -922,7 +922,7 @@ mod tests {
             let mode = std::env::var("CC_AUDIT_REMOTE_OUTPUT_MODE").unwrap();
             let cloner = if mode == "timeout" {
                 GitCloner::new().with_timeout(1)
-            } else if mode == "size" {
+            } else if mode == "size" || mode == "size-fd-hold" || mode == "size-fd-release" {
                 GitCloner::new().with_max_size(1)
             } else {
                 GitCloner::new()
@@ -941,14 +941,44 @@ mod tests {
             } else {
                 clone()
             };
+            if mode == "size-fd-hold" || mode == "size-fd-release" {
+                let control_dir =
+                    PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR").unwrap());
+                std::fs::write(control_dir.join("release"), b"release").unwrap();
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while !control_dir.join("hold-exited").exists()
+                    && std::time::Instant::now() < deadline
+                {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                assert!(control_dir.join("hold-exited").exists());
+            }
             if mode == "success" || mode == "runtime" || mode == "fd-hold" {
                 result.unwrap();
                 assert!(clone_path.join(".git").is_dir());
             } else if mode == "size" {
-                assert!(matches!(
-                    result,
-                    Err(RemoteError::RepositoryTooLarge { .. })
-                ));
+                assert!(
+                    matches!(result, Err(RemoteError::RepositoryTooLarge { .. })),
+                    "mode={mode}: got {result:?}"
+                );
+            } else if mode == "size-fd-hold" || mode == "size-fd-release" {
+                let actual_result = format!("{result:?}");
+                if mode == "size-fd-hold" {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(RemoteError::CloneFailed { message, .. })
+                                if message.contains("Repository too large")
+                                    && message.contains("Timed out collecting git output")
+                        ),
+                        "mode={mode}: got {actual_result}"
+                    );
+                } else {
+                    assert!(
+                        matches!(result, Err(RemoteError::RepositoryTooLarge { .. })),
+                        "mode={mode}: got {actual_result}"
+                    );
+                }
             } else if mode == "timeout" {
                 assert!(matches!(result, Err(RemoteError::CloneTimeout { .. })));
             } else if mode == "fd-hold-long" {
@@ -974,6 +1004,10 @@ mod tests {
         let fd_hold_clone = tempfile::tempdir().unwrap();
         let timeout_clone = tempfile::tempdir().unwrap();
         let size_clone = tempfile::tempdir().unwrap();
+        let size_fd_hold_clone = tempfile::tempdir().unwrap();
+        let size_fd_release_clone = tempfile::tempdir().unwrap();
+        let size_fd_hold_control = tempfile::tempdir().unwrap();
+        let size_fd_release_control = tempfile::tempdir().unwrap();
         let long_fd_hold_clone = tempfile::tempdir().unwrap();
         let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
             .map(|dir| dir.join("git"))
@@ -983,6 +1017,56 @@ mod tests {
         std::fs::write(
             &wrapper_path,
             "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n  fi\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold-long ]; then\n    (sleep 2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    exec sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      attempts=0\n      while [ ! -d \"$clone_path/.git\" ] && [ \"$attempts\" -lt 500 ]; do\n        sleep 0.01\n        attempts=$((attempts + 1))\n      done\n      if [ -d \"$clone_path/.git\" ]; then\n        head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n      fi\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &wrapper_path,
+            r#"#!/bin/sh
+set -eu
+mode="${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}"
+if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-release ]; then
+  if [ "$mode" = failure ]; then echo simulated failure >&2; fi
+  head -c 2097152 /dev/zero | tr '\000' O
+  head -c 2097152 /dev/zero | tr '\000' E >&2
+  if [ "$mode" = failure ]; then exit 17; fi
+  if [ "$mode" = fd-hold ]; then (sleep 0.2 >/dev/null) & fi
+  if [ "$mode" = fd-hold-long ]; then (sleep 2 >/dev/null) & fi
+  if [ "$mode" = timeout ]; then exec sleep 2; fi
+  if [ "$mode" = size ]; then
+    clone_path=""
+    for arg in "$@"; do clone_path="$arg"; done
+    (
+      attempts=0
+      while [ ! -d "$clone_path/.git" ] && [ "$attempts" -lt 500 ]; do sleep 0.01; attempts=$((attempts + 1)); done
+      if [ -d "$clone_path/.git" ]; then head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"; fi
+    ) &
+    size_writer=$!
+    if "$CC_AUDIT_REAL_GIT" "$@"; then status=0; else status=$?; fi
+    wait "$size_writer"
+    exit "$status"
+  fi
+fi
+if [ "${1:-}" = clone ] && { [ "$mode" = size-fd-hold ] || [ "$mode" = size-fd-release ]; }; then
+  clone_path=""
+  for arg in "$@"; do clone_path="$arg"; done
+  control_dir="$CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR"
+  (
+    : > "$control_dir/hold-ready"
+    deadline=$(( $(date +%s) + 5 ))
+    while [ ! -f "$control_dir/release" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.01; done
+    : > "$control_dir/hold-exited"
+  ) &
+  hold_pid=$!
+  while [ ! -f "$control_dir/hold-ready" ]; do sleep 0.01; done
+  mkdir -p "$clone_path/.git"
+  head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"
+  : > "$control_dir/size-ready"
+  if [ "$mode" = size-fd-release ]; then : > "$control_dir/release"; fi
+  wait "$hold_pid"
+  exit 0
+fi
+exec "$CC_AUDIT_REAL_GIT" "$@"
+"#,
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
@@ -1030,7 +1114,7 @@ mod tests {
                 .chain(std::env::split_paths(&current_path)),
         )
         .unwrap();
-        let run_child = |clone_path: &Path, mode: &str| {
+        let run_child = |clone_path: &Path, mode: &str, control_dir: Option<&Path>| {
             let mut child = std::process::Command::new(&test_binary)
                 .args([
                     "--exact",
@@ -1043,6 +1127,11 @@ mod tests {
                 .env("CC_AUDIT_REMOTE_OUTPUT_MODE", mode)
                 .env("CC_AUDIT_REAL_GIT", real_git.as_os_str())
                 .env("PATH", &child_path)
+                .envs(
+                    control_dir
+                        .into_iter()
+                        .map(|path| ("CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR", path.as_os_str())),
+                )
                 .spawn()
                 .unwrap();
             let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -1060,13 +1149,23 @@ mod tests {
             assert!(status.success(), "git output child test failed: {mode}");
         };
 
-        run_child(success_clone.path(), "success");
-        run_child(failure_clone.path(), "failure");
-        run_child(runtime_clone.path(), "runtime");
-        run_child(fd_hold_clone.path(), "fd-hold");
-        run_child(timeout_clone.path(), "timeout");
-        run_child(size_clone.path(), "size");
-        run_child(long_fd_hold_clone.path(), "fd-hold-long");
+        run_child(success_clone.path(), "success", None);
+        run_child(failure_clone.path(), "failure", None);
+        run_child(runtime_clone.path(), "runtime", None);
+        run_child(fd_hold_clone.path(), "fd-hold", None);
+        run_child(timeout_clone.path(), "timeout", None);
+        run_child(size_clone.path(), "size", None);
+        run_child(
+            size_fd_hold_clone.path(),
+            "size-fd-hold",
+            Some(size_fd_hold_control.path()),
+        );
+        run_child(
+            size_fd_release_clone.path(),
+            "size-fd-release",
+            Some(size_fd_release_control.path()),
+        );
+        run_child(long_fd_hold_clone.path(), "fd-hold-long", None);
         assert!(success_clone.path().join(".git").is_dir());
         assert!(!failure_clone.path().join(".git").exists());
         assert!(runtime_clone.path().join(".git").is_dir());

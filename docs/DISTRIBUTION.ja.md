@@ -51,7 +51,7 @@ git push origin vX.Y.Z
 
 #### 2. npm-publish.yml
 
-リリース公開でトリガー。GitHub Releaseからバイナリをダウンロードしてnpmに公開。
+`Release` workflowの完了時に起動し、workflowが成功した場合のみ公開jobを実行する。GitHub Releaseからバイナリをダウンロードしてnpmに公開する。
 
 **パッケージ:**
 - `@cc-audit/cc-audit` - メインラッパーパッケージ
@@ -66,7 +66,7 @@ git push origin vX.Y.Z
 
 #### 3. homebrew-update.yml
 
-リリース公開でトリガー。新バージョンとSHA256でHomebrew Formulaを更新。
+`Release` workflowの完了時に起動し、workflowが成功した場合のみ更新jobを実行する。新バージョンとSHA256でHomebrew Formulaを更新する。
 
 **必要なSecret:** `HOMEBREW_TAP_TOKEN`（homebrew-tapへのrepoアクセス権を持つPAT）
 

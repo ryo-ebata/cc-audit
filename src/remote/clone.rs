@@ -528,24 +528,31 @@ impl GitCloner {
             stderr_output,
         } = readers;
         let result = tokio::time::timeout(GIT_OUTPUT_COLLECTION_TIMEOUT, async {
-            let stdout = stdout_output
-                .await
+            let (stdout, stderr) = tokio::join!(stdout_output, stderr_output);
+            let stdout = stdout
                 .map_err(|error| error.to_string())?
-                .map_err(|error| error.to_string());
-            let stderr = stderr_output
-                .await
+                .map_err(|error| error.to_string())?;
+            let stderr = stderr
                 .map_err(|error| error.to_string())?
-                .map_err(|error| error.to_string());
-            Ok::<_, String>((stdout?, stderr?))
+                .map_err(|error| error.to_string())?;
+            Ok::<_, String>((stdout, stderr))
         })
         .await;
         match result {
-            Ok(Ok(output)) => Ok(output),
-            Ok(Err(error)) => Err(RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: self
-                    .sanitize_error_message(&format!("Failed to collect git output: {error}")),
-            }),
+            Ok(Ok(output)) => {
+                let _ = stdout_task.await;
+                let _ = stderr_task.await;
+                Ok(output)
+            }
+            Ok(Err(error)) => {
+                let _ = stdout_task.await;
+                let _ = stderr_task.await;
+                Err(RemoteError::CloneFailed {
+                    url: url.to_string(),
+                    message: self
+                        .sanitize_error_message(&format!("Failed to collect git output: {error}")),
+                })
+            }
             Err(_) => {
                 stdout_task.abort();
                 stderr_task.abort();
@@ -583,12 +590,7 @@ impl GitCloner {
         cleanup: Result<(), String>,
         output: Result<T, RemoteError>,
     ) -> RemoteError {
-        if cleanup.is_ok() && output.is_ok()
-            || matches!(
-                error,
-                RemoteError::CloneTimeout { .. } | RemoteError::RepositoryTooLarge { .. }
-            )
-        {
+        if cleanup.is_ok() && output.is_ok() {
             return error;
         }
         let mut message = error.to_string();
@@ -956,7 +958,9 @@ mod tests {
                 );
             } else {
                 let error = result.unwrap_err();
-                assert!(matches!(error, RemoteError::CloneFailed { .. }));
+                assert!(
+                    matches!(error, RemoteError::CloneFailed { message, .. } if message.contains("simulated failure"))
+                );
             }
             return;
         }
@@ -978,7 +982,7 @@ mod tests {
         let wrapper_path = wrapper.path().join("git");
         std::fs::write(
             &wrapper_path,
-            "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold-long ]; then\n    (sleep 2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      while [ ! -d \"$clone_path/.git\" ]; do sleep 0.01; done\n      head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
+            "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n  fi\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold-long ]; then\n    (sleep 2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    exec sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      attempts=0\n      while [ ! -d \"$clone_path/.git\" ] && [ \"$attempts\" -lt 500 ]; do\n        sleep 0.01\n        attempts=$((attempts + 1))\n      done\n      if [ -d \"$clone_path/.git\" ]; then\n        head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n      fi\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
@@ -1067,6 +1071,34 @@ mod tests {
         assert!(!failure_clone.path().join(".git").exists());
         assert!(runtime_clone.path().join(".git").is_dir());
         assert!(fd_hold_clone.path().join(".git").is_dir());
+    }
+
+    #[test]
+    fn test_async_reader_drains_concurrently_and_caps_output() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            use tokio::io::AsyncWriteExt;
+
+            let (mut stdout_writer, stdout_reader) = tokio::io::duplex(8192);
+            let (mut stderr_writer, stderr_reader) = tokio::io::duplex(8192);
+            let stdout_writer_task =
+                tokio::spawn(
+                    async move { stdout_writer.write_all(&vec![b'O'; 2 * 1024 * 1024]).await },
+                );
+            let stderr_writer_task =
+                tokio::spawn(
+                    async move { stderr_writer.write_all(&vec![b'E'; 2 * 1024 * 1024]).await },
+                );
+
+            let (stdout, stderr) = tokio::join!(
+                read_git_output_async(stdout_reader),
+                read_git_output_async(stderr_reader),
+            );
+            assert_eq!(stdout.unwrap().len(), MAX_GIT_OUTPUT_BYTES as usize);
+            assert_eq!(stderr.unwrap().len(), MAX_GIT_OUTPUT_BYTES as usize);
+            stdout_writer_task.await.unwrap().unwrap();
+            stderr_writer_task.await.unwrap().unwrap();
+        });
     }
 
     #[test]

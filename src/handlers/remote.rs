@@ -443,17 +443,24 @@ mod tests {
     }
 
     struct FailingReader {
-        first_chunk: Option<Vec<u8>>,
+        first_chunk: Vec<u8>,
+        offset: usize,
+        failed: bool,
     }
 
     impl Read for FailingReader {
         fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-            match self.first_chunk.take() {
-                Some(chunk) => {
-                    buffer[..chunk.len()].copy_from_slice(&chunk);
-                    Ok(chunk.len())
-                }
-                None => Err(std::io::Error::other("injected URL list read failure")),
+            if self.offset < self.first_chunk.len() {
+                let length = (self.first_chunk.len() - self.offset).min(buffer.len());
+                buffer[..length]
+                    .copy_from_slice(&self.first_chunk[self.offset..self.offset + length]);
+                self.offset += length;
+                Ok(length)
+            } else if !self.failed {
+                self.failed = true;
+                Err(std::io::Error::other("injected URL list read failure"))
+            } else {
+                Err(std::io::Error::other("injected URL list read failure"))
             }
         }
     }
@@ -505,7 +512,9 @@ mod tests {
     #[test]
     fn read_remote_list_rejects_midstream_io_error_without_partial_urls() {
         let reader = FailingReader {
-            first_chunk: Some(b"https://example.com/first\n".to_vec()),
+            first_chunk: b"https://example.com/first\n".to_vec(),
+            offset: 0,
+            failed: false,
         };
         let clone_calls = Arc::new(AtomicUsize::new(0));
         let error = read_remote_list_then(BufReader::new(reader), {

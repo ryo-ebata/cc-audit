@@ -188,6 +188,52 @@ mod compare_cli {
             .stdout(predicate::str::contains("extra.md:1"))
             .stdout(predicate::str::contains("Summary: 0 removed, 2 added"));
     }
+
+    #[test]
+    fn relative_directory_inputs_compare_cleanly() {
+        let workspace = TempDir::new().unwrap();
+        let left = workspace.path().join("left");
+        let right = workspace.path().join("right");
+        fs::create_dir_all(&left).unwrap();
+        fs::create_dir_all(&right).unwrap();
+        create_test_config(&left);
+        create_test_config(&right);
+        fs::write(left.join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg("left")
+            .arg("right")
+            .current_dir(workspace.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+
+    #[test]
+    fn renamed_single_file_inputs_compare_cleanly() {
+        let workspace = TempDir::new().unwrap();
+        let old = workspace.path().join("old.md");
+        let new = workspace.path().join("new.md");
+        create_test_config(workspace.path());
+        fs::write(&old, "sudo apt update\n").unwrap();
+        fs::write(&new, "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(&old)
+            .arg(&new)
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
 }
 
 mod overpermission_scan {

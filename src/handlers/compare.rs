@@ -18,41 +18,61 @@ struct FindingIdentity {
     code: String,
 }
 
+fn normalize_lexically(path: &std::path::Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                if !normalized.pop() && !path.is_absolute() {
+                    normalized.push(component.as_os_str());
+                }
+            }
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
 fn logical_file(input: &std::path::Path, finding_file: &str) -> String {
     if input.is_file() {
         return "<single-file>".to_string();
     }
 
-    let root = std::fs::canonicalize(input).unwrap_or_else(|_| input.to_path_buf());
+    let root = std::fs::canonicalize(input).unwrap_or_else(|_| normalize_lexically(input));
     let candidate = std::path::Path::new(finding_file);
-
-    let relative = if candidate.is_absolute() {
-        candidate
-            .strip_prefix(input)
-            .ok()
-            .map(|path| path.to_path_buf())
-            .or_else(|| {
-                candidate
-                    .strip_prefix(&root)
-                    .ok()
-                    .map(|path| path.to_path_buf())
-            })
-            .or_else(|| {
-                std::fs::canonicalize(candidate)
-                    .ok()
-                    .and_then(|path| path.strip_prefix(&root).ok().map(|p| p.to_path_buf()))
-            })
+    let candidate_paths = if candidate.is_absolute() {
+        vec![
+            std::fs::canonicalize(candidate)
+                .ok()
+                .unwrap_or_else(|| normalize_lexically(candidate)),
+        ]
     } else {
-        candidate
-            .strip_prefix(input)
-            .ok()
-            .map(|path| path.to_path_buf())
-            .or_else(|| {
-                std::fs::canonicalize(candidate)
-                    .ok()
-                    .and_then(|path| path.strip_prefix(&root).ok().map(|p| p.to_path_buf()))
-            })
+        // Finding paths are normally absolute, but relative paths can be
+        // emitted by scanners. Resolve them from the scan root first so that
+        // `sub/../SKILL.md` is normalized before identity comparison.
+        let mut paths = Vec::new();
+        if let Ok(path) = std::fs::canonicalize(root.join(candidate)) {
+            paths.push(path);
+        }
+        if let Ok(path) = std::fs::canonicalize(candidate) {
+            paths.push(path);
+        }
+        paths.push(normalize_lexically(&root.join(candidate)));
+        paths.push(normalize_lexically(candidate));
+        paths
     };
+
+    let relative = candidate_paths.iter().find_map(|path| {
+        path.strip_prefix(&root)
+            .ok()
+            .map(|relative| relative.to_path_buf())
+            .or_else(|| {
+                path.strip_prefix(normalize_lexically(input))
+                    .ok()
+                    .map(|relative| relative.to_path_buf())
+            })
+    });
 
     if let Some(path) = relative {
         // Keep the platform-native separator: on Unix, `a\\b.md` is a valid
@@ -340,7 +360,7 @@ mod tests {
         std::fs::create_dir(&nested).unwrap();
         let file = nested.join("file.md");
         std::fs::write(&file, "content").unwrap();
-        let alias = root.path().with_extension("-alias");
+        let alias = root.path().join("alias");
         std::os::unix::fs::symlink(root.path(), &alias).unwrap();
 
         assert_eq!(
@@ -362,6 +382,32 @@ mod tests {
             logical_file(
                 &root.path().join("nested").join(".."),
                 &file.display().to_string()
+            ),
+            "nested/file.md"
+        );
+        assert_eq!(
+            logical_file(
+                root.path(),
+                &root
+                    .path()
+                    .join("nested")
+                    .join("..")
+                    .join("file.md")
+                    .display()
+                    .to_string()
+            ),
+            "file.md"
+        );
+        assert_eq!(
+            logical_file(
+                root.path(),
+                &root
+                    .path()
+                    .join("nested")
+                    .join(".")
+                    .join("file.md")
+                    .display()
+                    .to_string()
             ),
             "nested/file.md"
         );

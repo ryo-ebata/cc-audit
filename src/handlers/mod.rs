@@ -22,6 +22,10 @@ use std::process::ExitCode;
 
 use crate::config::Config;
 
+fn missing_config_guidance() -> &'static str {
+    "\ncc-audit requires a configuration file (.cc-audit.yaml, .cc-audit.yml, .cc-audit.json, or .cc-audit.toml) to run.\nThe `init` command creates a YAML template:\n\n  cc-audit init\n\nOr specify a custom configuration file using:\n\n  cc-audit check --config <path> <paths...>\n"
+}
+
 // Re-export all handlers for convenience
 pub use baseline::{
     filter_against_baseline, handle_baseline, handle_check_drift, handle_save_baseline,
@@ -52,18 +56,7 @@ pub fn require_config(
         Ok((load_result.config, path))
     } else {
         eprintln!("Error: Configuration file not found.");
-        eprintln!();
-        eprintln!(
-            "cc-audit requires a configuration file (.cc-audit.yaml, .cc-audit.yml, .cc-audit.json, or .cc-audit.toml) to run."
-        );
-        eprintln!("The `init` command creates a YAML template:");
-        eprintln!();
-        eprintln!("  cc-audit init");
-        eprintln!();
-        eprintln!("Or specify a custom configuration file using:");
-        eprintln!();
-        eprintln!("  cc-audit check --config <path> <paths...>");
-        eprintln!();
+        eprint!("{}", missing_config_guidance());
         Err(ExitCode::from(2))
     }
 }
@@ -92,6 +85,22 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
     use tempfile::TempDir;
+
+    #[test]
+    fn test_missing_config_guidance_lists_supported_formats_and_remedies() {
+        let guidance = missing_config_guidance();
+
+        for extension in [
+            ".cc-audit.yaml",
+            ".cc-audit.yml",
+            ".cc-audit.json",
+            ".cc-audit.toml",
+        ] {
+            assert!(guidance.contains(extension));
+        }
+        assert!(guidance.contains("cc-audit init"));
+        assert!(guidance.contains("cc-audit check --config <path> <paths...>"));
+    }
 
     fn create_test_cli(args: &[&str]) -> Cli {
         let mut full_args = vec!["cc-audit", "check"];

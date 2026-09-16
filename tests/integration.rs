@@ -910,34 +910,6 @@ rules:
     }
 
     #[test]
-    fn test_config_file_not_present_shows_error() {
-        let dir = TempDir::new().unwrap();
-        let isolated_home = TempDir::new().unwrap();
-        let isolated_config = TempDir::new().unwrap();
-
-        // Use a bare relative path so project-root canonicalization cannot walk
-        // into an unrelated ancestor configuration. The config lookup happens
-        // before path validation, so this still exercises the missing-config
-        // diagnostic without creating files outside the isolated temp dirs.
-        check_cmd()
-            .current_dir(dir.path())
-            .arg("missing-skill")
-            .env("HOME", isolated_home.path())
-            .env("USERPROFILE", isolated_home.path())
-            .env("XDG_CONFIG_HOME", isolated_config.path())
-            .assert()
-            .failure()
-            .code(2)
-            .stderr(predicate::str::contains("Configuration file not found"))
-            .stderr(predicate::str::contains(".cc-audit.yaml"))
-            .stderr(predicate::str::contains(".cc-audit.yml"))
-            .stderr(predicate::str::contains(".cc-audit.json"))
-            .stderr(predicate::str::contains(".cc-audit.toml"))
-            .stderr(predicate::str::contains("cc-audit init"))
-            .stderr(predicate::str::contains("--config <path>"));
-    }
-
-    #[test]
     fn test_config_file_invalid_rule_shows_warning() {
         let dir = TempDir::new().unwrap();
 

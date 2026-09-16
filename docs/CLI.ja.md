@@ -74,7 +74,7 @@ cc-audit check [OPTIONS] <PATHS>...
 
 | オプション | 説明 |
 |------------|------|
-| `-c, --config <FILE>` | 設定ファイルのパス |
+| `-c, --config <FILE>` | 設定ファイルのパス（`.yaml`、`.yml`、`.json`、`.toml`） |
 
 ### 修正オプション
 

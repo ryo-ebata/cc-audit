@@ -53,8 +53,10 @@ pub fn require_config(
     } else {
         eprintln!("Error: Configuration file not found.");
         eprintln!();
-        eprintln!("cc-audit requires a configuration file (.cc-audit.yaml) to run.");
-        eprintln!("You can create one using:");
+        eprintln!(
+            "cc-audit requires a configuration file (.cc-audit.yaml, .cc-audit.yml, .cc-audit.json, or .cc-audit.toml) to run."
+        );
+        eprintln!("The `init` command creates a YAML template:");
         eprintln!();
         eprintln!("  cc-audit init");
         eprintln!();

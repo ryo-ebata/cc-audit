@@ -43,15 +43,15 @@ pub const AWESOME_CLAUDE_CODE_URL: &str = "https://github.com/anthropics/awesome
 
 ```rust
 pub struct GitCloner {
-    auth_token: Option<AuthToken>,
-    timeout: Duration,
+    // Configuration fields are private; use the builder methods below.
 }
 
 impl GitCloner {
     pub fn new() -> Self;
-    pub fn with_token(token: AuthToken) -> Self;
-    pub fn clone(&self, url: &str) -> Result<ClonedRepo, RemoteError>;
-    pub fn clone_with_ref(&self, url: &str, git_ref: &GitRef) -> Result<ClonedRepo, RemoteError>;
+    pub fn with_auth_token(self, token: Option<String>) -> Self;
+    pub fn with_timeout(self, secs: u64) -> Self;
+    pub fn with_max_size(self, mb: u64) -> Self;
+    pub fn clone(&self, url: &str, git_ref: &str) -> Result<ClonedRepo, RemoteError>;
 }
 ```
 
@@ -59,8 +59,11 @@ impl GitCloner {
 
 ```rust
 pub struct ClonedRepo {
-    path: PathBuf,
-    temp_dir: TempDir,  // Auto-cleanup on drop
+    pub path: PathBuf,
+    pub url: String,
+    pub git_ref: String,
+    pub commit_sha: Option<String>,
+    // The temporary directory handle is private and cleans up on drop.
 }
 
 impl ClonedRepo {
@@ -73,11 +76,17 @@ impl ClonedRepo {
 ```rust
 pub enum RemoteError {
     CloneFailed { url: String, message: String },
-    Timeout { url: String },
-    AuthenticationFailed { url: String },
-    RateLimited { url: String, retry_after: Option<Duration> },
     InvalidUrl(String),
-    IoError(std::io::Error),
+    NotFound(String),
+    AuthRequired(String),
+    RateLimitExceeded { reset_at: String },
+    Network(std::io::Error),
+    Http { status: u16, message: String },
+    ParseError(String),
+    TempDir(String),
+    GitNotFound,
+    CloneTimeout { url: String, timeout_secs: u64 },
+    RepositoryTooLarge { url: String, size_mb: u64, limit_mb: u64 },
 }
 ```
 
@@ -91,22 +100,22 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)>;
 ## Usage Example
 
 ```rust
-use cc_audit::remote::{GitCloner, ClonedRepo, RemoteError};
+use cc_audit::remote::{ClonedRepo, GitCloner, RemoteError};
 
+fn example() -> Result<(), RemoteError> {
 // Basic clone
 let cloner = GitCloner::new();
-let repo = cloner.clone("https://github.com/user/repo")?;
-let result = scan(repo.path());
+let repo: ClonedRepo = cloner.clone("https://github.com/user/repo", "HEAD")?;
+let _path = repo.path();
 
 // With authentication
-let cloner = GitCloner::with_token(AuthToken::new("ghp_xxx"));
-let repo = cloner.clone("https://github.com/org/private-repo")?;
+let cloner = GitCloner::new().with_auth_token(Some("ghp_xxx".to_string()));
+let repo = cloner.clone("https://github.com/org/private-repo", "HEAD")?;
 
 // Clone specific ref
-let repo = cloner.clone_with_ref(
-    "https://github.com/user/repo",
-    &GitRef::tag("v1.0.0")
-)?;
+let repo = cloner.clone("https://github.com/user/repo", "v1.0.0")?;
+Ok(())
+}
 ```
 
 ## CLI Usage

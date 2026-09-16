@@ -37,6 +37,11 @@ fn logical_file(input: &std::path::Path, finding_file: &str) -> String {
                     .ok()
                     .map(|path| path.to_path_buf())
             })
+            .or_else(|| {
+                std::fs::canonicalize(candidate)
+                    .ok()
+                    .and_then(|path| path.strip_prefix(&root).ok().map(|p| p.to_path_buf()))
+            })
     } else {
         candidate
             .strip_prefix(input)
@@ -50,7 +55,9 @@ fn logical_file(input: &std::path::Path, finding_file: &str) -> String {
     };
 
     if let Some(path) = relative {
-        return path.to_string_lossy().replace('\\', "/");
+        // Keep the platform-native separator: on Unix, `a\\b.md` is a valid
+        // filename and must not collide with the distinct path `a/b.md`.
+        return path.to_string_lossy().into_owned();
     }
 
     // Keep an unmappable location distinct without putting an absolute path in
@@ -294,12 +301,27 @@ mod tests {
     }
 
     #[test]
-    fn location_or_code_changes_are_differences() {
+    fn location_changes_are_differences() {
         let root1 = TempDir::new().unwrap();
         let root2 = TempDir::new().unwrap();
         let file1 = root1.path().join("SKILL.md");
         let file2 = root2.path().join("SKILL.md");
-        let mut changed = finding(&file2.display().to_string(), 2);
+        let findings1 = vec![finding(&file1.display().to_string(), 1)];
+        let findings2 = vec![finding(&file2.display().to_string(), 2)];
+
+        let (only_in_1, only_in_2) =
+            diff_findings(root1.path(), &findings1, root2.path(), &findings2);
+        assert_eq!(only_in_1.len(), 1);
+        assert_eq!(only_in_2.len(), 1);
+    }
+
+    #[test]
+    fn code_changes_are_differences() {
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let file1 = root1.path().join("SKILL.md");
+        let file2 = root2.path().join("SKILL.md");
+        let mut changed = finding(&file2.display().to_string(), 1);
         changed.code = "changed code".to_string();
         let findings1 = vec![finding(&file1.display().to_string(), 1)];
         let findings2 = vec![changed];
@@ -308,6 +330,58 @@ mod tests {
             diff_findings(root1.path(), &findings1, root2.path(), &findings2);
         assert_eq!(only_in_1.len(), 1);
         assert_eq!(only_in_2.len(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn path_normalization_preserves_native_names_and_symlink_roots() {
+        let root = TempDir::new().unwrap();
+        let nested = root.path().join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        let file = nested.join("file.md");
+        std::fs::write(&file, "content").unwrap();
+        let alias = root.path().with_extension("-alias");
+        std::os::unix::fs::symlink(root.path(), &alias).unwrap();
+
+        assert_eq!(
+            logical_file(root.path(), &file.display().to_string()),
+            "nested/file.md"
+        );
+        assert_eq!(
+            logical_file(&alias, &file.display().to_string()),
+            "nested/file.md"
+        );
+        assert_eq!(
+            logical_file(
+                &root.path().join("nested").join("."),
+                &file.display().to_string()
+            ),
+            "file.md"
+        );
+        assert_eq!(
+            logical_file(
+                &root.path().join("nested").join(".."),
+                &file.display().to_string()
+            ),
+            "nested/file.md"
+        );
+
+        let unix_name = root.path().join("a\\b.md");
+        let unix_path = logical_file(root.path(), &unix_name.display().to_string());
+        let nested_path = logical_file(
+            root.path(),
+            &root.path().join("a/b.md").display().to_string(),
+        );
+        assert_ne!(unix_path, nested_path);
+    }
+
+    #[test]
+    fn unmappable_locations_use_distinct_fallbacks() {
+        let root = TempDir::new().unwrap();
+        let first = logical_file(root.path(), "/outside/first.md");
+        let second = logical_file(root.path(), "/outside/second.md");
+        assert!(first.starts_with("<unmapped:"));
+        assert_ne!(first, second);
     }
 
     #[test]

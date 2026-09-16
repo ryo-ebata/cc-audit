@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.34](https://github.com/ryo-ebata/cc-audit/compare/v3.22.33...v3.22.34) (2026-09-16)
+
+
+### Bug Fixes
+
+* **cve:** update CVE database (v3.22.34) ([#501](https://github.com/ryo-ebata/cc-audit/issues/501)) ([dafabaf](https://github.com/ryo-ebata/cc-audit/commit/dafabaf69537f351176e594fd24b4a99a9037482))
+* **op004:** detect bare Bash tool grants ([#500](https://github.com/ryo-ebata/cc-audit/issues/500)) ([b38706d](https://github.com/ryo-ebata/cc-audit/commit/b38706d889471853c773ace30357875c8fc9032d))
+
 ## [3.22.33](https://github.com/ryo-ebata/cc-audit/compare/v3.22.32...v3.22.33) (2026-09-16)
 
 

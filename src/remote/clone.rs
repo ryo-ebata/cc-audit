@@ -939,7 +939,7 @@ mod tests {
             } else {
                 clone()
             };
-            if mode == "size-fd-hold" || mode == "size-fd-release" {
+            if mode == "size-fd-hold" || mode == "size-fd-release" || mode == "fd-hold-long" {
                 let control_dir =
                     PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR").unwrap());
                 std::fs::write(control_dir.join("release"), b"release").unwrap();
@@ -1006,6 +1006,7 @@ mod tests {
         let size_fd_release_clone = tempfile::tempdir().unwrap();
         let size_fd_hold_control = tempfile::tempdir().unwrap();
         let size_fd_release_control = tempfile::tempdir().unwrap();
+        let fd_hold_long_control = tempfile::tempdir().unwrap();
         let long_fd_hold_clone = tempfile::tempdir().unwrap();
         let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
             .map(|dir| dir.join("git"))
@@ -1023,7 +1024,19 @@ if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-r
   head -c 2097152 /dev/zero | tr '\000' E >&2
   if [ "$mode" = failure ]; then exit 17; fi
   if [ "$mode" = fd-hold ]; then (sleep 0.2 >/dev/null) & fi
-  if [ "$mode" = fd-hold-long ]; then (sleep 2 >/dev/null) & fi
+  if [ "$mode" = fd-hold-long ]; then
+    control_dir="$CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR"
+    (
+      : > "$control_dir/hold-ready"
+      deadline=$(( $(date +%s) + 5 ))
+      while [ ! -f "$control_dir/release" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.01; done
+      : > "$control_dir/hold-exited"
+    ) &
+    hold_pid=$!
+    ready_deadline=$(( $(date +%s) + 5 ))
+    while [ ! -f "$control_dir/hold-ready" ] && [ "$(date +%s)" -lt "$ready_deadline" ]; do sleep 0.01; done
+    if [ ! -f "$control_dir/hold-ready" ]; then exit 1; fi
+  fi
   if [ "$mode" = timeout ]; then exec sleep 2; fi
   if [ "$mode" = size ]; then
     clone_path=""
@@ -1160,7 +1173,11 @@ exec "$CC_AUDIT_REAL_GIT" "$@"
             "size-fd-release",
             Some(size_fd_release_control.path()),
         );
-        run_child(long_fd_hold_clone.path(), "fd-hold-long", None);
+        run_child(
+            long_fd_hold_clone.path(),
+            "fd-hold-long",
+            Some(fd_hold_long_control.path()),
+        );
         assert!(success_clone.path().join(".git").is_dir());
         assert!(!failure_clone.path().join(".git").exists());
         assert!(runtime_clone.path().join(".git").is_dir());

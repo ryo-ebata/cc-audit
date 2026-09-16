@@ -37,6 +37,10 @@ setup-all: setup
 build:
     cargo build
 
+# Build with full debug information and incremental compilation
+build-full-debug:
+    cargo build --profile dev-full
+
 # Build release version
 build-release:
     cargo build --release
@@ -52,6 +56,10 @@ build-all-features:
 # Run all tests
 test:
     cargo test
+
+# Run all tests with full debug information and incremental compilation
+test-full-debug:
+    cargo test --profile dev-full
 
 # Run all tests with all features (CI equivalent)
 test-all:

@@ -40,6 +40,7 @@ jobs:
       - run: bash .github/scripts/test-update-cve-cpe-vulnerable.sh
       - run: bash .github/scripts/test-update-cve-version-constraints.sh
       - run: bash .github/scripts/test-update-cve-cvss-severity.sh
+      - run: bash .github/scripts/test-cargo-profiles.sh
 
   changes:
     name: Detect Changes

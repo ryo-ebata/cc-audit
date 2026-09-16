@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.32](https://github.com/ryo-ebata/cc-audit/compare/v3.22.31...v3.22.32) (2026-09-16)
+
+
+### Bug Fixes
+
+* **dep010:** detect partial lower comparators ([#493](https://github.com/ryo-ebata/cc-audit/issues/493)) ([f6322b8](https://github.com/ryo-ebata/cc-audit/commit/f6322b84142b0f65fd47037a52ad20c1704143a7))
+
 ## [3.22.31](https://github.com/ryo-ebata/cc-audit/compare/v3.22.30...v3.22.31) (2026-09-16)
 
 

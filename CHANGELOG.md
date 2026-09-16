@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.3](https://github.com/ryo-ebata/cc-audit/compare/v3.23.2...v3.23.3) (2026-09-16)
+
+
+### Bug Fixes
+
+* avoid release tag resolver SIGPIPE ([#535](https://github.com/ryo-ebata/cc-audit/issues/535)) ([8875f5d](https://github.com/ryo-ebata/cc-audit/commit/8875f5d9e6dae85ea5ed2c8895baa0d80b503bcc))
+
+
+### Performance Improvements
+
+* avoid per-line rule collection ([#533](https://github.com/ryo-ebata/cc-audit/issues/533)) ([4ef9fae](https://github.com/ryo-ebata/cc-audit/commit/4ef9fae5f5a41b8313b8d76a2098ff2cc1191978))
+
 ## [3.23.2](https://github.com/ryo-ebata/cc-audit/compare/v3.23.1...v3.23.2) (2026-09-16)
 
 

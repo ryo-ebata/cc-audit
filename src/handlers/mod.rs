@@ -114,11 +114,27 @@ mod tests {
     /// environment to redirect the child process to another repository.
     fn init_test_git_repo(path: &Path) {
         let path = path.canonicalize().unwrap();
-        let path_env = std::env::var_os("PATH").unwrap_or_default();
+        let git_command = || {
+            let mut command = std::process::Command::new("git");
+            command.env_clear();
+            command.env("PATH", std::env::var_os("PATH").unwrap_or_default());
+            for variable in [
+                "HOME",
+                "USERPROFILE",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "SYSTEMROOT",
+                "TEMP",
+                "TMP",
+            ] {
+                if let Some(value) = std::env::var_os(variable) {
+                    command.env(variable, value);
+                }
+            }
+            command
+        };
 
-        let output = std::process::Command::new("git")
-            .env_clear()
-            .env("PATH", path_env.clone())
+        let output = git_command()
             .args(["init", "--quiet"])
             .current_dir(&path)
             .output()
@@ -130,9 +146,7 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
 
-        let output = std::process::Command::new("git")
-            .env_clear()
-            .env("PATH", path_env)
+        let output = git_command()
             .args(["rev-parse", "--show-toplevel"])
             .current_dir(&path)
             .output()
@@ -148,6 +162,54 @@ mod tests {
             actual_root.canonicalize().unwrap(),
             path,
             "git init created or selected a different repository"
+        );
+    }
+
+    #[test]
+    fn test_init_git_repo_with_inherited_environment() {
+        if std::env::var_os("CC_AUDIT_GIT_REPRO_CHILD").is_some() {
+            let target = PathBuf::from(std::env::var_os("CC_AUDIT_GIT_REPRO_TARGET").unwrap());
+            init_test_git_repo(&target);
+            return;
+        }
+
+        let parent = TempDir::new().unwrap();
+        let target = TempDir::new().unwrap();
+        init_test_git_repo(parent.path());
+
+        let snapshot = |path: &Path| fs::read(path).ok();
+        let config = snapshot(&parent.path().join(".git/config"));
+        let head = snapshot(&parent.path().join(".git/HEAD"));
+        let index = snapshot(&parent.path().join(".git/index"));
+        let test_binary = std::env::current_exe().unwrap();
+
+        let status = std::process::Command::new(test_binary)
+            .args([
+                "--exact",
+                "handlers::tests::test_init_git_repo_with_inherited_environment",
+                "--nocapture",
+            ])
+            .env("CC_AUDIT_GIT_REPRO_CHILD", "1")
+            .env("CC_AUDIT_GIT_REPRO_TARGET", target.path())
+            .env("GIT_DIR", parent.path().join(".git"))
+            .env("GIT_WORK_TREE", target.path())
+            .env("GIT_COMMON_DIR", parent.path().join(".git"))
+            .env("GIT_CONFIG", parent.path().join(".git/config"))
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.bare")
+            .env("GIT_CONFIG_VALUE_0", "true")
+            .env("GIT_INDEX_FILE", parent.path().join(".git/index"))
+            .status()
+            .unwrap();
+        assert!(status.success(), "isolated child test failed");
+
+        assert_eq!(snapshot(&parent.path().join(".git/config")), config);
+        assert_eq!(snapshot(&parent.path().join(".git/HEAD")), head);
+        assert_eq!(snapshot(&parent.path().join(".git/index")), index);
+        assert!(target.path().join(".git").is_dir());
+        assert_eq!(
+            target.path().canonicalize().unwrap(),
+            target.path().join(".").canonicalize().unwrap()
         );
     }
 

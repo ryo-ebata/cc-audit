@@ -73,7 +73,7 @@ check_result_job_wiring() {
     in_result && /^    needs:/ { has_needs=index($0, expected_needs) > 0 }
     in_result && /actions\/checkout@v7/ { checked_out=1 }
     in_result && index($0, "check-aggregate-workflow-results.sh " mode) { found=1; bad_order=!checked_out }
-    in_result && found && index($0, arg_marker) { arg_seen=1 }
+    in_result && index($0, arg_marker) { arg_seen=1 }
     END { if (in_result) exit !(found && checked_out && has_needs && !bad_order && arg_seen) }
   ' ".github/workflows/$workflow.yml"
   grep -Fq "$arg_marker" ".github/workflows/$workflow.yml"

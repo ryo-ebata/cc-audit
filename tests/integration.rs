@@ -47,6 +47,7 @@ mod runtime_executor {
 
 mod malicious_skills {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_detect_data_exfiltration() {
@@ -72,6 +73,46 @@ mod malicious_skills {
             .code(1)
             .stdout(predicate::str::contains("PE-001"))
             .stdout(predicate::str::contains("sudo"));
+    }
+
+    #[test]
+    fn test_detects_pe002_long_options_offline() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        fs::write(
+            dir.path().join("SKILL.md"),
+            "rm --recursive --force /\nrm --force --recursive /etc\n",
+        )
+        .unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("PE-002"));
+    }
+
+    #[test]
+    fn test_pe002_long_options_ignore_safe_paths_and_command_prefixes() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        fs::write(
+            dir.path().join("SKILL.md"),
+            "rm --recursive --force /tmp/specific-dir\nmyrm --recursive --force /\nrm --recursive --forceful /\n",
+        )
+        .unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg(dir.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("PE-002").not());
     }
 
     #[test]

@@ -41,10 +41,8 @@ pub const AWESOME_CLAUDE_CODE_URL: &str = "https://github.com/anthropics/awesome
 
 ### GitCloner
 
-```rust
-pub struct GitCloner {
-    // Configuration fields are private; use the builder methods below.
-}
+```text
+pub struct GitCloner; // Configuration fields are private.
 
 impl GitCloner {
     pub fn new() -> Self;
@@ -57,14 +55,13 @@ impl GitCloner {
 
 ### ClonedRepo
 
-```rust
-pub struct ClonedRepo {
-    pub path: PathBuf,
-    pub url: String,
-    pub git_ref: String,
-    pub commit_sha: Option<String>,
-    // The temporary directory handle is private and cleans up on drop.
-}
+```text
+pub struct ClonedRepo; // Public fields are shown below; cleanup state is private.
+
+pub path: PathBuf;
+pub url: String;
+pub git_ref: String;
+pub commit_sha: Option<String>;
 
 impl ClonedRepo {
     pub fn path(&self) -> &Path;
@@ -73,7 +70,7 @@ impl ClonedRepo {
 
 ### RemoteError
 
-```rust
+```text
 pub enum RemoteError {
     CloneFailed { url: String, message: String },
     InvalidUrl(String),
@@ -92,14 +89,14 @@ pub enum RemoteError {
 
 ### URL Parsing
 
-```rust
+```text
 pub fn parse_github_url(url: &str) -> Option<(String, String)>;
 // Returns (owner, repo) tuple
 ```
 
 ## Usage Example
 
-```rust
+```rust,no_run
 use cc_audit::remote::{ClonedRepo, GitCloner, RemoteError};
 
 fn example() -> Result<(), RemoteError> {
@@ -117,6 +114,10 @@ let repo = cloner.clone("https://github.com/user/repo", "v1.0.0")?;
 Ok(())
 }
 ```
+
+`ClonedRepo::commit_sha` contains the checked-out commit SHA when the follow-up
+lookup succeeds. A successful clone does not guarantee that lookup succeeds;
+lookup failures are represented as `None`.
 
 ## CLI Usage
 

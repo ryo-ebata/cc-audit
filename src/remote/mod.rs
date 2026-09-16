@@ -35,6 +35,10 @@ pub const DEFAULT_RATE_LIMIT_RETRIES: u32 = 5;
 /// awesome-claude-code repository URL
 pub const AWESOME_CLAUDE_CODE_URL: &str = "https://github.com/anthropics/awesome-claude-code";
 
+#[doc(hidden)]
+#[doc = include_str!("README.md")]
+pub mod readme_examples {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

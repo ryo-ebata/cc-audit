@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.0](https://github.com/ryo-ebata/cc-audit/compare/v3.22.38...v3.23.0) (2026-09-16)
+
+
+### Features
+
+* bound remote batch scanning concurrency ([#524](https://github.com/ryo-ebata/cc-audit/issues/524)) ([a640180](https://github.com/ryo-ebata/cc-audit/commit/a640180e7eb2162b67158267d44be9a8e471c34a))
+
 ## [3.22.38](https://github.com/ryo-ebata/cc-audit/compare/v3.22.37...v3.22.38) (2026-09-16)
 
 

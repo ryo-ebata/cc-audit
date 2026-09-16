@@ -945,10 +945,15 @@ mod tests {
                 result.unwrap();
                 assert!(clone_path.join(".git").is_dir());
             } else if mode == "size" {
-                assert!(matches!(
-                    result,
-                    Err(RemoteError::RepositoryTooLarge { .. })
-                ));
+                // Size enforcement is expected to win over cleanup/output errors.
+                // Keep the actual result in the failure message so runner-only
+                // races (for example, a descendant retaining a pipe) are
+                // diagnosable instead of appearing as a bare mode mismatch.
+                let actual_result = format!("{result:?}");
+                assert!(
+                    matches!(result, Err(RemoteError::RepositoryTooLarge { .. })),
+                    "mode={mode}: expected RepositoryTooLarge, got {actual_result}"
+                );
             } else if mode == "timeout" {
                 assert!(matches!(result, Err(RemoteError::CloneTimeout { .. })));
             } else if mode == "fd-hold-long" {

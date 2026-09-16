@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.36](https://github.com/ryo-ebata/cc-audit/compare/v3.22.35...v3.22.36) (2026-09-16)
+
+
+### Bug Fixes
+
+* **dk005:** detect latest Compose images with registry ports ([#507](https://github.com/ryo-ebata/cc-audit/issues/507)) ([3ce9b92](https://github.com/ryo-ebata/cc-audit/commit/3ce9b9297065c371f4003be1d0ba59c075c71eb5))
+* **ex001:** detect requests getenv exfiltration ([#509](https://github.com/ryo-ebata/cc-audit/issues/509)) ([a86b9f4](https://github.com/ryo-ebata/cc-audit/commit/a86b9f4f14437c97f1edc6f8fd1f0b9b87d081a9))
+
 ## [3.22.35](https://github.com/ryo-ebata/cc-audit/compare/v3.22.34...v3.22.35) (2026-09-16)
 
 

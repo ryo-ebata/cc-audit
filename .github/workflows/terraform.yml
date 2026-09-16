@@ -34,6 +34,7 @@ jobs:
 
       - name: Find Terraform directories
         id: find
+        if: steps.filter.outputs.infra == 'true'
         run: |
           bash .github/scripts/check-aggregate-workflow-results.sh terraform-discover infra
 

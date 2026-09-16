@@ -159,5 +159,6 @@ grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/c
 grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/self-audit.yml
 grep -Fq 'check-aggregate-workflow-results.sh terraform' .github/workflows/terraform.yml
 grep -Fq 'check-aggregate-workflow-results.sh terraform-filter' .github/workflows/terraform.yml
+grep -Fq "if: steps.filter.outputs.infra == 'true'" .github/workflows/terraform.yml
 
 echo "aggregate workflow result checks passed"

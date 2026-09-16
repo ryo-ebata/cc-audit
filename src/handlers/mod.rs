@@ -110,6 +110,47 @@ mod tests {
         fs::write(dir.join(".cc-audit.yaml"), config_content).unwrap();
     }
 
+    /// Initialize a test repository without allowing the test runner's Git
+    /// environment to redirect the child process to another repository.
+    fn init_test_git_repo(path: &Path) {
+        let path = path.canonicalize().unwrap();
+        let path_env = std::env::var_os("PATH").unwrap_or_default();
+
+        let output = std::process::Command::new("git")
+            .env_clear()
+            .env("PATH", path_env.clone())
+            .args(["init", "--quiet"])
+            .current_dir(&path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git init failed in {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let output = std::process::Command::new("git")
+            .env_clear()
+            .env("PATH", path_env)
+            .args(["rev-parse", "--show-toplevel"])
+            .current_dir(&path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git repository verification failed in {}: {}",
+            path.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let actual_root = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim());
+        assert_eq!(
+            actual_root.canonicalize().unwrap(),
+            path,
+            "git init created or selected a different repository"
+        );
+    }
+
     #[test]
     fn test_handler_result_success() {
         let result = HandlerResult::Success;
@@ -370,12 +411,7 @@ mod tests {
     #[test]
     fn test_handle_hook_init_in_git_repo() {
         let temp_dir = TempDir::new().unwrap();
-        // Create a git repository
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(temp_dir.path())
-            .output()
-            .unwrap();
+        init_test_git_repo(temp_dir.path());
 
         let action = HookAction::Init {
             path: temp_dir.path().to_path_buf(),
@@ -387,12 +423,7 @@ mod tests {
     #[test]
     fn test_handle_hook_remove_in_git_repo_not_installed() {
         let temp_dir = TempDir::new().unwrap();
-        // Create a git repository
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(temp_dir.path())
-            .output()
-            .unwrap();
+        init_test_git_repo(temp_dir.path());
 
         let action = HookAction::Remove {
             path: temp_dir.path().to_path_buf(),
@@ -405,12 +436,7 @@ mod tests {
     #[test]
     fn test_handle_hook_remove_in_git_repo_installed() {
         let temp_dir = TempDir::new().unwrap();
-        // Create a git repository
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(temp_dir.path())
-            .output()
-            .unwrap();
+        init_test_git_repo(temp_dir.path());
 
         // First install the hook
         let init_action = HookAction::Init {

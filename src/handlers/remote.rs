@@ -395,10 +395,16 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
-    use std::sync::{Barrier, Mutex, mpsc};
+    use std::sync::{Condvar, Mutex, mpsc};
+    use std::time::Duration;
 
     struct MockClone {
         dropped: Arc<AtomicUsize>,
+    }
+
+    struct StartGate {
+        started: Mutex<usize>,
+        ready: Condvar,
     }
 
     impl Drop for MockClone {
@@ -413,7 +419,10 @@ mod tests {
         let active = Arc::new(AtomicUsize::new(0));
         let maximum = Arc::new(AtomicUsize::new(0));
         let dropped = Arc::new(AtomicUsize::new(0));
-        let started = Arc::new(Barrier::new(3));
+        let started = Arc::new(StartGate {
+            started: Mutex::new(0),
+            ready: Condvar::new(),
+        });
         let start_count = Arc::new(AtomicUsize::new(0));
         let (repo_2_done_tx, repo_2_done_rx) = mpsc::channel();
         let (repo_1_done_tx, repo_1_done_rx) = mpsc::channel();
@@ -434,15 +443,32 @@ mod tests {
                 let current = active.fetch_add(1, Ordering::Relaxed) + 1;
                 maximum.fetch_max(current, Ordering::Relaxed);
                 if start_count.fetch_add(1, Ordering::Relaxed) < 3 {
-                    started.wait();
+                    let gate = Arc::clone(&started);
+                    let mut count = gate.started.lock().unwrap();
+                    *count += 1;
+                    count = gate
+                        .ready
+                        .wait_timeout_while(count, Duration::from_secs(1), |count| *count < 3)
+                        .unwrap()
+                        .0;
+                    assert_eq!(*count, 3, "all workers must reach the start gate");
+                    gate.ready.notify_all();
                 }
                 match url {
                     "repo-2" => repo_2_done_tx.send(()).unwrap(),
                     "repo-1" => {
-                        repo_2_done_rx.lock().unwrap().recv().unwrap();
+                        repo_2_done_rx
+                            .lock()
+                            .unwrap()
+                            .recv_timeout(Duration::from_secs(1))
+                            .unwrap();
                         repo_1_done_tx.send(()).unwrap();
                     }
-                    "repo-0" => repo_1_done_rx.lock().unwrap().recv().unwrap(),
+                    "repo-0" => repo_1_done_rx
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(1))
+                        .unwrap(),
                     _ => {}
                 }
                 active.fetch_sub(1, Ordering::Relaxed);
@@ -461,22 +487,33 @@ mod tests {
     #[test]
     fn bounded_batch_handles_zero_limit_and_partial_failures() {
         let urls: Vec<String> = (0..4).map(|index| format!("repo-{index}")).collect();
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
         let dropped = Arc::new(AtomicUsize::new(0));
         let results = run_bounded_batch(&urls, 0, {
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
             let dropped = Arc::clone(&dropped);
             move |url| {
                 let clone = MockClone {
                     dropped: Arc::clone(&dropped),
                 };
+                let current = active.fetch_add(1, Ordering::Relaxed) + 1;
+                maximum.fetch_max(current, Ordering::Relaxed);
                 if url == "repo-2" {
-                    scan_owned_repository(clone, |_| Err::<usize, _>("scan failed"))
+                    let result = scan_owned_repository(clone, |_| Err::<usize, _>("scan failed"));
+                    active.fetch_sub(1, Ordering::Relaxed);
+                    result
                 } else {
-                    scan_owned_repository(clone, |_| Ok::<_, &str>(url.len()))
+                    let result = scan_owned_repository(clone, |_| Ok::<_, &str>(url.len()));
+                    active.fetch_sub(1, Ordering::Relaxed);
+                    result
                 }
             }
         });
 
         assert_eq!(results.len(), urls.len());
+        assert_eq!(maximum.load(Ordering::Relaxed), 1);
         assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
         assert_eq!(results[0].as_ref().unwrap(), &6);
         assert_eq!(dropped.load(Ordering::Relaxed), urls.len());

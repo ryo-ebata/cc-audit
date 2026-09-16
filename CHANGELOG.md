@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.27](https://github.com/ryo-ebata/cc-audit/compare/v3.22.26...v3.22.27) (2026-09-16)
+
+
+### Bug Fixes
+
+* **rules:** detect httpx environment exfiltration ([#467](https://github.com/ryo-ebata/cc-audit/issues/467)) ([4bf95ce](https://github.com/ryo-ebata/cc-audit/commit/4bf95ce9e4e68cf46ad32807a1aa865087412574))
+* **rules:** detect urllib environment exfiltration ([#469](https://github.com/ryo-ebata/cc-audit/issues/469)) ([91b5984](https://github.com/ryo-ebata/cc-audit/commit/91b598487f894a73543d919a54cda596313bf168))
+
 ## [3.22.26](https://github.com/ryo-ebata/cc-audit/compare/v3.22.25...v3.22.26) (2026-09-16)
 
 

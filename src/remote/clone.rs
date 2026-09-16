@@ -1024,19 +1024,6 @@ if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-r
   head -c 2097152 /dev/zero | tr '\000' E >&2
   if [ "$mode" = failure ]; then exit 17; fi
   if [ "$mode" = fd-hold ]; then (sleep 0.2 >/dev/null) & fi
-  if [ "$mode" = fd-hold-long ]; then
-    control_dir="$CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR"
-    (
-      : > "$control_dir/hold-ready"
-      deadline=$(( $(date +%s) + 5 ))
-      while [ ! -f "$control_dir/release" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.01; done
-      : > "$control_dir/hold-exited"
-    ) &
-    hold_pid=$!
-    ready_deadline=$(( $(date +%s) + 5 ))
-    while [ ! -f "$control_dir/hold-ready" ] && [ "$(date +%s)" -lt "$ready_deadline" ]; do sleep 0.01; done
-    if [ ! -f "$control_dir/hold-ready" ]; then exit 1; fi
-  fi
   if [ "$mode" = timeout ]; then exec sleep 2; fi
   if [ "$mode" = size ]; then
     clone_path=""
@@ -1072,6 +1059,22 @@ if [ "${1:-}" = clone ] && { [ "$mode" = size-fd-hold ] || [ "$mode" = size-fd-r
   if [ "$mode" = size-fd-release ]; then : > "$control_dir/release"; fi
   wait "$hold_pid"
   exit 0
+fi
+if [ "${1:-}" = clone ] && [ "$mode" = fd-hold-long ]; then
+  if "$CC_AUDIT_REAL_GIT" "$@"; then status=0; else status=$?; fi
+  if [ "$status" -ne 0 ]; then exit "$status"; fi
+  control_dir="$CC_AUDIT_REMOTE_OUTPUT_CONTROL_DIR"
+  (
+    : > "$control_dir/hold-ready"
+    deadline=$(( $(date +%s) + 5 ))
+    while [ ! -f "$control_dir/release" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 0.01; done
+    : > "$control_dir/hold-exited"
+  ) &
+  hold_pid=$!
+  ready_deadline=$(( $(date +%s) + 5 ))
+  while [ ! -f "$control_dir/hold-ready" ] && [ "$(date +%s)" -lt "$ready_deadline" ]; do sleep 0.01; done
+  if [ ! -f "$control_dir/hold-ready" ]; then exit 1; fi
+  exit "$status"
 fi
 exec "$CC_AUDIT_REAL_GIT" "$@"
 "#,

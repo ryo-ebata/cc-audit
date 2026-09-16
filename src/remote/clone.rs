@@ -7,11 +7,9 @@ use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command as AsyncCommand};
-
 const MAX_GIT_OUTPUT_BYTES: u64 = 1024 * 1024;
 const GIT_OUTPUT_COLLECTION_TIMEOUT: Duration = Duration::from_secs(1);
 const GIT_PROCESS_CLEANUP_TIMEOUT: Duration = Duration::from_secs(1);
-
 async fn read_git_output_async<R: tokio::io::AsyncRead + Unpin>(
     mut reader: R,
 ) -> std::io::Result<Vec<u8>> {
@@ -1016,11 +1014,6 @@ mod tests {
         let wrapper_path = wrapper.path().join("git");
         std::fs::write(
             &wrapper_path,
-            "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n  fi\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold-long ]; then\n    (sleep 2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    exec sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      attempts=0\n      while [ ! -d \"$clone_path/.git\" ] && [ \"$attempts\" -lt 500 ]; do\n        sleep 0.01\n        attempts=$((attempts + 1))\n      done\n      if [ -d \"$clone_path/.git\" ]; then\n        head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n      fi\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
-        )
-        .unwrap();
-        std::fs::write(
-            &wrapper_path,
             r#"#!/bin/sh
 set -eu
 mode="${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}"
@@ -1057,7 +1050,9 @@ if [ "${1:-}" = clone ] && { [ "$mode" = size-fd-hold ] || [ "$mode" = size-fd-r
     : > "$control_dir/hold-exited"
   ) &
   hold_pid=$!
-  while [ ! -f "$control_dir/hold-ready" ]; do sleep 0.01; done
+  ready_deadline=$(( $(date +%s) + 5 ))
+  while [ ! -f "$control_dir/hold-ready" ] && [ "$(date +%s)" -lt "$ready_deadline" ]; do sleep 0.01; done
+  if [ ! -f "$control_dir/hold-ready" ]; then exit 1; fi
   mkdir -p "$clone_path/.git"
   head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"
   : > "$control_dir/size-ready"

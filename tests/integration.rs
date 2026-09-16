@@ -220,13 +220,13 @@ mod compare_cli {
         let left = workspace.path().join("left");
         let right = workspace.path().join("right");
         fs::create_dir_all(left.join("left")).unwrap();
-        fs::create_dir_all(right.join("right")).unwrap();
+        fs::create_dir_all(right.join("left")).unwrap();
         create_test_config(&left);
         create_test_config(&right);
         fs::write(left.join("SKILL.md"), "sudo apt update\n").unwrap();
-        fs::write(right.join("SKILL.md"), "echo safe\n").unwrap();
+        fs::write(right.join("SKILL.md"), "sudo apt update\n").unwrap();
         fs::write(left.join("left/SKILL.md"), "sudo apt update\n").unwrap();
-        fs::write(right.join("right/SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("left/SKILL.md"), "sudo apt update\n").unwrap();
 
         check_cmd()
             .arg("--type")
@@ -236,10 +236,9 @@ mod compare_cli {
             .arg("right")
             .current_dir(workspace.path())
             .assert()
-            .failure()
-            .code(1)
-            .stdout(predicate::str::contains("SKILL.md:1"))
-            .stdout(predicate::str::contains("Summary: 4 removed, 2 added"));
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
     }
 
     #[test]

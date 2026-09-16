@@ -5,7 +5,7 @@ use crate::{
     DependencyScanner, DirectoryWalker, DockerScanner, DynamicRule, Finding, HookScanner,
     IgnoreFilter, MalwareDatabase, McpScanner, PluginScanner, RiskScore, RuleSeverity,
     RulesDirScanner, ScanResult, ScanType, Scanner, SkillScanner, SubagentScanner, Summary,
-    WalkConfig,
+    TextFilesConfig, WalkConfig,
 };
 use chrono::Utc;
 use std::io::IsTerminal;
@@ -144,7 +144,7 @@ fn run_scan_with_check_args_internal(
         let fan_out = scan_types.len() > 1;
         let mut path_scanned = false;
         for scan_type in &scan_types {
-            let result = run_scanner_for_type(
+            let result = run_scanner_for_type_with_text_files(
                 scan_type,
                 path,
                 &create_ignore_filter,
@@ -152,6 +152,7 @@ fn run_scan_with_check_args_internal(
                 effective.strict_secrets,
                 effective.allow_inline_suppression,
                 effective.recursive,
+                &config.text_files,
                 &custom_rules,
                 progress_callback.clone(),
             );
@@ -279,6 +280,7 @@ fn dedup_findings(findings: Vec<Finding>) -> Vec<Finding> {
 }
 
 /// Run the appropriate scanner based on scan type.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn run_scanner_for_type<F>(
     scan_type: &ScanType,
@@ -288,6 +290,36 @@ fn run_scanner_for_type<F>(
     strict_secrets: bool,
     allow_inline_suppression: bool,
     recursive: bool,
+    custom_rules: &[DynamicRule],
+    progress_callback: crate::engine::scanner::ProgressCallback,
+) -> crate::error::Result<Vec<Finding>>
+where
+    F: Fn(&Path) -> IgnoreFilter,
+{
+    run_scanner_for_type_with_text_files(
+        scan_type,
+        path,
+        create_ignore_filter,
+        skip_comments,
+        strict_secrets,
+        allow_inline_suppression,
+        recursive,
+        &TextFilesConfig::default(),
+        custom_rules,
+        progress_callback,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_scanner_for_type_with_text_files<F>(
+    scan_type: &ScanType,
+    path: &Path,
+    create_ignore_filter: &F,
+    skip_comments: bool,
+    strict_secrets: bool,
+    allow_inline_suppression: bool,
+    recursive: bool,
+    text_files: &TextFilesConfig,
     custom_rules: &[DynamicRule],
     progress_callback: crate::engine::scanner::ProgressCallback,
 ) -> crate::error::Result<Vec<Finding>>
@@ -306,6 +338,7 @@ where
                 .with_strict_secrets(strict_secrets)
                 .with_inline_suppression(allow_inline_suppression)
                 .with_recursive(recursive)
+                .with_text_files_config(text_files.clone())
                 .with_dynamic_rules(custom_rules.to_vec())
                 .with_progress_callback(progress_callback);
             scanner.scan_path(path)

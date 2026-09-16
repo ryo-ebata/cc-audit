@@ -5,11 +5,12 @@ pub use file_filter::SkillFileFilter;
 pub use frontmatter::FrontmatterParser;
 
 use super::walker::{DirectoryWalker, WalkConfig};
+use crate::config::TextFilesConfig;
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
-use crate::run::is_text_file;
+use crate::run::is_text_file_with_config;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -24,6 +25,11 @@ impl_scanner_builder!(SkillScanner);
 impl SkillScanner {
     pub fn with_ignore_filter(mut self, filter: IgnoreFilter) -> Self {
         self.config = self.config.with_ignore_filter(filter);
+        self
+    }
+
+    pub fn with_text_files_config(mut self, config: TextFilesConfig) -> Self {
+        self.config = self.config.with_text_files_config(config);
         self
     }
 
@@ -49,7 +55,7 @@ impl SkillScanner {
 
     /// Check if a file should be scanned
     fn should_scan_file(&self, path: &Path) -> bool {
-        SkillFileFilter::should_scan(path)
+        SkillFileFilter::should_scan_with_config(path, self.config.text_files_config())
     }
 
     fn is_within_scan_depth(dir: &Path, path: &Path, max_depth: Option<usize>) -> bool {
@@ -190,7 +196,7 @@ impl Scanner for SkillScanner {
             }
             // Only process text files (matching count_files_to_scan behavior)
             // Note: ignore filter is already applied by DirectoryWalker
-            if is_text_file(&path) {
+            if is_text_file_with_config(&path, self.config.text_files_config()) {
                 let canonical = path.canonicalize().unwrap_or(path.clone());
                 if !scanned_files.contains(&canonical) {
                     files_to_scan.push(path);

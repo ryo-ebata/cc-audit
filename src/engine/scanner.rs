@@ -231,6 +231,7 @@ pub type ProgressCallback = std::sync::Arc<dyn Fn() + Send + Sync>;
 pub struct ScannerConfig {
     engine: RuleEngine,
     ignore_filter: Option<IgnoreFilter>,
+    text_files: crate::config::TextFilesConfig,
     skip_comments: bool,
     strict_secrets: bool,
     recursive: bool,
@@ -244,6 +245,7 @@ impl ScannerConfig {
         Self {
             engine: RuleEngine::new(),
             ignore_filter: None,
+            text_files: crate::config::TextFilesConfig::default(),
             skip_comments: false,
             strict_secrets: false,
             recursive: true,
@@ -311,6 +313,17 @@ impl ScannerConfig {
     pub fn with_ignore_filter(mut self, filter: IgnoreFilter) -> Self {
         self.ignore_filter = Some(filter);
         self
+    }
+
+    /// Sets the configured text-file extensions and special names.
+    pub fn with_text_files_config(mut self, config: crate::config::TextFilesConfig) -> Self {
+        self.text_files = config;
+        self
+    }
+
+    /// Returns the configured text-file extensions and special names.
+    pub fn text_files_config(&self) -> &crate::config::TextFilesConfig {
+        &self.text_files
     }
 
     /// Adds dynamic rules loaded from custom YAML files.

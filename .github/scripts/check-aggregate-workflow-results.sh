@@ -57,6 +57,29 @@ check_semver() {
   fi
 }
 
+check_terraform() {
+  local changes_result="$1"
+  local infra_output="$2"
+  local directories="$3"
+  shift 3
+  [[ "$changes_result" == "success" ]] || return 1
+  require_boolean "$infra_output" || return 1
+  jq -e -s 'length == 1 and (.[0] | type == "array" and all(.[]; type == "string"))' <<<"$directories" >/dev/null || return 1
+  if [[ "$directories" == "[]" ]]; then
+    [[ "$infra_output" == "false" || "$infra_output" == "true" ]] || return 1
+    local child_result
+    for child_result in "$@"; do
+      [[ "$child_result" == "skipped" ]] || return 1
+    done
+    return 0
+  fi
+  [[ "$infra_output" == "true" ]] || return 1
+  local child_result
+  for child_result in "$@"; do
+    [[ "$child_result" == "success" ]] || return 1
+  done
+}
+
 case "${1:-}" in
   ci)
     shift
@@ -76,6 +99,10 @@ case "${1:-}" in
     shift
     check_semver "$@"
     ;;
+  terraform)
+    shift
+    check_terraform "$@"
+    ;;
   unconditional)
     [[ "${2:-}" == "success" ]]
     ;;
@@ -84,8 +111,31 @@ case "${1:-}" in
     require_boolean "${2:-}" || exit 1
     echo "rust=${2}" >> "$GITHUB_OUTPUT"
     ;;
+  terraform-filter)
+    infra_output="${2:-}"
+    directories="${3:-}"
+    require_boolean "$infra_output" || exit 1
+    if [[ "$infra_output" == "false" ]]; then
+      [[ -z "$directories" ]] || exit 1
+      echo "infra=false" >> "$GITHUB_OUTPUT"
+      echo "directories=[]" >> "$GITHUB_OUTPUT"
+      exit 0
+    fi
+    jq -e -s 'length == 1 and (.[0] | type == "array" and all(.[]; type == "string"))' <<<"$directories" >/dev/null || exit 1
+    echo "infra=true" >> "$GITHUB_OUTPUT"
+    echo "directories=$(jq -c -s '.[0]' <<<"$directories")" >> "$GITHUB_OUTPUT"
+    ;;
+  terraform-discover)
+    root="${2:?Terraform root is required}"
+    if [[ ! -d "$root" ]]; then
+      echo "directories=[]" >> "$GITHUB_OUTPUT"
+      exit 0
+    fi
+    dirs=$(find "$root" -name '*.tf' -type f -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
+    echo "directories=$dirs" >> "$GITHUB_OUTPUT"
+    ;;
   *)
-    echo "usage: $0 {ci|conditional|security|semver|unconditional} ..." >&2
+    echo "usage: $0 {ci|conditional|security|semver|terraform|unconditional|filter|terraform-filter} ..." >&2
     exit 2
     ;;
 esac

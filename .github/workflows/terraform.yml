@@ -19,8 +19,8 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      infra: ${{ steps.filter.outputs.infra }}
-      directories: ${{ steps.find.outputs.directories }}
+      infra: ${{ steps.validate.outputs.infra }}
+      directories: ${{ steps.validate.outputs.directories }}
     steps:
       - uses: actions/checkout@v7
 
@@ -36,10 +36,16 @@ jobs:
         id: find
         if: steps.filter.outputs.infra == 'true'
         run: |
-          # Find all directories containing .tf files
-          DIRS=$(find infra -name "*.tf" -type f -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "directories=$DIRS" >> $GITHUB_OUTPUT
-          echo "Found Terraform directories: $DIRS"
+          bash .github/scripts/check-aggregate-workflow-results.sh terraform-discover infra
+
+      - name: Validate Terraform change outputs
+        id: validate
+        env:
+          RAW_INFRA: ${{ steps.filter.outputs.infra }}
+          RAW_DIRECTORIES: ${{ steps.find.outputs.directories }}
+        run: |
+          bash .github/scripts/check-aggregate-workflow-results.sh terraform-filter \
+            "$RAW_INFRA" "$RAW_DIRECTORIES"
 
   fmt:
     name: Format
@@ -204,20 +210,20 @@ jobs:
     needs: [changes, fmt, validate, tflint, tfsec]
     if: always()
     steps:
+      - uses: actions/checkout@v7
       - name: Check results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          INFRA_OUTPUT: ${{ needs.changes.outputs.infra }}
+          DIRECTORIES_OUTPUT: ${{ needs.changes.outputs.directories }}
+          FMT_RESULT: ${{ needs.fmt.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          TFLINT_RESULT: ${{ needs.tflint.result }}
+          TFSEC_RESULT: ${{ needs.tfsec.result }}
         run: |
-          if [[ "${{ needs.changes.outputs.infra }}" != "true" ]]; then
-            echo "No infrastructure changes detected, skipping Terraform checks"
-            exit 0
-          fi
-          if [[ "${{ needs.fmt.result }}" == "failure" || \
-                "${{ needs.validate.result }}" == "failure" || \
-                "${{ needs.tflint.result }}" == "failure" || \
-                "${{ needs.tfsec.result }}" == "failure" ]]; then
-            echo "One or more Terraform jobs failed"
-            exit 1
-          fi
-          echo "All Terraform checks passed"
+          bash .github/scripts/check-aggregate-workflow-results.sh terraform \
+            "$CHANGES_RESULT" "$INFRA_OUTPUT" "$DIRECTORIES_OUTPUT" \
+            "$FMT_RESULT" "$VALIDATE_RESULT" "$TFLINT_RESULT" "$TFSEC_RESULT"
 
       - name: Create Summary
         if: needs.changes.outputs.infra == 'true'

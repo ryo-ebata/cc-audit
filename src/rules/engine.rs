@@ -133,35 +133,27 @@ impl RuleEngine {
                 parse_inline_suppression(line).or_else(|| disabled_rules.clone())
             };
 
-            // Early termination: Pre-filter rules that are suppressed
-            let active_rules: Vec<&Rule> = if let Some(ref suppression) = current_suppression {
-                self.rules
-                    .iter()
-                    .filter(|r| !suppression.is_suppressed(r.id))
-                    .collect()
-            } else {
-                self.rules.iter().collect()
-            };
-
-            for rule in active_rules {
+            // Filter only when suppression is active. The common unsuppressed
+            // path can iterate the static rule slice directly, avoiding a
+            // per-line Vec allocation.
+            for rule in self.rules.iter().filter(|rule| {
+                current_suppression
+                    .as_ref()
+                    .is_none_or(|suppression| !suppression.is_suppressed(rule.id))
+            }) {
                 if let Some(mut finding) = Self::check_line(rule, line, file_path, line_num + 1) {
                     self.apply_secret_leak_heuristics(&mut finding, file_path, line);
                     findings.push(finding);
                 }
             }
 
-            // Check dynamic rules with early termination
-            let active_dynamic_rules: Vec<&DynamicRule> =
-                if let Some(ref suppression) = current_suppression {
-                    self.dynamic_rules
-                        .iter()
-                        .filter(|r| !suppression.is_suppressed(&r.id))
-                        .collect()
-                } else {
-                    self.dynamic_rules.iter().collect()
-                };
-
-            for rule in active_dynamic_rules {
+            // Apply the same allocation-free fast path to dynamic rules. An
+            // empty dynamic rule set naturally performs no iterations.
+            for rule in self.dynamic_rules.iter().filter(|rule| {
+                current_suppression
+                    .as_ref()
+                    .is_none_or(|suppression| !suppression.is_suppressed(&rule.id))
+            }) {
                 if let Some(mut finding) =
                     Self::check_dynamic_line(rule, line, file_path, line_num + 1)
                 {
@@ -1301,6 +1293,43 @@ rules:
             !findings.iter().any(|f| f.id == "CUSTOM-003"),
             "Should suppress custom rule with inline comment"
         );
+    }
+
+    #[test]
+    fn test_static_and_dynamic_rules_preserve_order_with_suppression() {
+        use crate::rules::custom::CustomRuleLoader;
+
+        let yaml = r#"
+version: "1"
+rules:
+  - id: "CUSTOM-005"
+    name: "Dangerous Function"
+    severity: "high"
+    category: "injection"
+    patterns:
+      - 'dangerous_fn\('
+    message: "Dangerous function call"
+"#;
+        let dynamic_rules = CustomRuleLoader::load_from_string(yaml).unwrap();
+        let engine = RuleEngine::new()
+            .with_dynamic_rules(dynamic_rules)
+            .with_inline_suppression(true);
+
+        let content = "sudo rm -rf /tmp dangerous_fn(data) # cc-audit-ignore:CUSTOM-005\n"
+            .to_string()
+            + "dangerous_fn(data)";
+        let findings = engine.check_content(&content, "test.rs");
+
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| finding.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["PE-001", "OP-005", "CUSTOM-005"]
+        );
+        assert_eq!(findings[0].location.line, 1);
+        assert_eq!(findings[1].location.line, 1);
+        assert_eq!(findings[2].location.line, 2);
     }
 
     #[test]

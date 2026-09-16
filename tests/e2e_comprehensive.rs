@@ -6,7 +6,7 @@
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 fn fixtures_path() -> PathBuf {
@@ -22,6 +22,13 @@ fn cmd() -> assert_cmd::Command {
 fn check_cmd() -> assert_cmd::Command {
     let mut c = cargo_bin_cmd!("cc-audit");
     c.arg("check");
+    c
+}
+
+/// Create a check command with an isolated profile store for the child process.
+fn check_cmd_with_profile_dir(profile_dir: &Path) -> assert_cmd::Command {
+    let mut c = check_cmd();
+    c.env("CC_AUDIT_PROFILE_DIR", profile_dir);
     c
 }
 
@@ -1169,12 +1176,13 @@ mod profiles {
     #[test]
     fn test_save_profile() {
         let dir = TempDir::new().unwrap();
+        let profile_dir = TempDir::new().unwrap();
         create_config(dir.path());
 
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Safe content\n").unwrap();
 
-        check_cmd()
+        check_cmd_with_profile_dir(profile_dir.path())
             .arg("--strict")
             .arg("--format")
             .arg("json")
@@ -1184,18 +1192,23 @@ mod profiles {
             .assert()
             .success()
             .stdout(predicate::str::contains("Profile").or(predicate::str::contains("saved")));
+
+        let saved = fs::read_to_string(profile_dir.path().join("test-profile.yaml")).unwrap();
+        let profile: cc_audit::Profile = serde_norway::from_str(&saved).unwrap();
+        assert_eq!(profile.name, "test-profile");
     }
 
     #[test]
     fn test_load_profile() {
         let dir = TempDir::new().unwrap();
+        let profile_dir = TempDir::new().unwrap();
         create_config(dir.path());
 
         let skill_md = dir.path().join("SKILL.md");
         fs::write(&skill_md, "# Safe content\n").unwrap();
 
         // Save profile
-        check_cmd()
+        check_cmd_with_profile_dir(profile_dir.path())
             .arg("--strict")
             .arg("--format")
             .arg("json")
@@ -1205,13 +1218,68 @@ mod profiles {
             .assert()
             .success();
 
+        assert!(profile_dir.path().join("e2e-test-profile.yaml").is_file());
+
         // Load profile
-        check_cmd()
+        check_cmd_with_profile_dir(profile_dir.path())
             .arg("--profile")
             .arg("e2e-test-profile")
             .arg(dir.path())
             .assert()
             .success();
+    }
+
+    #[test]
+    fn test_profile_child_process_stores_are_isolated() {
+        let first_scan_dir = TempDir::new().unwrap();
+        let second_scan_dir = TempDir::new().unwrap();
+        let first_profile_dir = TempDir::new().unwrap();
+        let second_profile_dir = TempDir::new().unwrap();
+        create_config(first_scan_dir.path());
+        create_config(second_scan_dir.path());
+        fs::write(first_scan_dir.path().join("SKILL.md"), "# First\n").unwrap();
+        fs::write(second_scan_dir.path().join("SKILL.md"), "# Second\n").unwrap();
+
+        check_cmd_with_profile_dir(first_profile_dir.path())
+            .arg("--strict")
+            .arg("--save-profile")
+            .arg("same-profile")
+            .arg(first_scan_dir.path())
+            .assert()
+            .success();
+        check_cmd_with_profile_dir(second_profile_dir.path())
+            .arg("--save-profile")
+            .arg("same-profile")
+            .arg(second_scan_dir.path())
+            .assert()
+            .success();
+
+        let first_saved =
+            fs::read_to_string(first_profile_dir.path().join("same-profile.yaml")).unwrap();
+        let second_saved =
+            fs::read_to_string(second_profile_dir.path().join("same-profile.yaml")).unwrap();
+        let first_profile: cc_audit::Profile = serde_norway::from_str(&first_saved).unwrap();
+        let second_profile: cc_audit::Profile = serde_norway::from_str(&second_saved).unwrap();
+        assert!(first_profile.strict);
+        assert!(!second_profile.strict);
+    }
+
+    #[test]
+    fn test_profile_dir_invalid_override_does_not_fallback_to_home() {
+        let scan_dir = TempDir::new().unwrap();
+        create_config(scan_dir.path());
+        fs::write(scan_dir.path().join("SKILL.md"), "# Safe\n").unwrap();
+
+        for invalid_dir in ["", "relative-profile-dir"] {
+            check_cmd()
+                .env("CC_AUDIT_PROFILE_DIR", invalid_dir)
+                .arg("--save-profile")
+                .arg("invalid-profile-test")
+                .arg(scan_dir.path())
+                .assert()
+                .failure()
+                .stderr(predicate::str::contains("CC_AUDIT_PROFILE_DIR"));
+        }
     }
 }
 

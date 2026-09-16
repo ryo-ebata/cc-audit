@@ -91,6 +91,11 @@ profile:
 # CLI --no-recursive flag has highest priority. Boolean enable flags such as
 # deep_scan remain enabled when true in the CLI, config file, or selected profile.
 
+# Optional profile storage override
+# CC_AUDIT_PROFILE_DIR: absolute directory used for profile save/load when set.
+# An empty or relative value is rejected; when unset, the platform user profile
+# directory is used.
+
 # Watch mode settings
 watch:
   debounce_ms: 300

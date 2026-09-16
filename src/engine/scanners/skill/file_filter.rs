@@ -1,4 +1,7 @@
 use std::path::Path;
+use std::sync::LazyLock;
+
+use crate::config::TextFilesConfig;
 
 /// File extensions that should be scanned in skill directories
 const SCANNABLE_EXTENSIONS: &[&str] = &[
@@ -14,6 +17,9 @@ const CONFIG_FILES: &[&str] = &[
     ".cc-audit.toml",
     ".cc-auditignore",
 ];
+
+static DEFAULT_TEXT_FILES_CONFIG: LazyLock<TextFilesConfig> =
+    LazyLock::new(TextFilesConfig::default);
 
 /// Determines which files should be scanned within a skill directory
 pub struct SkillFileFilter;
@@ -34,10 +40,26 @@ impl SkillFileFilter {
             return true;
         }
 
-        // Extension-less executable scripts (e.g. `scripts/hook` with `#!/bin/bash`)
+        // Extension-less executable scripts (e.g. `scripts/hook` with a `#!/bin/bash`)
         // must also be scanned; fall back to shebang detection so they are not
         // silently skipped.
         crate::run::has_known_shebang(path)
+    }
+
+    /// Check if a file should be scanned using configured text-file names.
+    pub fn should_scan_with_config(path: &Path, text_files: &TextFilesConfig) -> bool {
+        // Exclude cc-audit config files
+        if Self::is_config_file(path) {
+            return false;
+        }
+
+        // Preserve the historical default classifier and only add entries that
+        // are explicitly configured beyond its built-in set.
+        if text_files.is_text_file(path) && !DEFAULT_TEXT_FILES_CONFIG.is_text_file(path) {
+            return true;
+        }
+
+        Self::should_scan(path)
     }
 
     /// Check if a file is a cc-audit configuration file

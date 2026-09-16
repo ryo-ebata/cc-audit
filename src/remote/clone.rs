@@ -29,6 +29,26 @@ async fn read_git_output_async<R: tokio::io::AsyncRead + Unpin>(
     Ok(output)
 }
 
+fn spawn_git_reader<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
+    reader: R,
+) -> (
+    tokio::task::JoinHandle<()>,
+    tokio::sync::oneshot::Receiver<std::io::Result<Vec<u8>>>,
+) {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        let _ = sender.send(read_git_output_async(reader).await);
+    });
+    (task, receiver)
+}
+
+struct GitOutputReaders {
+    stdout_task: tokio::task::JoinHandle<()>,
+    stderr_task: tokio::task::JoinHandle<()>,
+    stdout_output: tokio::sync::oneshot::Receiver<std::io::Result<Vec<u8>>>,
+    stderr_output: tokio::sync::oneshot::Receiver<std::io::Result<Vec<u8>>>,
+}
+
 async fn terminate_child(child: &mut Child) -> Result<(), String> {
     let kill_error = child.kill();
     let kill_error = match tokio::time::timeout(GIT_PROCESS_CLEANUP_TIMEOUT, kill_error).await {
@@ -432,10 +452,16 @@ impl GitCloner {
                 url: url.to_string(),
                 message: "Failed to capture git stderr".to_string(),
             })?;
-        let stdout_reader = tokio::spawn(read_git_output_async(stdout));
-        let stderr_reader = tokio::spawn(read_git_output_async(stderr));
+        let (stdout_task, stdout_output) = spawn_git_reader(stdout);
+        let (stderr_task, stderr_output) = spawn_git_reader(stderr);
+        let readers = GitOutputReaders {
+            stdout_task,
+            stderr_task,
+            stdout_output,
+            stderr_output,
+        };
 
-        self.wait_for_clone(&mut child, url, path, git_ref, stdout_reader, stderr_reader)
+        self.wait_for_clone(&mut child, url, path, git_ref, readers)
             .await
     }
 
@@ -445,8 +471,7 @@ impl GitCloner {
         url: &str,
         path: &Path,
         _git_ref: &str,
-        stdout_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
-        stderr_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+        readers: GitOutputReaders,
     ) -> Result<(), RemoteError> {
         let timeout = Duration::from_secs(self.timeout_secs);
         let wait_result = tokio::time::timeout(timeout, async {
@@ -467,9 +492,7 @@ impl GitCloner {
         .await;
         match wait_result {
             Ok(Ok(status)) => {
-                let (_, stderr) = self
-                    .collect_git_output(url, stdout_reader, stderr_reader)
-                    .await?;
+                let (_, stderr) = self.collect_git_output(url, readers).await?;
                 if !status.success() {
                     return self.classify_clone_failure(url, &stderr);
                 }
@@ -478,16 +501,12 @@ impl GitCloner {
             }
             Ok(Err(error)) => {
                 let cleanup = terminate_child(child).await;
-                let output = self
-                    .collect_git_output(url, stdout_reader, stderr_reader)
-                    .await;
+                let output = self.collect_git_output(url, readers).await;
                 Err(self.cleanup_error(url, error, cleanup, output))
             }
             Err(_) => {
                 let cleanup = terminate_child(child).await;
-                let output = self
-                    .collect_git_output(url, stdout_reader, stderr_reader)
-                    .await;
+                let output = self.collect_git_output(url, readers).await;
                 let error = RemoteError::CloneTimeout {
                     url: url.to_string(),
                     timeout_secs: self.timeout_secs,
@@ -500,24 +519,23 @@ impl GitCloner {
     async fn collect_git_output(
         &self,
         url: &str,
-        mut stdout_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
-        mut stderr_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+        readers: GitOutputReaders,
     ) -> Result<(Vec<u8>, Vec<u8>), RemoteError> {
+        let GitOutputReaders {
+            stdout_task,
+            stderr_task,
+            stdout_output,
+            stderr_output,
+        } = readers;
         let result = tokio::time::timeout(GIT_OUTPUT_COLLECTION_TIMEOUT, async {
-            let (stdout, stderr) = tokio::join!(
-                async {
-                    (&mut stdout_reader)
-                        .await
-                        .map_err(|error| error.to_string())?
-                        .map_err(|error| error.to_string())
-                },
-                async {
-                    (&mut stderr_reader)
-                        .await
-                        .map_err(|error| error.to_string())?
-                        .map_err(|error| error.to_string())
-                },
-            );
+            let stdout = stdout_output
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string());
+            let stderr = stderr_output
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string());
             Ok::<_, String>((stdout?, stderr?))
         })
         .await;
@@ -529,10 +547,10 @@ impl GitCloner {
                     .sanitize_error_message(&format!("Failed to collect git output: {error}")),
             }),
             Err(_) => {
-                stderr_reader.abort();
-                let _ = stderr_reader.await;
-                stdout_reader.abort();
-                let _ = stdout_reader.await;
+                stdout_task.abort();
+                stderr_task.abort();
+                let _ = stdout_task.await;
+                let _ = stderr_task.await;
                 Err(RemoteError::CloneFailed {
                     url: url.to_string(),
                     message: format!(
@@ -931,6 +949,11 @@ mod tests {
                 ));
             } else if mode == "timeout" {
                 assert!(matches!(result, Err(RemoteError::CloneTimeout { .. })));
+            } else if mode == "fd-hold-long" {
+                let error = result.unwrap_err();
+                assert!(
+                    matches!(error, RemoteError::CloneFailed { message, .. } if message.contains("Timed out collecting git output"))
+                );
             } else {
                 let error = result.unwrap_err();
                 assert!(matches!(error, RemoteError::CloneFailed { .. }));
@@ -947,6 +970,7 @@ mod tests {
         let fd_hold_clone = tempfile::tempdir().unwrap();
         let timeout_clone = tempfile::tempdir().unwrap();
         let size_clone = tempfile::tempdir().unwrap();
+        let long_fd_hold_clone = tempfile::tempdir().unwrap();
         let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
             .map(|dir| dir.join("git"))
             .find(|path| path.is_file())
@@ -954,7 +978,7 @@ mod tests {
         let wrapper_path = wrapper.path().join("git");
         std::fs::write(
             &wrapper_path,
-            "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      while [ ! -d \"$clone_path/.git\" ]; do sleep 0.01; done\n      head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
+            "#!/bin/sh\nset -eu\nsize_writer=\"\"\nif [ \"${1:-}\" = clone ]; then\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold-long ]; then\n    (sleep 2 >/dev/null) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      while [ ! -d \"$clone_path/.git\" ]; do sleep 0.01; done\n      head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n    ) &\n    size_writer=$!\n  fi\nfi\nif [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n  if \"$CC_AUDIT_REAL_GIT\" \"$@\"; then status=0; else status=$?; fi\n  wait \"$size_writer\"\n  exit \"$status\"\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
@@ -1003,7 +1027,7 @@ mod tests {
         )
         .unwrap();
         let run_child = |clone_path: &Path, mode: &str| {
-            let status = std::process::Command::new(&test_binary)
+            let mut child = std::process::Command::new(&test_binary)
                 .args([
                     "--exact",
                     "remote::clone::tests::test_clone_drains_git_output",
@@ -1015,8 +1039,20 @@ mod tests {
                 .env("CC_AUDIT_REMOTE_OUTPUT_MODE", mode)
                 .env("CC_AUDIT_REAL_GIT", real_git.as_os_str())
                 .env("PATH", &child_path)
-                .status()
+                .spawn()
                 .unwrap();
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            let status = loop {
+                match child.try_wait().unwrap() {
+                    Some(status) => break status,
+                    None if std::time::Instant::now() >= deadline => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        panic!("git output child test timed out: {mode}");
+                    }
+                    None => std::thread::sleep(Duration::from_millis(10)),
+                }
+            };
             assert!(status.success(), "git output child test failed: {mode}");
         };
 
@@ -1026,6 +1062,7 @@ mod tests {
         run_child(fd_hold_clone.path(), "fd-hold");
         run_child(timeout_clone.path(), "timeout");
         run_child(size_clone.path(), "size");
+        run_child(long_fd_hold_clone.path(), "fd-hold-long");
         assert!(success_clone.path().join(".git").is_dir());
         assert!(!failure_clone.path().join(".git").exists());
         assert!(runtime_clone.path().join(".git").is_dir());

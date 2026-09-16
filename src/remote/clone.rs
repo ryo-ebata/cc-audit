@@ -1032,7 +1032,7 @@ if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-r
       attempts=0
       while [ ! -d "$clone_path/.git" ] && [ "$attempts" -lt 500 ]; do sleep 0.01; attempts=$((attempts + 1)); done
       if [ -d "$clone_path/.git" ]; then head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"; fi
-    ) &
+    ) > /dev/null 2>&1 &
     size_writer=$!
     if "$CC_AUDIT_REAL_GIT" "$@"; then status=0; else status=$?; fi
     wait "$size_writer"

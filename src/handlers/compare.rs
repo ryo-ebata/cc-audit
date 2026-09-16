@@ -48,18 +48,19 @@ fn logical_file(input: &std::path::Path, finding_file: &str) -> String {
                 .unwrap_or_else(|| normalize_lexically(candidate)),
         ]
     } else {
-        // Finding paths are normally absolute, but relative paths can be
-        // emitted by scanners. Resolve them from the scan root first so that
-        // `sub/../SKILL.md` is normalized before identity comparison.
+        // Finding paths are normally absolute, but relative paths emitted by
+        // scanners are relative to the process cwd. Try that contract first;
+        // the root-relative fallback is only for callers that construct
+        // findings manually.
         let mut paths = Vec::new();
-        if let Ok(path) = std::fs::canonicalize(root.join(candidate)) {
-            paths.push(path);
-        }
         if let Ok(path) = std::fs::canonicalize(candidate) {
             paths.push(path);
         }
-        paths.push(normalize_lexically(&root.join(candidate)));
         paths.push(normalize_lexically(candidate));
+        if let Ok(path) = std::fs::canonicalize(root.join(candidate)) {
+            paths.push(path);
+        }
+        paths.push(normalize_lexically(&root.join(candidate)));
         paths
     };
 

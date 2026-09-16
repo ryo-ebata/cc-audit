@@ -215,6 +215,34 @@ mod compare_cli {
     }
 
     #[test]
+    fn relative_inputs_do_not_confuse_input_name_with_nested_directory() {
+        let workspace = TempDir::new().unwrap();
+        let left = workspace.path().join("left");
+        let right = workspace.path().join("right");
+        fs::create_dir_all(left.join("left")).unwrap();
+        fs::create_dir_all(right.join("right")).unwrap();
+        create_test_config(&left);
+        create_test_config(&right);
+        fs::write(left.join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("SKILL.md"), "echo safe\n").unwrap();
+        fs::write(left.join("left/SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.join("right/SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg("left")
+            .arg("right")
+            .current_dir(workspace.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("SKILL.md:1"))
+            .stdout(predicate::str::contains("Summary: 4 removed, 2 added"));
+    }
+
+    #[test]
     fn renamed_single_file_inputs_compare_cleanly() {
         let workspace = TempDir::new().unwrap();
         let old = workspace.path().join("old.md");

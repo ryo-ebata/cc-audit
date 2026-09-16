@@ -56,6 +56,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
       - name: Check results
         run: |
           bash .github/scripts/check-aggregate-workflow-results.sh unconditional "${{ needs.npm-install-test.result }}"

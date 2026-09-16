@@ -27,8 +27,8 @@ check_security() {
   [[ "$event" == "pull_request" || "$event" == "push" || "$event" == "schedule" ]] || return 1
   [[ "$changes_result" == "success" ]] || return 1
   require_boolean "$should_run" || return 1
-  [[ "$should_run" == "false" ]] && return 0
   require_boolean "$rust_output" || return 1
+  [[ "$should_run" == "false" ]] && return 0
   local child_result
   for child_result in "$@"; do
     [[ "$child_result" == "success" ]] || return 1
@@ -45,15 +45,14 @@ check_semver() {
   [[ "$event" == "pull_request" || "$event" == "push" ]] || return 1
   [[ "$changes_result" == "success" ]] || return 1
   require_boolean "$should_run" || return 1
+  require_boolean "$rust_output" || return 1
   [[ "$should_run" == "false" ]] && return 0
   [[ "$semver_result" == "success" ]] || return 1
   if [[ "$event" == "pull_request" ]]; then
-    require_boolean "$rust_output" || return 1
     if [[ "$rust_output" == "true" ]]; then
       [[ "$changelog_result" == "success" ]] || return 1
     fi
   else
-    require_boolean "$rust_output"
     [[ "$changelog_result" == "skipped" ]] || return 1
   fi
 }

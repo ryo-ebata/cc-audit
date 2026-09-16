@@ -181,6 +181,7 @@ jobs:
     needs: [changes, benchmark, binary-size, build-time]
     if: always()
     steps:
+      - uses: actions/checkout@v7
       - name: Check results
         run: |
           bash .github/scripts/check-aggregate-workflow-results.sh conditional \

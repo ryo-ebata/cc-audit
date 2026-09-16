@@ -24,23 +24,28 @@ run_case 1 ci failure success success false success success success success succ
 run_case 1 ci success cancelled success true success success success success success
 
 run_case 0 security schedule success true false success success success success success
+run_case 1 security schedule success false "" success success success success success
 run_case 0 security pull_request success false false cancelled cancelled cancelled cancelled cancelled
 run_case 1 security schedule success true invalid success success success success success
 run_case 1 security pull_request failure false false success success success success success
+run_case 1 security pull_request success false empty success success success success success
 
 run_case 0 semver push success true false success skipped
+run_case 1 semver push success true "" success skipped
 run_case 0 semver pull_request success true true success success
 run_case 0 semver pull_request success false false success skipped
 run_case 1 semver push success true false success success
 run_case 1 semver pull_request success true true success skipped
 run_case 1 semver pull_request success empty true success success
 run_case 1 semver pull_request failure false false success skipped
+run_case 1 semver pull_request success false empty success skipped
 
 run_case 0 unconditional success
 run_case 1 unconditional cancelled
 run_case 1 unconditional skipped
 
 output_file="$(mktemp)"
+trap 'rm -f "$output_file"' EXIT
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter true false
 grep -Fq 'rust=true' "$output_file"
 if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter empty false; then

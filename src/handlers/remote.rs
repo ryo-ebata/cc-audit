@@ -7,8 +7,100 @@ use colored::Colorize;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc;
+use std::thread;
 
 use super::run_normal_check_mode;
+
+#[derive(Debug, Clone, Copy)]
+struct FindingCounts {
+    total: usize,
+    critical: usize,
+    high: usize,
+    medium: usize,
+    low: usize,
+}
+
+#[derive(Debug)]
+enum BatchFailure {
+    Clone(String),
+    Scan,
+}
+
+fn finding_counts(result: &crate::ScanResult) -> FindingCounts {
+    FindingCounts {
+        total: result.summary.critical
+            + result.summary.high
+            + result.summary.medium
+            + result.summary.low,
+        critical: result.summary.critical,
+        high: result.summary.high,
+        medium: result.summary.medium,
+        low: result.summary.low,
+    }
+}
+
+fn run_bounded_batch<T, E, F>(items: &[String], limit: usize, operation: F) -> Vec<Result<T, E>>
+where
+    T: Send,
+    E: Send,
+    F: Fn(&str) -> Result<T, E> + Send + Sync,
+{
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let worker_count = limit.max(1).min(items.len());
+    let next_index = Arc::new(AtomicUsize::new(0));
+    let (sender, receiver) = mpsc::channel();
+    let operation = &operation;
+
+    thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let next_index = Arc::clone(&next_index);
+            let sender = sender.clone();
+            scope.spawn(move || {
+                loop {
+                    let index = next_index.fetch_add(1, Ordering::Relaxed);
+                    if index >= items.len() {
+                        break;
+                    }
+                    let result = operation(&items[index]);
+                    sender
+                        .send((index, result))
+                        .expect("batch receiver is alive");
+                }
+            });
+        }
+        drop(sender);
+
+        let mut results: Vec<Option<Result<T, E>>> = (0..items.len()).map(|_| None).collect();
+        for (index, result) in receiver {
+            results[index] = Some(result);
+        }
+        results
+            .into_iter()
+            .map(|result| result.expect("every batch item has a result"))
+            .collect()
+    })
+}
+
+fn scan_cloned_repository(
+    cloner: &GitCloner,
+    url: &str,
+    git_ref: &str,
+    args: &CheckArgs,
+    effective: &EffectiveConfig,
+) -> Result<FindingCounts, BatchFailure> {
+    let cloned = cloner
+        .clone(url, git_ref)
+        .map_err(|error| BatchFailure::Clone(error.to_string()))?;
+    let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], effective);
+    let result = run_scan_with_check_args(&scan_args).ok_or(BatchFailure::Scan)?;
+    Ok(finding_counts(&result))
+}
 
 /// Handle --remote command: scan a single remote repository.
 pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
@@ -95,44 +187,38 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
         GitCloner::new()
     };
 
+    let results = run_bounded_batch(&urls, effective.parallel_clones, |url| {
+        scan_cloned_repository(&cloner, url, &effective.git_ref, args, &effective)
+    });
     let mut total_findings = 0;
     let mut failed_count = 0;
 
-    for (i, url) in urls.iter().enumerate() {
+    for (i, (url, result)) in urls.iter().zip(results).enumerate() {
         println!("\n[{}/{}] Scanning: {}", i + 1, urls.len(), url);
-
-        match cloner.clone(url, &effective.git_ref) {
-            Ok(cloned) => {
-                let cloned: ClonedRepo = cloned;
-                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
-
-                if let Some(result) = run_scan_with_check_args(&scan_args) {
-                    let count = result.summary.critical
-                        + result.summary.high
-                        + result.summary.medium
-                        + result.summary.low;
-                    total_findings += count;
-                    println!(
-                        "  {} {} findings ({} critical, {} high, {} medium, {} low)",
-                        if count > 0 {
-                            "⚠".yellow()
-                        } else {
-                            "✓".green()
-                        },
-                        count,
-                        result.summary.critical,
-                        result.summary.high,
-                        result.summary.medium,
-                        result.summary.low
-                    );
-                } else {
-                    failed_count += 1;
-                    eprintln!("  {} Scan failed", "✗".red());
-                }
+        match result {
+            Ok(counts) => {
+                total_findings += counts.total;
+                println!(
+                    "  {} {} findings ({} critical, {} high, {} medium, {} low)",
+                    if counts.total > 0 {
+                        "⚠".yellow()
+                    } else {
+                        "✓".green()
+                    },
+                    counts.total,
+                    counts.critical,
+                    counts.high,
+                    counts.medium,
+                    counts.low
+                );
             }
-            Err(e) => {
+            Err(BatchFailure::Scan) => {
                 failed_count += 1;
-                eprintln!("  {} Clone failed: {}", "✗".red(), e);
+                eprintln!("  {} Scan failed", "✗".red());
+            }
+            Err(BatchFailure::Clone(error)) => {
+                failed_count += 1;
+                eprintln!("  {} Clone failed: {}", "✗".red(), error);
             }
         }
     }
@@ -205,53 +291,47 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
 
     println!("Found {} repositories to scan", urls.len());
 
+    let batch_results = run_bounded_batch(&urls, effective.parallel_clones, |url| {
+        scan_cloned_repository(&cloner, url, "HEAD", args, &effective)
+    });
     let mut total_findings = 0;
     let mut failed_count = 0;
     let mut results: Vec<(String, usize, usize, usize, usize, usize)> = Vec::new();
 
-    for (i, url) in urls.iter().enumerate() {
+    for (i, (url, result)) in urls.iter().zip(batch_results).enumerate() {
         println!("\n[{}/{}] Scanning: {}", i + 1, urls.len(), url);
-
-        match cloner.clone(url, "HEAD") {
-            Ok(cloned) => {
-                let cloned: ClonedRepo = cloned;
-                let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], &effective);
-
-                if let Some(result) = run_scan_with_check_args(&scan_args) {
-                    let count = result.summary.critical
-                        + result.summary.high
-                        + result.summary.medium
-                        + result.summary.low;
-                    total_findings += count;
-                    results.push((
-                        url.clone(),
-                        count,
-                        result.summary.critical,
-                        result.summary.high,
-                        result.summary.medium,
-                        result.summary.low,
-                    ));
-                    println!(
-                        "  {} {} findings ({} critical, {} high, {} medium, {} low)",
-                        if count > 0 {
-                            "⚠".yellow()
-                        } else {
-                            "✓".green()
-                        },
-                        count,
-                        result.summary.critical,
-                        result.summary.high,
-                        result.summary.medium,
-                        result.summary.low
-                    );
-                } else {
-                    failed_count += 1;
-                    eprintln!("  {} Scan failed", "✗".red());
-                }
+        match result {
+            Ok(counts) => {
+                total_findings += counts.total;
+                results.push((
+                    url.clone(),
+                    counts.total,
+                    counts.critical,
+                    counts.high,
+                    counts.medium,
+                    counts.low,
+                ));
+                println!(
+                    "  {} {} findings ({} critical, {} high, {} medium, {} low)",
+                    if counts.total > 0 {
+                        "⚠".yellow()
+                    } else {
+                        "✓".green()
+                    },
+                    counts.total,
+                    counts.critical,
+                    counts.high,
+                    counts.medium,
+                    counts.low
+                );
             }
-            Err(e) => {
+            Err(BatchFailure::Scan) => {
                 failed_count += 1;
-                eprintln!("  {} Clone failed: {}", "✗".red(), e);
+                eprintln!("  {} Scan failed", "✗".red());
+            }
+            Err(BatchFailure::Clone(error)) => {
+                failed_count += 1;
+                eprintln!("  {} Clone failed: {}", "✗".red(), error);
             }
         }
     }
@@ -299,5 +379,77 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
         ExitCode::from(1)
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    use std::time::Duration;
+
+    struct MockClone {
+        dropped: Arc<AtomicUsize>,
+    }
+
+    impl Drop for MockClone {
+        fn drop(&mut self) {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn bounded_batch_respects_limit_and_releases_completed_clones() {
+        let urls: Vec<String> = (0..6).map(|index| format!("repo-{index}")).collect();
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let results = run_bounded_batch(&urls, 3, {
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
+            let dropped = Arc::clone(&dropped);
+            move |_| {
+                let clone = MockClone {
+                    dropped: Arc::clone(&dropped),
+                };
+                let current = active.fetch_add(1, Ordering::Relaxed) + 1;
+                maximum.fetch_max(current, Ordering::Relaxed);
+                thread::sleep(Duration::from_millis(10));
+                active.fetch_sub(1, Ordering::Relaxed);
+                drop(clone);
+                Ok::<_, ()>(())
+            }
+        });
+
+        assert_eq!(results.len(), urls.len());
+        assert!(maximum.load(Ordering::Relaxed) > 1);
+        assert!(maximum.load(Ordering::Relaxed) <= 3);
+        assert_eq!(dropped.load(Ordering::Relaxed), urls.len());
+    }
+
+    #[test]
+    fn bounded_batch_handles_zero_limit_and_partial_failures() {
+        let urls: Vec<String> = (0..4).map(|index| format!("repo-{index}")).collect();
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let results = run_bounded_batch(&urls, 0, {
+            let active = Arc::clone(&active);
+            let maximum = Arc::clone(&maximum);
+            move |url| {
+                let current = active.fetch_add(1, Ordering::Relaxed) + 1;
+                maximum.fetch_max(current, Ordering::Relaxed);
+                thread::sleep(Duration::from_millis(2));
+                active.fetch_sub(1, Ordering::Relaxed);
+                if url == "repo-2" {
+                    Err::<(), _>("clone failed")
+                } else {
+                    Ok(())
+                }
+            }
+        });
+
+        assert_eq!(results.len(), urls.len());
+        assert_eq!(maximum.load(Ordering::Relaxed), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
     }
 }

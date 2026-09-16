@@ -6,6 +6,43 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
 
+const REPOSITORY_GIT_ENV: &[&str] = &[
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_DIR",
+    "GIT_GRAFT_FILE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+];
+
+fn command_without_repository_git_env(program: &str) -> Command {
+    let mut command = Command::new(program);
+    for (key, _) in std::env::vars_os() {
+        let is_repository_git_env = key.to_str().is_some_and(|key| {
+            let normalized = if cfg!(windows) {
+                key.to_ascii_uppercase()
+            } else {
+                key.to_string()
+            };
+            REPOSITORY_GIT_ENV.contains(&normalized.as_str())
+                || normalized.starts_with("GIT_CONFIG_KEY_")
+                || normalized.starts_with("GIT_CONFIG_VALUE_")
+        });
+        if is_repository_git_env {
+            command.env_remove(key);
+        }
+    }
+    command
+}
+
 static TOKEN_URL_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"https://[^@\s]+@").expect("TOKEN_URL_PATTERN is a valid regex literal")
 });
@@ -248,7 +285,7 @@ impl GitCloner {
         let askpass_script = self.create_askpass_script()?;
 
         // Build the git clone command with security measures
-        let mut cmd = Command::new("git");
+        let mut cmd = command_without_repository_git_env("git");
 
         // Disable hooks for security
         cmd.env("GIT_TEMPLATE_DIR", "");
@@ -361,7 +398,7 @@ impl GitCloner {
 
     /// Get the commit SHA of HEAD
     fn get_commit_sha(&self, path: &Path) -> Result<String, RemoteError> {
-        let output = Command::new("git")
+        let output = command_without_repository_git_env("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(path)
             .output()
@@ -410,6 +447,38 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)> {
 mod tests {
     use super::*;
 
+    fn run_git(args: &[&str], current_dir: &Path) -> std::process::Output {
+        let mut command = Command::new("git");
+        command
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("GIT_CONFIG_NOSYSTEM", "1");
+        for variable in ["SYSTEMROOT", "TEMP", "TMP"] {
+            if let Some(value) = std::env::var_os(variable) {
+                command.env(variable, value);
+            }
+        }
+        command
+            .args(args)
+            .current_dir(current_dir)
+            .output()
+            .unwrap()
+    }
+
+    fn assert_git_success(output: &std::process::Output, operation: &str) {
+        assert!(
+            output.status.success(),
+            "{operation} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn git_stdout(args: &[&str], current_dir: &Path, operation: &str) -> String {
+        let output = run_git(args, current_dir);
+        assert_git_success(&output, operation);
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
     #[test]
     fn test_parse_github_url_https() {
         let result = parse_github_url("https://github.com/owner/repo");
@@ -443,6 +512,194 @@ mod tests {
         let cloner = GitCloner::new();
         assert!(cloner.validate_url("http://github.com/owner/repo").is_err());
         assert!(cloner.validate_url("ftp://github.com/owner/repo").is_err());
+    }
+
+    #[test]
+    fn test_clone_isolates_repository_git_environment() {
+        if std::env::var_os("CC_AUDIT_REMOTE_CLONE_CHILD").is_some() {
+            let bare_repo = std::env::var_os("CC_AUDIT_REMOTE_BARE_REPO").unwrap();
+            let clone_path = PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_CLONE_PATH").unwrap());
+            let expected_sha = std::env::var("CC_AUDIT_REMOTE_EXPECTED_SHA").unwrap();
+            let config_mode = std::env::var("CC_AUDIT_REMOTE_CONFIG_MODE").unwrap();
+
+            let cloner = GitCloner::new();
+            cloner
+                .execute_clone(
+                    &format!("file://{}", PathBuf::from(bare_repo).display()),
+                    &clone_path,
+                    "main",
+                )
+                .unwrap();
+            assert_eq!(cloner.get_commit_sha(&clone_path).unwrap(), expected_sha);
+            let global = command_without_repository_git_env("git")
+                .args(["config", "--global", "--get", "cc-audit.test-global"])
+                .current_dir(&clone_path)
+                .output()
+                .unwrap();
+            assert_git_success(&global, "global config lookup");
+            assert_eq!(
+                String::from_utf8_lossy(&global.stdout).trim(),
+                "global-value"
+            );
+            let system = command_without_repository_git_env("git")
+                .args(["config", "--get", "cc-audit.test-system"])
+                .current_dir(&clone_path)
+                .output()
+                .unwrap();
+            if config_mode == "nosystem" {
+                assert!(
+                    !system.status.success(),
+                    "GIT_CONFIG_NOSYSTEM was not preserved"
+                );
+                assert_eq!(system.status.code(), Some(1));
+                assert!(system.stdout.is_empty());
+            } else {
+                assert_git_success(&system, "system config lookup");
+                assert_eq!(
+                    String::from_utf8_lossy(&system.stdout).trim(),
+                    "system-value"
+                );
+            }
+            return;
+        }
+
+        let source = tempfile::tempdir().unwrap();
+        let bare = tempfile::tempdir().unwrap();
+        let clone = tempfile::tempdir().unwrap();
+        let clone_without_system = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let global_config = config.path().join("global");
+        let system_config = config.path().join("system");
+        std::fs::write(&global_config, "[cc-audit]\n\ttest-global = global-value\n").unwrap();
+        std::fs::write(&system_config, "[cc-audit]\n\ttest-system = system-value\n").unwrap();
+
+        assert_git_success(&run_git(&["init", "--quiet"], source.path()), "source init");
+        std::fs::write(source.path().join("README.md"), "first commit\n").unwrap();
+        assert_git_success(&run_git(&["add", "README.md"], source.path()), "source add");
+        assert_git_success(
+            &run_git(
+                &[
+                    "-c",
+                    "user.name=cc-audit-test",
+                    "-c",
+                    "user.email=cc-audit-test@example.invalid",
+                    "-c",
+                    "commit.gpgSign=false",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+                source.path(),
+            ),
+            "source commit",
+        );
+        let expected_sha = git_stdout(&["rev-parse", "HEAD"], source.path(), "source rev-parse");
+        assert_git_success(
+            &run_git(&["init", "--bare", "--quiet"], bare.path()),
+            "bare init",
+        );
+        assert_git_success(
+            &run_git(
+                &["push", bare.path().to_str().unwrap(), "HEAD:main"],
+                source.path(),
+            ),
+            "source push",
+        );
+
+        std::fs::write(source.path().join("second.md"), "second commit\n").unwrap();
+        assert_git_success(
+            &run_git(&["add", "second.md"], source.path()),
+            "source add second",
+        );
+        assert_git_success(
+            &run_git(
+                &[
+                    "-c",
+                    "user.name=cc-audit-test",
+                    "-c",
+                    "user.email=cc-audit-test@example.invalid",
+                    "-c",
+                    "commit.gpgSign=false",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "second fixture",
+                ],
+                source.path(),
+            ),
+            "source commit second",
+        );
+        let source_current_sha = git_stdout(
+            &["rev-parse", "HEAD"],
+            source.path(),
+            "source current rev-parse",
+        );
+        assert_ne!(source_current_sha, expected_sha);
+
+        let snapshot = |path: &Path| match std::fs::read(path) {
+            Ok(contents) => Some(contents),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to snapshot {}: {error}", path.display()),
+        };
+        let source_config = snapshot(&source.path().join(".git/config"));
+        let source_head = snapshot(&source.path().join(".git/HEAD"));
+        let source_index = snapshot(&source.path().join(".git/index"));
+        let test_binary = std::env::current_exe().unwrap();
+
+        let run_child = |clone_path: &Path, mode: &str, nosystem: bool| {
+            let mut child = std::process::Command::new(&test_binary);
+            child
+                .args([
+                    "--exact",
+                    "remote::clone::tests::test_clone_isolates_repository_git_environment",
+                    "--nocapture",
+                ])
+                .env("CC_AUDIT_REMOTE_CLONE_CHILD", "1")
+                .env("CC_AUDIT_REMOTE_CONFIG_MODE", mode)
+                .env("CC_AUDIT_REMOTE_BARE_REPO", bare.path())
+                .env("CC_AUDIT_REMOTE_CLONE_PATH", clone_path)
+                .env("CC_AUDIT_REMOTE_EXPECTED_SHA", &expected_sha)
+                .env("GIT_DIR", source.path().join(".git"))
+                .env("GIT_WORK_TREE", clone_path)
+                .env("GIT_COMMON_DIR", source.path().join(".git"))
+                .env("GIT_CONFIG", source.path().join(".git/config"))
+                .env("GIT_CONFIG_COUNT", "1")
+                .env("GIT_CONFIG_KEY_0", "core.bare")
+                .env("GIT_CONFIG_VALUE_0", "true")
+                .env("GIT_CONFIG_GLOBAL", &global_config)
+                .env("GIT_CONFIG_NOSYSTEM", if nosystem { "1" } else { "0" })
+                .env("GIT_CONFIG_SYSTEM", &system_config)
+                .env("GIT_INDEX_FILE", source.path().join(".git/index"));
+            if cfg!(windows) {
+                child
+                    .env("Git_Dir", source.path().join(".git"))
+                    .env("Git_Work_Tree", clone_path)
+                    .env("Git_Common_Dir", source.path().join(".git"))
+                    .env("Git_Config", source.path().join(".git/config"))
+                    .env("Git_Config_Global", &global_config)
+                    .env("Git_Config_Count", "1")
+                    .env("Git_Config_Key_0", "core.bare")
+                    .env("Git_Config_Value_0", "true")
+                    .env("Git_Config_System", &system_config)
+                    .env("Git_Index_File", source.path().join(".git/index"));
+                child.env("Git_Config_NoSystem", if nosystem { "1" } else { "0" });
+            }
+            let status = child.status().unwrap();
+            assert!(status.success(), "isolated clone child test failed");
+        };
+        run_child(clone.path(), "config", false);
+        run_child(clone_without_system.path(), "nosystem", true);
+
+        assert_eq!(snapshot(&source.path().join(".git/config")), source_config);
+        assert_eq!(snapshot(&source.path().join(".git/HEAD")), source_head);
+        assert_eq!(snapshot(&source.path().join(".git/index")), source_index);
+        assert!(clone.path().join(".git").is_dir());
+        assert!(clone_without_system.path().join(".git").is_dir());
+        assert_eq!(
+            git_stdout(&["rev-parse", "HEAD"], clone.path(), "clone rev-parse"),
+            expected_sha
+        );
     }
 
     #[test]

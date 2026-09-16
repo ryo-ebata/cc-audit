@@ -3,9 +3,144 @@
 use crate::run::EffectiveConfig;
 use crate::{CheckArgs, Config, run_scan_with_check_args};
 use colored::Colorize;
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::process::ExitCode;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct FindingIdentity {
+    id: String,
+    message: String,
+    file: String,
+    line: usize,
+    column: Option<usize>,
+    code: String,
+}
+
+fn logical_file(input: &std::path::Path, finding_file: &str) -> String {
+    if input.is_file() {
+        return "<single-file>".to_string();
+    }
+
+    let root = std::fs::canonicalize(input).unwrap_or_else(|_| input.to_path_buf());
+    let candidate = std::path::Path::new(finding_file);
+
+    let relative = if candidate.is_absolute() {
+        candidate
+            .strip_prefix(input)
+            .ok()
+            .map(|path| path.to_path_buf())
+            .or_else(|| {
+                candidate
+                    .strip_prefix(&root)
+                    .ok()
+                    .map(|path| path.to_path_buf())
+            })
+    } else {
+        candidate
+            .strip_prefix(input)
+            .ok()
+            .map(|path| path.to_path_buf())
+            .or_else(|| {
+                std::fs::canonicalize(candidate)
+                    .ok()
+                    .and_then(|path| path.strip_prefix(&root).ok().map(|p| p.to_path_buf()))
+            })
+    };
+
+    if let Some(path) = relative {
+        return path.to_string_lossy().replace('\\', "/");
+    }
+
+    // Keep an unmappable location distinct without putting an absolute path in
+    // the comparison key. The original location remains available for display.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    finding_file.hash(&mut hasher);
+    format!("<unmapped:{:016x}>", hasher.finish())
+}
+
+fn finding_identity(input: &std::path::Path, finding: &crate::rules::Finding) -> FindingIdentity {
+    FindingIdentity {
+        id: finding.id.clone(),
+        message: finding.message.clone(),
+        file: logical_file(input, &finding.location.file),
+        line: finding.location.line,
+        column: finding.location.column,
+        code: finding.code.clone(),
+    }
+}
+
+fn finding_for_display(
+    input: &std::path::Path,
+    finding: &crate::rules::Finding,
+) -> crate::rules::Finding {
+    let mut displayed = finding.clone();
+    let logical = logical_file(input, &finding.location.file);
+    if !input.is_file() && !logical.starts_with("<unmapped:") {
+        displayed.location.file = logical;
+    }
+    displayed
+}
+
+fn diff_findings(
+    input1: &std::path::Path,
+    findings1: &[crate::rules::Finding],
+    input2: &std::path::Path,
+    findings2: &[crate::rules::Finding],
+) -> (Vec<crate::rules::Finding>, Vec<crate::rules::Finding>) {
+    let mut right_counts = HashMap::new();
+    for finding in findings2 {
+        *right_counts
+            .entry(finding_identity(input2, finding))
+            .or_insert(0usize) += 1;
+    }
+
+    let mut only_in_1 = Vec::new();
+    for finding in findings1 {
+        let count = right_counts
+            .entry(finding_identity(input1, finding))
+            .or_insert(0);
+        if *count == 0 {
+            only_in_1.push(finding_for_display(input1, finding));
+        } else {
+            *count -= 1;
+        }
+    }
+
+    let mut left_counts = HashMap::new();
+    for finding in findings1 {
+        *left_counts
+            .entry(finding_identity(input1, finding))
+            .or_insert(0usize) += 1;
+    }
+
+    let mut only_in_2 = Vec::new();
+    for finding in findings2 {
+        let count = left_counts
+            .entry(finding_identity(input2, finding))
+            .or_insert(0);
+        if *count == 0 {
+            only_in_2.push(finding_for_display(input2, finding));
+        } else {
+            *count -= 1;
+        }
+    }
+
+    (only_in_1, only_in_2)
+}
+
+fn print_finding(prefix: &str, finding: &crate::rules::Finding) {
+    let marker = if prefix == "+" {
+        prefix.green()
+    } else {
+        prefix.red()
+    };
+    println!(
+        "  {} [{}] {}:{} {}",
+        marker, finding.id, finding.location.file, finding.location.line, finding.message
+    );
+}
 
 /// Handle --compare command.
 pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
@@ -47,28 +182,8 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
         }
     };
 
-    // Compare findings
-    let findings1: HashSet<_> = result1
-        .findings
-        .iter()
-        .map(|f| (&f.id, &f.message))
-        .collect();
-    let findings2: HashSet<_> = result2
-        .findings
-        .iter()
-        .map(|f| (&f.id, &f.message))
-        .collect();
-
-    let only_in_1: Vec<_> = result1
-        .findings
-        .iter()
-        .filter(|f| !findings2.contains(&(&f.id, &f.message)))
-        .collect();
-    let only_in_2: Vec<_> = result2
-        .findings
-        .iter()
-        .filter(|f| !findings1.contains(&(&f.id, &f.message)))
-        .collect();
+    // Compare normalized finding occurrences, preserving duplicate counts.
+    let (only_in_1, only_in_2) = diff_findings(path1, &result1.findings, path2, &result2.findings);
 
     if only_in_1.is_empty() && only_in_2.is_empty() {
         println!("{}", "No differences found.".green());
@@ -87,7 +202,7 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
             .bold()
         );
         for f in &only_in_1 {
-            println!("  {} [{}] {}", "-".red(), f.id, f.message);
+            print_finding("-", f);
         }
         println!();
     }
@@ -104,7 +219,7 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
             .bold()
         );
         for f in &only_in_2 {
-            println!("  {} [{}] {}", "+".green(), f.id, f.message);
+            print_finding("+", f);
         }
         println!();
     }
@@ -116,4 +231,97 @@ pub fn handle_compare(args: &CheckArgs, paths: &[PathBuf]) -> ExitCode {
     );
 
     ExitCode::from(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::{Category, Severity};
+    use crate::test_utils::fixtures::create_finding;
+    use tempfile::TempDir;
+
+    fn finding(file: &str, line: usize) -> crate::rules::Finding {
+        create_finding(
+            "PE-001",
+            Severity::Critical,
+            Category::PrivilegeEscalation,
+            "Sudo execution",
+            file,
+            line,
+        )
+    }
+
+    #[test]
+    fn identical_directory_trees_under_distinct_roots_have_no_diff() {
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let file1 = root1.path().join("SKILL.md");
+        let file2 = root2.path().join("SKILL.md");
+        let findings1 = vec![finding(&file1.display().to_string(), 1)];
+        let findings2 = vec![finding(&file2.display().to_string(), 1)];
+        assert_eq!(
+            finding_identity(root1.path(), &findings1[0]),
+            finding_identity(root2.path(), &findings2[0])
+        );
+
+        let (only_in_1, only_in_2) =
+            diff_findings(root1.path(), &findings1, root2.path(), &findings2);
+        assert!(only_in_1.is_empty());
+        assert!(only_in_2.is_empty());
+    }
+
+    #[test]
+    fn distinct_relative_occurrences_and_counts_are_preserved() {
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let common1 = root1.path().join("SKILL.md");
+        let common2 = root2.path().join("SKILL.md");
+        let extra2 = root2.path().join("extra.md");
+        let findings1 = vec![
+            finding(&common1.display().to_string(), 1),
+            finding(&common1.display().to_string(), 1),
+        ];
+        let findings2 = vec![
+            finding(&common2.display().to_string(), 1),
+            finding(&extra2.display().to_string(), 1),
+        ];
+
+        let (only_in_1, only_in_2) =
+            diff_findings(root1.path(), &findings1, root2.path(), &findings2);
+        assert_eq!(only_in_1.len(), 1);
+        assert_eq!(only_in_2.len(), 1);
+        assert_eq!(only_in_2[0].location.file, "extra.md");
+    }
+
+    #[test]
+    fn location_or_code_changes_are_differences() {
+        let root1 = TempDir::new().unwrap();
+        let root2 = TempDir::new().unwrap();
+        let file1 = root1.path().join("SKILL.md");
+        let file2 = root2.path().join("SKILL.md");
+        let mut changed = finding(&file2.display().to_string(), 2);
+        changed.code = "changed code".to_string();
+        let findings1 = vec![finding(&file1.display().to_string(), 1)];
+        let findings2 = vec![changed];
+
+        let (only_in_1, only_in_2) =
+            diff_findings(root1.path(), &findings1, root2.path(), &findings2);
+        assert_eq!(only_in_1.len(), 1);
+        assert_eq!(only_in_2.len(), 1);
+    }
+
+    #[test]
+    fn single_files_with_different_names_compare_as_one_logical_file() {
+        let dir = TempDir::new().unwrap();
+        let old = dir.path().join("old.md");
+        let new = dir.path().join("new.md");
+        std::fs::write(&old, "sudo").unwrap();
+        std::fs::write(&new, "sudo").unwrap();
+        let findings1 = vec![finding(&old.display().to_string(), 1)];
+        let findings2 = vec![finding(&new.display().to_string(), 1)];
+
+        let (only_in_1, only_in_2) = diff_findings(&old, &findings1, &new, &findings2);
+        assert!(only_in_1.is_empty());
+        assert!(only_in_2.is_empty());
+    }
 }

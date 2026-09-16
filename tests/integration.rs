@@ -141,6 +141,55 @@ mod malicious_skills {
     }
 }
 
+mod compare_cli {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn identical_trees_compare_cleanly() {
+        let left = TempDir::new().unwrap();
+        let right = TempDir::new().unwrap();
+        create_test_config(left.path());
+        create_test_config(right.path());
+        fs::write(left.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(left.path())
+            .arg(right.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("No differences found."));
+    }
+
+    #[test]
+    fn added_same_rule_occurrence_reports_relative_location() {
+        let left = TempDir::new().unwrap();
+        let right = TempDir::new().unwrap();
+        create_test_config(left.path());
+        create_test_config(right.path());
+        fs::write(left.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("SKILL.md"), "sudo apt update\n").unwrap();
+        fs::write(right.path().join("extra.md"), "sudo apt install foo\n").unwrap();
+
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--compare")
+            .arg(left.path())
+            .arg(right.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("extra.md:1"))
+            .stdout(predicate::str::contains("Summary: 0 removed, 2 added"));
+    }
+}
+
 mod overpermission_scan {
     use super::*;
     use tempfile::TempDir;

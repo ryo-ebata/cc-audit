@@ -128,7 +128,7 @@ mod overpermission_scan {
         let dir = TempDir::new().unwrap();
         create_test_config(dir.path());
         let skill_md = dir.path().join("SKILL.md");
-        fs::write(&skill_md, "test fixture: allowed-tools: Bash\n").unwrap();
+        fs::write(&skill_md, "test fixture: allowed-tools: Bash, Read\n").unwrap();
 
         check_cmd()
             .arg("--type")

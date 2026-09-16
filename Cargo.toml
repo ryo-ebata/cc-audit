@@ -53,6 +53,20 @@ criterion = { version = "0.8", features = ["html_reports"] }
 name = "scan_benchmark"
 harness = false
 
+# Keep the default development and test artifacts small enough for constrained
+# CI agents and worktrees. Backtraces retain file and line information, while
+# incremental state generation is disabled to reduce target/debug growth.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+# Opt in when full debugger variable information and fast incremental rebuilds
+# are more important than disk usage.
+[profile.dev-full]
+inherits = "dev"
+debug = true
+incremental = true
+
 # Coverage configuration
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

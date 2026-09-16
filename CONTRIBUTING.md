@@ -30,12 +30,24 @@ just check
 ```bash
 just build          # Debug build
 just build-release  # Release build
+just build-full-debug # Full debugger information and incremental rebuilds
 ```
+
+The default development and test profiles use line-table-only backtraces and
+disable incremental compilation to suppress incremental state generation in
+`target/`. This reduces artifact growth but does not impose a size limit on
+`target/` or remove artifacts that already exist. Use the `*-full-debug` recipes
+when debugger variable information and faster incremental rebuilds are more
+important than disk usage; that profile creates a separate set of full-debug
+artifacts and can increase disk usage. Release builds keep their existing
+profile. Coverage uses `cargo llvm-cov` overrides and has not been validated
+against the new profile settings in CI yet.
 
 ### Testing
 
 ```bash
 just test           # Run all tests
+just test-full-debug # Tests with full debug information and incremental rebuilds
 just test-verbose   # Run tests with output
 just coverage       # Run coverage report
 ```

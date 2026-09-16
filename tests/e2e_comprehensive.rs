@@ -441,6 +441,39 @@ mod output_formats {
                         .any(|result| result["ruleId"] == "SC-001")
                 );
             }
+
+            let safe_dir = TempDir::new().unwrap();
+            create_config(safe_dir.path());
+            let safe_output_path = safe_dir.path().join(format!("output.{extension}"));
+            let safe_skill_md = safe_dir.path().join("SKILL.md");
+            fs::write(&safe_skill_md, "# Safe content\n").unwrap();
+
+            check_cmd()
+                .arg("--format")
+                .arg(format)
+                .arg("--output")
+                .arg(&safe_output_path)
+                .arg("--no-cve-scan")
+                .arg("--no-malware-scan")
+                .arg(safe_dir.path())
+                .assert()
+                .success();
+
+            let safe_content = fs::read_to_string(&safe_output_path).unwrap();
+            assert!(
+                !safe_content.is_empty(),
+                "{format} safe output must not be empty"
+            );
+            if format == "sarif" {
+                let safe_sarif: serde_json::Value = serde_json::from_str(&safe_content).unwrap();
+                assert_eq!(safe_sarif["version"], "2.1.0");
+                assert!(
+                    safe_sarif["runs"][0]["results"]
+                        .as_array()
+                        .unwrap()
+                        .is_empty()
+                );
+            }
         }
     }
 }

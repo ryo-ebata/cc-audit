@@ -909,21 +909,32 @@ rules:
         check_cmd().arg(&scan_dir).assert().success();
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_config_file_not_present_shows_error() {
         let dir = TempDir::new().unwrap();
+        let isolated_home = TempDir::new().unwrap();
+        let isolated_config = TempDir::new().unwrap();
 
-        // Create a simple test file without config
-        let skill_md = dir.path().join("SKILL.md");
-        fs::write(&skill_md, "# Test\necho hello\n").unwrap();
-
-        // Should fail with error about missing config file
+        // Use a bare relative path so project-root canonicalization cannot walk
+        // into an unrelated ancestor configuration. The config lookup happens
+        // before path validation, so this exercises the CLI diagnostic without
+        // creating files outside the isolated temp dirs.
         check_cmd()
-            .arg(dir.path())
+            .current_dir(dir.path())
+            .arg("missing-skill")
+            .env("HOME", isolated_home.path())
+            .env("XDG_CONFIG_HOME", isolated_config.path())
             .assert()
             .failure()
             .code(2)
-            .stderr(predicate::str::contains("Configuration file not found"));
+            .stderr(predicate::str::contains("Configuration file not found"))
+            .stderr(predicate::str::contains(".cc-audit.yaml"))
+            .stderr(predicate::str::contains(".cc-audit.yml"))
+            .stderr(predicate::str::contains(".cc-audit.json"))
+            .stderr(predicate::str::contains(".cc-audit.toml"))
+            .stderr(predicate::str::contains("cc-audit init"))
+            .stderr(predicate::str::contains("--config <path>"));
     }
 
     #[test]

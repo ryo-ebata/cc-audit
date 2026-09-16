@@ -267,6 +267,9 @@ RUN npm install && \
 
         assert_eq!(DockerfileParser::escape_character(content), '`');
         assert!(DockerfileParser::normalize_continuations(content).contains("safe \\\n"));
+
+        let mixed_case = "# syntax=docker/dockerfile:1\n# EsCaPe =`\nFROM alpine\nRUN echo safe `\n    && echo safe\n";
+        assert_eq!(DockerfileParser::escape_character(mixed_case), '`');
     }
 
     #[test]

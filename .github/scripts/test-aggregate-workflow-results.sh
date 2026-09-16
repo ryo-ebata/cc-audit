@@ -44,11 +44,39 @@ run_case 0 unconditional success
 run_case 1 unconditional cancelled
 run_case 1 unconditional skipped
 
+check_result_job_wiring() {
+  local workflow="$1"
+  local mode="$2"
+  local expected_needs="$3"
+  local arg_marker="$4"
+  awk -v mode="$mode" -v expected_needs="$expected_needs" -v arg_marker="$arg_marker" '
+    BEGIN { bad_order=0 }
+    /^  [a-z0-9-]+-result:/ { in_result=1; next }
+    in_result && /^  [a-z0-9-]+:/ { exit !(found && checked_out && has_needs && !bad_order) }
+    in_result && /^    needs:/ { has_needs=index($0, expected_needs) > 0 }
+    in_result && /actions\/checkout@v7/ { checked_out=1 }
+    in_result && index($0, "check-aggregate-workflow-results.sh " mode) { found=1; bad_order=!checked_out }
+    in_result && found && index($0, arg_marker) { arg_seen=1 }
+    END { if (in_result) exit !(found && checked_out && has_needs && !bad_order && arg_seen) }
+  ' ".github/workflows/$workflow.yml"
+  grep -Fq "$arg_marker" ".github/workflows/$workflow.yml"
+}
+
+check_result_job_wiring ci ci 'needs: [workflow-action-references, release-tag-resolution, changes, fmt, clippy, test, coverage, doc]' 'needs.workflow-action-references.result'
+check_result_job_wiring msrv conditional 'needs: [changes, msrv-check, msrv-verify]' 'needs.changes.result'
+check_result_job_wiring security security 'needs: [changes, audit, deny, supply-chain, advisory-db, outdated]' 'needs.changes.outputs.should_run'
+check_result_job_wiring performance conditional 'needs: [changes, benchmark, binary-size, build-time]' 'needs.changes.result'
+check_result_job_wiring semver semver 'needs: [changes, semver-check, changelog-check]' 'needs.changes.outputs.should_run'
+check_result_job_wiring npm-install-test unconditional 'needs: [npm-install-test]' 'needs.npm-install-test.result'
+check_result_job_wiring cargo-install-test unconditional 'needs: [cargo-install-test]' 'needs.cargo-install-test.result'
+check_result_job_wiring self-audit unconditional 'needs: [self-audit]' 'needs.self-audit.result'
+grep -Fq 'needs.release-tag-resolution.result' .github/workflows/ci.yml
+
 output_file="$(mktemp)"
 trap 'rm -f "$output_file"' EXIT
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter true false
 grep -Fq 'rust=true' "$output_file"
-if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter empty false; then
+if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter "" false; then
   echo "empty filter output must fail"
   exit 1
 fi

@@ -111,6 +111,28 @@ fn scan_cloned_repository(
     Ok(finding_counts(&result))
 }
 
+fn read_remote_list<R: BufRead>(reader: R) -> Result<Vec<String>, (usize, std::io::Error)> {
+    let mut urls = Vec::new();
+    for (index, line) in reader.lines().enumerate() {
+        let line_number = index + 1;
+        let line = line.map_err(|error| (line_number, error))?;
+        let line = line.trim().to_string();
+        if !line.is_empty() && !line.starts_with('#') {
+            urls.push(line);
+        }
+    }
+    Ok(urls)
+}
+
+fn read_remote_list_then<R, T, F>(reader: R, on_success: F) -> Result<T, (usize, std::io::Error)>
+where
+    R: BufRead,
+    F: FnOnce(Vec<String>) -> T,
+{
+    let urls = read_remote_list(reader)?;
+    Ok(on_success(urls))
+}
+
 /// Handle --remote command: scan a single remote repository.
 pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
     let url = match &args.remote {
@@ -163,7 +185,20 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
     };
 
     // Load config from current directory to get effective settings
-    let config = Config::load(Some(std::path::Path::new(".")));
+    let config = match &args.config {
+        Some(config_path) => match Config::from_file(config_path) {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!(
+                    "Error: Failed to load configuration from {}: {}",
+                    config_path.display(),
+                    error
+                );
+                return ExitCode::from(2);
+            }
+        },
+        None => Config::load(Some(std::path::Path::new("."))),
+    };
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     // Read URLs from file
@@ -176,12 +211,18 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
     };
 
     let reader = BufReader::new(file);
-    let urls: Vec<String> = reader
-        .lines()
-        .map_while(Result::ok)
-        .map(|line| line.trim().to_string())
-        .filter(|line| !line.is_empty() && !line.starts_with('#'))
-        .collect();
+    let urls = match read_remote_list_then(reader, |urls| urls) {
+        Ok(urls) => urls,
+        Err((line, error)) => {
+            eprintln!(
+                "Failed to read URL list {} at line {}: {}",
+                list_path.display(),
+                line,
+                error
+            );
+            return ExitCode::from(2);
+        }
+    };
 
     if urls.is_empty() {
         eprintln!("No URLs found in {}", list_path.display());
@@ -394,6 +435,7 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Cursor, Read};
     use std::sync::atomic::AtomicUsize;
     use std::sync::{Condvar, Mutex, mpsc};
     use std::time::Duration;
@@ -411,6 +453,99 @@ mod tests {
         fn drop(&mut self) {
             self.dropped.fetch_add(1, Ordering::Relaxed);
         }
+    }
+
+    struct FailingReader {
+        first_chunk: Vec<u8>,
+        offset: usize,
+        failed: bool,
+    }
+
+    impl Read for FailingReader {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            if self.offset < self.first_chunk.len() {
+                let length = (self.first_chunk.len() - self.offset).min(buffer.len());
+                buffer[..length]
+                    .copy_from_slice(&self.first_chunk[self.offset..self.offset + length]);
+                self.offset += length;
+                Ok(length)
+            } else if !self.failed {
+                self.failed = true;
+                Err(std::io::Error::other("injected URL list read failure"))
+            } else {
+                Err(std::io::Error::other("injected URL list read failure"))
+            }
+        }
+    }
+
+    #[test]
+    fn read_remote_list_filters_comments_and_blank_lines() {
+        let input = b"\n# ignored\n https://example.com/one \n\nhttps://example.com/two\n";
+        let urls = read_remote_list(BufReader::new(Cursor::new(input))).unwrap();
+
+        assert_eq!(urls, ["https://example.com/one", "https://example.com/two"]);
+    }
+
+    #[test]
+    fn read_remote_list_rejects_invalid_utf8_at_beginning_without_partial_urls() {
+        let input = b"\xffhttps://user:secret@example.com/repo\nhttps://example.com/later\n";
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(Cursor::new(input)), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
+
+        assert_eq!(error.0, 1);
+        assert!(error.1.to_string().contains("valid UTF-8"));
+        assert!(!error.1.to_string().contains("secret"));
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn read_remote_list_rejects_invalid_utf8_after_valid_url_without_partial_urls() {
+        let input = b"https://example.com/first\n\xffhttps://user:secret@example.com/repo\nhttps://example.com/later\n";
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(Cursor::new(input)), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
+
+        assert_eq!(error.0, 2);
+        assert!(error.1.to_string().contains("valid UTF-8"));
+        assert!(!error.1.to_string().contains("secret"));
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn read_remote_list_rejects_midstream_io_error_without_partial_urls() {
+        let reader = FailingReader {
+            first_chunk: b"https://example.com/first\n".to_vec(),
+            offset: 0,
+            failed: false,
+        };
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(reader), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
+
+        assert_eq!(error.0, 2);
+        assert!(
+            error
+                .1
+                .to_string()
+                .contains("injected URL list read failure")
+        );
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
     }
 
     #[test]

@@ -12,8 +12,8 @@ use tracing::{debug, info, warn};
 
 use super::{
     filter_against_baseline, handle_baseline, handle_check_drift, handle_compare, handle_fix,
-    handle_hook_mode, handle_pin, handle_pin_verify, handle_report_fp, handle_save_baseline,
-    handle_save_profile, handle_sbom, handle_show_profile, require_config,
+    handle_hook_mode, handle_pin, handle_pin_verify, handle_remote_list_scan, handle_report_fp,
+    handle_save_baseline, handle_save_profile, handle_sbom, handle_show_profile, require_config,
 };
 
 /// Validate that a path is safe to write to.
@@ -78,6 +78,10 @@ fn validate_input_path(path: &Path) -> Result<(), String> {
 /// Handle `cc-audit check` subcommand.
 pub fn handle_check(args: &CheckArgs, verbose: bool) -> ExitCode {
     info!(paths = ?args.paths, "Starting check command");
+
+    if args.remote_list.is_some() {
+        return handle_remote_list_scan(args);
+    }
 
     // Determine project root for config lookup
     // For --compare, use the first compare path; otherwise use paths

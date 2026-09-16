@@ -45,6 +45,8 @@ run_case 1 terraform success false '[]' cancelled skipped skipped skipped
 run_case 0 terraform success true '[]' skipped skipped skipped skipped
 run_case 1 terraform success true '[]' skipped success skipped skipped
 run_case 0 terraform success true '["infra/a"]' success success success success
+directories_output='["infra/github"]'
+run_case 0 terraform success true "$directories_output" success success success success
 run_case 1 terraform success true '["infra/a"]' success cancelled success success
 run_case 1 terraform success true '' success success success success
 run_case 1 terraform success true '{}' success success success success
@@ -160,5 +162,7 @@ grep -Fq 'check-aggregate-workflow-results.sh unconditional' .github/workflows/s
 grep -Fq 'check-aggregate-workflow-results.sh terraform' .github/workflows/terraform.yml
 grep -Fq 'check-aggregate-workflow-results.sh terraform-filter' .github/workflows/terraform.yml
 grep -Fq "if: steps.filter.outputs.infra == 'true'" .github/workflows/terraform.yml
+grep -Fq 'DIRECTORIES_OUTPUT: ${{ needs.changes.outputs.directories }}' .github/workflows/terraform.yml
+grep -Fq '"$DIRECTORIES_OUTPUT"' .github/workflows/terraform.yml
 
 echo "aggregate workflow result checks passed"

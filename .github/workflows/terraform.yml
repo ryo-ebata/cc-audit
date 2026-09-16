@@ -212,12 +212,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Check results
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          INFRA_OUTPUT: ${{ needs.changes.outputs.infra }}
+          DIRECTORIES_OUTPUT: ${{ needs.changes.outputs.directories }}
+          FMT_RESULT: ${{ needs.fmt.result }}
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+          TFLINT_RESULT: ${{ needs.tflint.result }}
+          TFSEC_RESULT: ${{ needs.tfsec.result }}
         run: |
           bash .github/scripts/check-aggregate-workflow-results.sh terraform \
-            "${{ needs.changes.result }}" "${{ needs.changes.outputs.infra }}" \
-            "${{ needs.changes.outputs.directories }}" \
-            "${{ needs.fmt.result }}" "${{ needs.validate.result }}" \
-            "${{ needs.tflint.result }}" "${{ needs.tfsec.result }}"
+            "$CHANGES_RESULT" "$INFRA_OUTPUT" "$DIRECTORIES_OUTPUT" \
+            "$FMT_RESULT" "$VALIDATE_RESULT" "$TFLINT_RESULT" "$TFSEC_RESULT"
 
       - name: Create Summary
         if: needs.changes.outputs.infra == 'true'

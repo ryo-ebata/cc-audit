@@ -1028,15 +1028,14 @@ if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-r
   if [ "$mode" = size ]; then
     clone_path=""
     for arg in "$@"; do clone_path="$arg"; done
-    (
-      attempts=0
-      while [ ! -d "$clone_path/.git" ] && [ "$attempts" -lt 500 ]; do sleep 0.01; attempts=$((attempts + 1)); done
-      if [ -d "$clone_path/.git" ]; then head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"; fi
-    ) > /dev/null 2>&1 &
-    size_writer=$!
-    if "$CC_AUDIT_REAL_GIT" "$@"; then status=0; else status=$?; fi
-    wait "$size_writer"
-    exit "$status"
+    # Keep the size-limit case deterministic: a real git clone may leave
+    # descendants holding the captured output pipe after the wrapper is
+    # terminated for the size error. Real git execution is covered by the
+    # success/failure cases; this case isolates size detection itself.
+    mkdir -p "$clone_path/.git"
+    head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"
+    exec sleep 1
+    exit 0
   fi
 fi
 if [ "${1:-}" = clone ] && { [ "$mode" = size-fd-hold ] || [ "$mode" = size-fd-release ]; }; then

@@ -44,6 +44,68 @@ severity:
 }
 
 #[test]
+fn test_sc007_tagless_container_pull_cli_regression() {
+    let detected_dir = TempDir::new().unwrap();
+    create_config(detected_dir.path());
+    let detected_dockerfile = detected_dir.path().join("Dockerfile");
+    fs::write(
+        &detected_dockerfile,
+        "FROM alpine:3.20\nRUN docker pull alpine\nRUN podman pull ghcr.io/acme/worker\nRUN docker pull registry.example.com:5000/acme/worker:stable\n",
+    )
+    .unwrap();
+
+    let output = check_cmd()
+        .current_dir(detected_dir.path())
+        .args([
+            "--type",
+            "docker",
+            "--format",
+            "json",
+            "--no-cve-scan",
+            "--no-malware-scan",
+        ])
+        .arg(&detected_dockerfile)
+        .assert()
+        .failure()
+        .code(1)
+        .get_output()
+        .stdout
+        .clone();
+    let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    let findings = report["findings"].as_array().unwrap();
+    assert_eq!(
+        findings
+            .iter()
+            .filter(|finding| finding["id"] == "SC-007")
+            .count(),
+        3
+    );
+
+    let safe_dir = TempDir::new().unwrap();
+    create_config(safe_dir.path());
+    let safe_dockerfile = safe_dir.path().join("Dockerfile");
+    fs::write(
+        &safe_dockerfile,
+        "FROM alpine:3.20\nRUN docker pull alpine@sha256:0123456789abcdef\nRUN podman pull localhost:5000/acme/worker\nRUN docker pull --help\n# Documentation: docker pull alpine\n",
+    )
+    .unwrap();
+
+    check_cmd()
+        .current_dir(safe_dir.path())
+        .args([
+            "--type",
+            "docker",
+            "--format",
+            "json",
+            "--no-cve-scan",
+            "--no-malware-scan",
+        ])
+        .arg(&safe_dockerfile)
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_ex001_httpx_environment_exfiltration_through_skill_cli() {
     let dir = TempDir::new().unwrap();
     create_config(dir.path());

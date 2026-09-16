@@ -1,7 +1,7 @@
 ---
 name: complex-skill
 description: A complex but safe skill for project scaffolding
-allowed-tools: Read, Write, Bash
+allowed-tools: Read, Write, Bash(./scripts/validate.sh)
 hooks:
   PreToolUse:
     - matcher: 'Bash'

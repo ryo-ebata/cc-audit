@@ -141,6 +141,48 @@ mod overpermission_scan {
             .code(0)
             .stdout(predicate::str::contains("\"findings\": []"));
     }
+
+    #[test]
+    fn test_scan_overpermission_detects_bare_bash_in_frontmatter() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let skill_md = dir.path().join("SKILL.md");
+
+        for content in [
+            "---\nallowed-tools: Bash\n---\n",
+            "---\nallowed-tools: Bash\n---",
+            "---\nallowed-tools: Read, Bash\n---\n",
+            "---\nallowed-tools: Read, Bash\n---",
+            "---\nallowed-tools: \"Bash\"\n---\n",
+            "---\nallowed-tools: [Bash]\n---\n",
+            "---\nallowed-tools: [\"Bash\"]\n---\n",
+            "---\nallowed-tools: [Read, Bash]\n---\n",
+        ] {
+            fs::write(&skill_md, content).unwrap();
+            check_cmd()
+                .arg("--type")
+                .arg("skill")
+                .arg("--format")
+                .arg("json")
+                .arg(dir.path())
+                .assert()
+                .failure()
+                .code(1)
+                .stdout(predicate::str::contains("OP-004"));
+        }
+
+        fs::write(&skill_md, "---\nallowed-tools: Bash(git:*)\n---\n").unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("skill")
+            .arg("--format")
+            .arg("json")
+            .arg(dir.path())
+            .assert()
+            .success()
+            .code(0)
+            .stdout(predicate::str::contains("\"findings\": []"));
+    }
 }
 
 mod benign_skills {

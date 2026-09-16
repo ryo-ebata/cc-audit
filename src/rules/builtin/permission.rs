@@ -119,7 +119,8 @@ fn op_004() -> Rule {
         confidence: Confidence::Firm,
         patterns: vec![
             Regex::new(r#"Bash\s*[=:]\s*\*"#).expect("OP-004: invalid regex"),
-            Regex::new(r#"allowed-tools:.*Bash\s*[^(]"#).expect("OP-004: invalid regex"),
+            Regex::new(r#"allowed-tools:.*\bBash\b(?:\s*,|\s*$|\s+[^\s(]|["']|\])"#)
+                .expect("OP-004: invalid regex"),
             Regex::new(r#"shell[_-]?access\s*[=:]\s*(true|yes|\*)"#)
                 .expect("OP-004: invalid regex"),
         ],
@@ -327,6 +328,7 @@ fn op_009() -> Rule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rules::RuleEngine;
 
     #[test]
     fn test_op_001_detects_wildcard_tools() {
@@ -378,6 +380,41 @@ mod tests {
             let matched = rule.patterns.iter().any(|p| p.is_match(input));
             let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
             assert_eq!(matched && !excluded, should_match, "OP-004: {}", input);
+        }
+    }
+
+    #[test]
+    fn test_op_004_detects_bare_bash_and_respects_tool_boundaries() {
+        let rule = op_004();
+        let positive = [
+            "allowed-tools: Bash",
+            "allowed-tools: Bash\n",
+            "allowed-tools: Read, Bash",
+            "allowed-tools: Bash, Read",
+            "allowed-tools: Bash, Bash(npm:*)",
+            "allowed-tools: \"Bash\"",
+            "allowed-tools: 'Bash'",
+            "allowed-tools: [Bash]",
+            "allowed-tools: [\"Bash\"]",
+            "allowed-tools: [Read, Bash]",
+        ];
+        for input in positive {
+            assert!(
+                RuleEngine::matches_rule_line(&rule, input),
+                "OP-004 should detect unrestricted Bash: {input:?}"
+            );
+        }
+
+        let negative = [
+            "allowed-tools: Bash(git:*)",
+            "allowed-tools: Read, Bash (git:*)",
+            "allowed-tools: Bashful",
+        ];
+        for input in negative {
+            assert!(
+                !RuleEngine::matches_rule_line(&rule, input),
+                "OP-004 should not detect restricted or similar tool names: {input:?}"
+            );
         }
     }
 

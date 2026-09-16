@@ -40,6 +40,188 @@ fn remote_list_invalid_utf8_fails_before_starting_clone_batch() {
     assert!(!stdout.contains("Scanning:"));
 }
 
+#[test]
+fn remote_cli_dispatch_rejects_non_https_url_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    create_test_config(dir.path());
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(dir.path().join(".cc-audit.yaml"))
+        .arg("--remote")
+        .arg("http://example.invalid/repo")
+        .arg("--git-ref")
+        .arg("test-ref")
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Cloning repository"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("Collecting files to scan"));
+}
+
+#[cfg(unix)]
+fn create_fake_git(dir: &std::path::Path, readme: &str) -> std::path::PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin = dir.join("fake-bin");
+    fs::create_dir(&bin).unwrap();
+    let git = bin.join("git");
+    let script = format!(
+        r#"#!/bin/sh
+printf '%s\n' "$*" >> "$FAKE_GIT_LOG"
+if [ "$1" = "--version" ]; then exit 0; fi
+if [ "$1" = "clone" ]; then
+  if [ -n "$EXPECTED_AUTH_TOKEN" ]; then
+    if [ -n "$GIT_ASKPASS" ] && [ -x "$GIT_ASKPASS" ] && [ "$("$GIT_ASKPASS" Password)" = "$EXPECTED_AUTH_TOKEN" ]; then
+      printf '%s\n' AUTH_OK >> "$FAKE_GIT_LOG"
+    else
+      printf '%s\n' AUTH_MISSING_OR_INVALID >> "$FAKE_GIT_LOG"
+    fi
+  fi
+  last=""
+  for arg in "$@"; do last="$arg"; done
+  mkdir -p "$last"
+  cat > "$last/README.md" <<'README_EOF'
+{}
+README_EOF
+  exit 0
+fi
+if [ "$1" = "rev-parse" ]; then echo deadbeef; exit 0; fi
+exit 0
+"#,
+        readme
+    );
+    fs::write(&git, script).unwrap();
+    fs::set_permissions(&git, fs::Permissions::from_mode(0o700)).unwrap();
+    bin
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_cli_dispatch_propagates_ref_and_auth_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    create_test_config(dir.path());
+    let log = dir.path().join("git.log");
+    let fake_bin = create_fake_git(dir.path(), "# safe fixture\n");
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(dir.path().join(".cc-audit.yaml"))
+        .arg("--remote")
+        .arg("https://example.com/repo")
+        .arg("--git-ref")
+        .arg("test-ref")
+        .arg("--remote-auth")
+        .arg("secret-token")
+        .env("PATH", path)
+        .env("FAKE_GIT_LOG", &log)
+        .env("EXPECTED_AUTH_TOKEN", "secret-token")
+        .env("HOME", dir.path())
+        .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+    let git_log = fs::read_to_string(&log).unwrap();
+
+    assert!(output.status.success());
+    assert!(git_log.contains("--branch test-ref"));
+    assert!(git_log.contains("AUTH_OK"));
+    assert!(!git_log.contains("secret-token"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("secret-token"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("secret-token"));
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_cli_dispatch_propagates_config_ref_and_auth_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = dir.path().join("explicit-config.yaml");
+    fs::write(
+        dir.path().join(".cc-audit.yaml"),
+        "scan:\n  git_ref: wrong-ref\n  remote_auth: wrong-token\n",
+    )
+    .unwrap();
+    fs::write(
+        &config,
+        "scan:\n  git_ref: config-ref\n  remote_auth: config-token\n",
+    )
+    .unwrap();
+    let log = dir.path().join("git.log");
+    let fake_bin = create_fake_git(dir.path(), "# safe fixture\n");
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(&config)
+        .arg("--remote")
+        .arg("https://example.com/repo")
+        .env("PATH", path)
+        .env("FAKE_GIT_LOG", &log)
+        .env("EXPECTED_AUTH_TOKEN", "config-token")
+        .env_remove("GITHUB_TOKEN")
+        .env("HOME", dir.path())
+        .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+    let git_log = fs::read_to_string(&log).unwrap();
+
+    assert!(output.status.success());
+    assert!(git_log.contains("--branch config-ref"));
+    assert!(git_log.contains("AUTH_OK"));
+    assert!(!git_log.contains("config-token"));
+    assert!(!git_log.contains("wrong-ref"));
+    assert!(!git_log.contains("wrong-token"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("config-token"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("config-token"));
+}
+
+#[cfg(unix)]
+#[test]
+fn awesome_cli_dispatch_scans_fixture_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    create_test_config(dir.path());
+    let log = dir.path().join("git.log");
+    let fake_bin = create_fake_git(
+        dir.path(),
+        "# fixture\nhttps://github.com/example/fixture-repository\n",
+    );
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(dir.path().join(".cc-audit.yaml"))
+        .arg("--awesome-claude-code")
+        .arg("--parallel-clones")
+        .arg("1")
+        .env("PATH", path)
+        .env("FAKE_GIT_LOG", &log)
+        .env("HOME", dir.path())
+        .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success());
+    assert!(stdout.contains("Found 1 repositories to scan"));
+    assert!(stdout.contains("Summary: 1 repos scanned, 0 total findings, 0 failed"));
+}
+
 fn cmd() -> assert_cmd::Command {
     cargo_bin_cmd!("cc-audit")
 }

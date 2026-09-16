@@ -49,6 +49,20 @@ where
     scan(&repository)
 }
 
+fn load_remote_config(args: &CheckArgs) -> Result<Config, ExitCode> {
+    match &args.config {
+        Some(config_path) => Config::from_file(config_path).map_err(|error| {
+            eprintln!(
+                "Error: Failed to load configuration from {}: {}",
+                config_path.display(),
+                error
+            );
+            ExitCode::from(2)
+        }),
+        None => Ok(Config::load(Some(std::path::Path::new(".")))),
+    }
+}
+
 fn run_bounded_batch<T, E, F>(items: &[String], limit: usize, operation: F) -> Vec<Result<T, E>>
 where
     T: Send,
@@ -144,7 +158,10 @@ pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
     };
 
     // Load config from current directory to get effective settings
-    let config = Config::load(Some(std::path::Path::new(".")));
+    let config = match load_remote_config(args) {
+        Ok(config) => config,
+        Err(exit_code) => return exit_code,
+    };
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     println!("Cloning repository: {}", url);
@@ -185,19 +202,9 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
     };
 
     // Load config from current directory to get effective settings
-    let config = match &args.config {
-        Some(config_path) => match Config::from_file(config_path) {
-            Ok(config) => config,
-            Err(error) => {
-                eprintln!(
-                    "Error: Failed to load configuration from {}: {}",
-                    config_path.display(),
-                    error
-                );
-                return ExitCode::from(2);
-            }
-        },
-        None => Config::load(Some(std::path::Path::new("."))),
+    let config = match load_remote_config(args) {
+        Ok(config) => config,
+        Err(exit_code) => return exit_code,
     };
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
@@ -293,7 +300,10 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
     println!("Fetching awesome-claude-code repository...");
 
     // Load config from current directory to get effective settings
-    let config = Config::load(Some(std::path::Path::new(".")));
+    let config = match load_remote_config(args) {
+        Ok(config) => config,
+        Err(exit_code) => return exit_code,
+    };
     let effective = EffectiveConfig::from_check_args_and_config(args, &config);
 
     let cloner = if let Some(ref token) = effective.remote_auth {

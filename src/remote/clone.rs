@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::LazyLock;
 use std::time::Duration;
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::{NamedTempFile, TempDir, TempPath};
 use tokio::io::AsyncReadExt;
 use tokio::process::{Child, Command as AsyncCommand};
 const MAX_GIT_OUTPUT_BYTES: u64 = 1024 * 1024;
@@ -280,7 +280,7 @@ impl GitCloner {
     /// - Token is not visible in process list (ps aux)
     /// - Token is not logged in git error messages
     /// - Script is automatically cleaned up
-    fn create_askpass_script(&self) -> Result<Option<NamedTempFile>, RemoteError> {
+    fn create_askpass_script(&self) -> Result<Option<TempPath>, RemoteError> {
         let Some(ref token) = self.auth_token else {
             return Ok(None);
         };
@@ -302,7 +302,7 @@ impl GitCloner {
                 .map_err(|e| RemoteError::TempDir(e.to_string()))?;
         }
 
-        Ok(Some(script))
+        Ok(Some(script.into_temp_path()))
     }
 
     /// Sanitize error messages to remove any potential token leakage.
@@ -412,7 +412,8 @@ impl GitCloner {
         let mut cmd = async_command_without_repository_git_env("git");
         cmd.env("GIT_TEMPLATE_DIR", "");
         if let Some(ref script) = askpass_script {
-            cmd.env("GIT_ASKPASS", script.path());
+            let script_path: &std::path::Path = script.as_ref();
+            cmd.env("GIT_ASKPASS", script_path);
             cmd.env("GIT_TERMINAL_PROMPT", "0");
         }
         cmd.args([
@@ -1323,7 +1324,7 @@ exec "$CC_AUDIT_REAL_GIT" "$@"
         let script = script.unwrap();
 
         // Verify script exists and is executable
-        let path = script.path();
+        let path: &std::path::Path = script.as_ref();
         assert!(path.exists());
 
         let metadata = std::fs::metadata(path).unwrap();

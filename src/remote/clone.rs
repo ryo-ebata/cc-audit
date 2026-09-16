@@ -551,6 +551,8 @@ mod tests {
                     !system.status.success(),
                     "GIT_CONFIG_NOSYSTEM was not preserved"
                 );
+                assert_eq!(system.status.code(), Some(1));
+                assert!(system.stdout.is_empty());
             } else {
                 assert_git_success(&system, "system config lookup");
                 assert_eq!(
@@ -666,11 +668,9 @@ mod tests {
                 .env("GIT_CONFIG_KEY_0", "core.bare")
                 .env("GIT_CONFIG_VALUE_0", "true")
                 .env("GIT_CONFIG_GLOBAL", &global_config)
+                .env("GIT_CONFIG_NOSYSTEM", if nosystem { "1" } else { "0" })
                 .env("GIT_CONFIG_SYSTEM", &system_config)
                 .env("GIT_INDEX_FILE", source.path().join(".git/index"));
-            if nosystem {
-                child.env("GIT_CONFIG_NOSYSTEM", "1");
-            }
             if cfg!(windows) {
                 child
                     .env("Git_Dir", source.path().join(".git"))
@@ -683,9 +683,7 @@ mod tests {
                     .env("Git_Config_Value_0", "true")
                     .env("Git_Config_System", &system_config)
                     .env("Git_Index_File", source.path().join(".git/index"));
-                if nosystem {
-                    child.env("Git_Config_NoSystem", "1");
-                }
+                child.env("Git_Config_NoSystem", if nosystem { "1" } else { "0" });
             }
             let status = child.status().unwrap();
             assert!(status.success(), "isolated clone child test failed");

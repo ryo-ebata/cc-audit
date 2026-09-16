@@ -1,20 +1,52 @@
 use super::error::RemoteError;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
+use tokio::io::AsyncReadExt;
+use tokio::process::{Child, Command as AsyncCommand};
 
 const MAX_GIT_OUTPUT_BYTES: u64 = 1024 * 1024;
+const GIT_OUTPUT_COLLECTION_TIMEOUT: Duration = Duration::from_secs(1);
 
-fn read_git_output<R: Read>(reader: R) -> std::io::Result<Vec<u8>> {
-    let mut output = Vec::new();
-    reader
-        .take(MAX_GIT_OUTPUT_BYTES + 1)
-        .read_to_end(&mut output)?;
-    output.truncate(MAX_GIT_OUTPUT_BYTES as usize);
+async fn read_git_output_async<R: tokio::io::AsyncRead + Unpin>(
+    mut reader: R,
+) -> std::io::Result<Vec<u8>> {
+    let mut output = Vec::with_capacity(MAX_GIT_OUTPUT_BYTES as usize);
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = reader.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+
+        let remaining = MAX_GIT_OUTPUT_BYTES as usize - output.len();
+        output.extend_from_slice(&buffer[..read.min(remaining)]);
+    }
     Ok(output)
+}
+
+async fn terminate_child(child: &mut Child) -> Result<(), String> {
+    let kill_error = child
+        .kill()
+        .await
+        .err()
+        .map(|error| format!("kill: {error}"));
+    let wait_error = child
+        .wait()
+        .await
+        .err()
+        .map(|error| format!("wait after kill: {error}"));
+    match (kill_error, wait_error) {
+        (None, None) => Ok(()),
+        (kill_error, wait_error) => Err([kill_error, wait_error]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("; ")),
+    }
 }
 
 const REPOSITORY_GIT_ENV: &[&str] = &[
@@ -36,6 +68,26 @@ const REPOSITORY_GIT_ENV: &[&str] = &[
 
 fn command_without_repository_git_env(program: &str) -> Command {
     let mut command = Command::new(program);
+    for (key, _) in std::env::vars_os() {
+        let is_repository_git_env = key.to_str().is_some_and(|key| {
+            let normalized = if cfg!(windows) {
+                key.to_ascii_uppercase()
+            } else {
+                key.to_string()
+            };
+            REPOSITORY_GIT_ENV.contains(&normalized.as_str())
+                || normalized.starts_with("GIT_CONFIG_KEY_")
+                || normalized.starts_with("GIT_CONFIG_VALUE_")
+        });
+        if is_repository_git_env {
+            command.env_remove(key);
+        }
+    }
+    command
+}
+
+fn async_command_without_repository_git_env(program: &str) -> AsyncCommand {
+    let mut command = AsyncCommand::new(program);
     for (key, _) in std::env::vars_os() {
         let is_repository_git_env = key.to_str().is_some_and(|key| {
             let normalized = if cfg!(windows) {
@@ -84,6 +136,7 @@ impl ClonedRepo {
 }
 
 /// Git repository cloner with security measures
+#[derive(Clone)]
 pub struct GitCloner {
     /// Optional authentication token for private repositories
     auth_token: Option<String>,
@@ -292,23 +345,51 @@ impl GitCloner {
 
     /// Execute git clone command with security measures and timeout.
     fn execute_clone(&self, url: &str, path: &Path, git_ref: &str) -> Result<(), RemoteError> {
-        // Create askpass script for secure token handling
+        let cloner = GitCloner {
+            auth_token: self.auth_token.clone(),
+            timeout_secs: self.timeout_secs,
+            max_size_mb: self.max_size_mb,
+        };
+        let url = url.to_string();
+        let path = path.to_path_buf();
+        let git_ref = git_ref.to_string();
+        let thread_url = url.clone();
+        std::thread::Builder::new()
+            .name("cc-audit-git-clone".to_string())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|error| RemoteError::CloneFailed {
+                        url: thread_url.clone(),
+                        message: format!("Failed to create clone runtime: {error}"),
+                    })?;
+                runtime.block_on(cloner.execute_clone_async(&thread_url, &path, &git_ref))
+            })
+            .map_err(|error| RemoteError::CloneFailed {
+                url: url.to_string(),
+                message: format!("Failed to start clone runtime: {error}"),
+            })?
+            .join()
+            .map_err(|_| RemoteError::CloneFailed {
+                url,
+                message: "Clone runtime thread panicked".to_string(),
+            })?
+    }
+
+    async fn execute_clone_async(
+        &self,
+        url: &str,
+        path: &Path,
+        git_ref: &str,
+    ) -> Result<(), RemoteError> {
         let askpass_script = self.create_askpass_script()?;
-
-        // Build the git clone command with security measures
-        let mut cmd = command_without_repository_git_env("git");
-
-        // Disable hooks for security
+        let mut cmd = async_command_without_repository_git_env("git");
         cmd.env("GIT_TEMPLATE_DIR", "");
-
-        // Set up authentication via GIT_ASKPASS if we have a token
         if let Some(ref script) = askpass_script {
             cmd.env("GIT_ASKPASS", script.path());
-            // Disable terminal prompts to force use of ASKPASS
             cmd.env("GIT_TERMINAL_PROMPT", "0");
         }
-
-        // Clone with shallow depth
         cmd.args([
             "clone",
             "--depth",
@@ -320,24 +401,16 @@ impl GitCloner {
             "-c",
             "advice.detachedHead=false",
         ]);
-
-        // Add branch/ref if not HEAD
         if git_ref != "HEAD" && !git_ref.is_empty() {
             cmd.args(["--branch", git_ref]);
         }
+        cmd.arg(url).arg(path);
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-        cmd.arg(url);
-        cmd.arg(path);
-
-        // Execute with timeout using a child process
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| RemoteError::CloneFailed {
+        let mut child = cmd.spawn().map_err(|error| RemoteError::CloneFailed {
             url: url.to_string(),
-            message: self.sanitize_error_message(&e.to_string()),
+            message: self.sanitize_error_message(&error.to_string()),
         })?;
-
         let stdout = child
             .stdout
             .take()
@@ -352,97 +425,151 @@ impl GitCloner {
                 url: url.to_string(),
                 message: "Failed to capture git stderr".to_string(),
             })?;
-        let stdout_reader =
-            std::thread::spawn(move || read_git_output(std::io::BufReader::new(stdout)));
-        let stderr_reader =
-            std::thread::spawn(move || read_git_output(std::io::BufReader::new(stderr)));
+        let stdout_reader = tokio::spawn(read_git_output_async(stdout));
+        let stderr_reader = tokio::spawn(read_git_output_async(stderr));
 
-        let collect_output = || -> Result<(Vec<u8>, Vec<u8>), RemoteError> {
-            let stdout = stdout_reader.join().map_err(|_| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to collect git stdout".to_string(),
-            })?;
-            let stderr = stderr_reader.join().map_err(|_| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: "Failed to collect git stderr".to_string(),
-            })?;
-            let stdout = stdout.map_err(|e| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: self.sanitize_error_message(&e.to_string()),
-            })?;
-            let stderr = stderr.map_err(|e| RemoteError::CloneFailed {
-                url: url.to_string(),
-                message: self.sanitize_error_message(&e.to_string()),
-            })?;
-            Ok((stdout, stderr))
-        };
+        self.wait_for_clone(&mut child, url, path, git_ref, stdout_reader, stderr_reader)
+            .await
+    }
 
-        // Wait with timeout
+    async fn wait_for_clone(
+        &self,
+        child: &mut Child,
+        url: &str,
+        path: &Path,
+        _git_ref: &str,
+        stdout_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+        stderr_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+    ) -> Result<(), RemoteError> {
         let timeout = Duration::from_secs(self.timeout_secs);
-        let start = std::time::Instant::now();
-
-        loop {
-            if let Err(error) = self.check_repository_size(url, path) {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = collect_output();
-                return Err(error);
-            }
-
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    // Process finished
-                    let (_, stderr) = collect_output()?;
-
-                    if !status.success() {
-                        let stderr = String::from_utf8_lossy(&stderr);
-                        let sanitized_stderr = self.sanitize_error_message(&stderr);
-
-                        // Check for common error patterns
-                        if stderr.contains("Repository not found") || stderr.contains("404") {
-                            return Err(RemoteError::NotFound(url.to_string()));
-                        }
-
-                        if stderr.contains("Authentication failed")
-                            || stderr.contains("could not read Username")
-                        {
-                            return Err(RemoteError::AuthRequired(url.to_string()));
-                        }
-
-                        return Err(RemoteError::CloneFailed {
+        let wait_result = tokio::time::timeout(timeout, async {
+            loop {
+                tokio::select! {
+                    status = child.wait() => {
+                        break status.map_err(|error| RemoteError::CloneFailed {
                             url: url.to_string(),
-                            message: sanitized_stderr,
+                            message: self.sanitize_error_message(&error.to_string()),
                         });
                     }
-
-                    self.check_repository_size(url, path)?;
-                    return Ok(());
-                }
-                Ok(None) => {
-                    // Process still running, check timeout
-                    if start.elapsed() > timeout {
-                        // Kill the process
-                        let _ = child.kill();
-                        let _ = child.wait();
-                        let _ = collect_output();
-                        return Err(RemoteError::CloneFailed {
-                            url: url.to_string(),
-                            message: format!("Clone timed out after {} seconds", self.timeout_secs),
-                        });
+                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                        self.check_repository_size(url, path)?;
                     }
-                    // Sleep briefly before checking again
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-                Err(e) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    let _ = collect_output();
-                    return Err(RemoteError::CloneFailed {
-                        url: url.to_string(),
-                        message: self.sanitize_error_message(&e.to_string()),
-                    });
                 }
             }
+        })
+        .await;
+        match wait_result {
+            Ok(Ok(status)) => {
+                let (_, stderr) = self
+                    .collect_git_output(url, stdout_reader, stderr_reader)
+                    .await?;
+                if !status.success() {
+                    return self.classify_clone_failure(url, &stderr);
+                }
+                self.check_repository_size(url, path)?;
+                Ok(())
+            }
+            Ok(Err(error)) => {
+                let cleanup = terminate_child(child).await;
+                let output = self
+                    .collect_git_output(url, stdout_reader, stderr_reader)
+                    .await;
+                Err(self.cleanup_error(
+                    url,
+                    self.sanitize_error_message(&error.to_string()),
+                    cleanup,
+                    output,
+                ))
+            }
+            Err(_) => {
+                let cleanup = terminate_child(child).await;
+                let output = self
+                    .collect_git_output(url, stdout_reader, stderr_reader)
+                    .await;
+                let message = format!("Clone timed out after {} seconds", self.timeout_secs);
+                Err(self.cleanup_error(url, message, cleanup, output))
+            }
+        }
+    }
+
+    async fn collect_git_output(
+        &self,
+        url: &str,
+        mut stdout_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+        mut stderr_reader: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
+    ) -> Result<(Vec<u8>, Vec<u8>), RemoteError> {
+        let result = tokio::time::timeout(GIT_OUTPUT_COLLECTION_TIMEOUT, async {
+            let stdout = (&mut stdout_reader)
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+            let stderr = (&mut stderr_reader)
+                .await
+                .map_err(|error| error.to_string())?
+                .map_err(|error| error.to_string())?;
+            Ok::<_, String>((stdout, stderr))
+        })
+        .await;
+        match result {
+            Ok(Ok(output)) => Ok(output),
+            Ok(Err(error)) => {
+                stderr_reader.abort();
+                let _ = stderr_reader.await;
+                stdout_reader.abort();
+                let _ = stdout_reader.await;
+                Err(RemoteError::CloneFailed {
+                    url: url.to_string(),
+                    message: self
+                        .sanitize_error_message(&format!("Failed to collect git output: {error}")),
+                })
+            }
+            Err(_) => {
+                stderr_reader.abort();
+                let _ = stderr_reader.await;
+                stdout_reader.abort();
+                let _ = stdout_reader.await;
+                Err(RemoteError::CloneFailed {
+                    url: url.to_string(),
+                    message: format!(
+                        "Timed out collecting git output after {GIT_OUTPUT_COLLECTION_TIMEOUT:?}"
+                    ),
+                })
+            }
+        }
+    }
+
+    fn classify_clone_failure(&self, url: &str, stderr: &[u8]) -> Result<(), RemoteError> {
+        let stderr = String::from_utf8_lossy(stderr);
+        let sanitized_stderr = self.sanitize_error_message(&stderr);
+        if stderr.contains("Repository not found") || stderr.contains("404") {
+            return Err(RemoteError::NotFound(url.to_string()));
+        }
+        if stderr.contains("Authentication failed") || stderr.contains("could not read Username") {
+            return Err(RemoteError::AuthRequired(url.to_string()));
+        }
+        Err(RemoteError::CloneFailed {
+            url: url.to_string(),
+            message: sanitized_stderr,
+        })
+    }
+
+    fn cleanup_error<T>(
+        &self,
+        url: &str,
+        message: String,
+        cleanup: Result<(), String>,
+        output: Result<T, RemoteError>,
+    ) -> RemoteError {
+        let mut message = message;
+        if let Err(error) = cleanup {
+            message.push_str(&format!("; process cleanup failed: {error}"));
+        }
+        if let Err(error) = output {
+            message.push_str(&format!("; {error}"));
+        }
+        RemoteError::CloneFailed {
+            url: url.to_string(),
+            message: self.sanitize_error_message(&message),
         }
     }
 
@@ -760,12 +887,28 @@ mod tests {
             let clone_path =
                 PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_OUTPUT_CLONE_PATH").unwrap());
             let mode = std::env::var("CC_AUDIT_REMOTE_OUTPUT_MODE").unwrap();
-            let result = GitCloner::new().execute_clone(
-                &format!("file://{}", PathBuf::from(bare_repo).display()),
-                &clone_path,
-                "main",
-            );
-            if mode == "success" {
+            let cloner = if mode == "timeout" {
+                GitCloner::new().with_timeout(1)
+            } else if mode == "size" {
+                GitCloner::new().with_max_size(1)
+            } else {
+                GitCloner::new()
+            };
+            let clone = || {
+                cloner.execute_clone(
+                    &format!("file://{}", PathBuf::from(bare_repo).display()),
+                    &clone_path,
+                    "main",
+                )
+            };
+            let result = if mode == "runtime" {
+                tokio::runtime::Runtime::new()
+                    .unwrap()
+                    .block_on(async { clone() })
+            } else {
+                clone()
+            };
+            if mode == "success" || mode == "runtime" || mode == "fd-hold" {
                 result.unwrap();
                 assert!(clone_path.join(".git").is_dir());
             } else {
@@ -780,6 +923,10 @@ mod tests {
         let wrapper = tempfile::tempdir().unwrap();
         let success_clone = tempfile::tempdir().unwrap();
         let failure_clone = tempfile::tempdir().unwrap();
+        let runtime_clone = tempfile::tempdir().unwrap();
+        let fd_hold_clone = tempfile::tempdir().unwrap();
+        let timeout_clone = tempfile::tempdir().unwrap();
+        let size_clone = tempfile::tempdir().unwrap();
         let real_git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
             .map(|dir| dir.join("git"))
             .find(|path| path.is_file())
@@ -787,7 +934,7 @@ mod tests {
         let wrapper_path = wrapper.path().join("git");
         std::fs::write(
             &wrapper_path,
-            "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = clone ]; then\n  head -c 1048576 /dev/zero | tr '\\000' O\n  head -c 1048576 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
+            "#!/bin/sh\nset -eu\nif [ \"${1:-}\" = clone ]; then\n  head -c 2097152 /dev/zero | tr '\\000' O\n  head -c 2097152 /dev/zero | tr '\\000' E >&2\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = failure ]; then\n    echo simulated failure >&2\n    exit 17\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = fd-hold ]; then\n    (sleep 0.2) &\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = timeout ]; then\n    sleep 2\n  fi\n  if [ \"${CC_AUDIT_REMOTE_OUTPUT_MODE:-success}\" = size ]; then\n    clone_path=\"\"\n    for arg in \"$@\"; do clone_path=\"$arg\"; done\n    (\n      while [ ! -d \"$clone_path\" ]; do sleep 0.01; done\n      head -c 2097152 /dev/zero > \"$clone_path/.cc-audit-large\"\n    ) &\n  fi\nfi\nexec \"$CC_AUDIT_REAL_GIT\" \"$@\"\n",
         )
         .unwrap();
         use std::os::unix::fs::PermissionsExt;
@@ -855,8 +1002,14 @@ mod tests {
 
         run_child(success_clone.path(), "success");
         run_child(failure_clone.path(), "failure");
+        run_child(runtime_clone.path(), "runtime");
+        run_child(fd_hold_clone.path(), "fd-hold");
+        run_child(timeout_clone.path(), "timeout");
+        run_child(size_clone.path(), "size");
         assert!(success_clone.path().join(".git").is_dir());
         assert!(!failure_clone.path().join(".git").exists());
+        assert!(runtime_clone.path().join(".git").is_dir());
+        assert!(fd_hold_clone.path().join(".git").is_dir());
     }
 
     #[test]

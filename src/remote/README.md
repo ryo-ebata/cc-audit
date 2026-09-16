@@ -123,26 +123,26 @@ lookup failures are represented as `None`.
 
 ```bash
 # Scan remote repository
-cc-audit --remote https://github.com/user/repo
+cc-audit check --remote https://github.com/user/repo
 
 # With specific branch
-cc-audit --remote https://github.com/user/repo --git-ref feature-branch
+cc-audit check --remote https://github.com/user/repo --git-ref feature-branch
 
 # With authentication
-cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+cc-audit check --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
 
 # Parallel scanning
-cc-audit --remote-list repos.txt --parallel-clones 8
+cc-audit check --remote-list repos.txt --parallel-clones 8
 ```
 
 ## Batch Scanning
 
 ```bash
 # Scan list of repositories
-cc-audit --remote-list repositories.txt
+cc-audit check --remote-list repositories.txt
 
 # Scan awesome-claude-code repositories
-cc-audit --awesome-claude-code
+cc-audit check --awesome-claude-code
 ```
 
 ## Security Considerations

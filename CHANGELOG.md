@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.22](https://github.com/ryo-ebata/cc-audit/compare/v3.22.21...v3.22.22) (2026-09-16)
+
+
+### Bug Fixes
+
+* **scan:** apply text file config to auxiliary scans ([#445](https://github.com/ryo-ebata/cc-audit/issues/445)) ([27a1113](https://github.com/ryo-ebata/cc-audit/commit/27a111332ac18b5ceebbde418a1ec7f19ed7717e))
+
 ## [3.22.21](https://github.com/ryo-ebata/cc-audit/compare/v3.22.20...v3.22.21) (2026-09-16)
 
 

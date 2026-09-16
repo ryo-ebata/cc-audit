@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.26](https://github.com/ryo-ebata/cc-audit/compare/v3.22.25...v3.22.26) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ci:** fail Terraform aggregate checks closed ([#463](https://github.com/ryo-ebata/cc-audit/issues/463)) ([58b6960](https://github.com/ryo-ebata/cc-audit/commit/58b6960976620758e7f1e46dba3450e5a859a872))
+
 ## [3.22.25](https://github.com/ryo-ebata/cc-audit/compare/v3.22.24...v3.22.25) (2026-09-16)
 
 

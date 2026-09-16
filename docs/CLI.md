@@ -272,7 +272,7 @@ cc-audit proxy [OPTIONS] --target <IP:PORT>
 | Option | Description |
 |--------|-------------|
 | `--port <PORT>` | Proxy listen port (default: 8080) |
-| `--target <IP:PORT>` | Target MCP server address as numeric IPv4 (`127.0.0.1:9000`) or bracketed IPv6 (`[::1]:9000`) (required) |
+| `--target <IP:PORT>` | Target MCP server address as numeric IPv4 (`127.0.0.1:9000`) or bracketed IPv6 (`[::1]:9000`) (required). A numeric IPv4 address without a port defaults to `3000`; hostnames such as `localhost` are not supported. |
 | `--tls` | Enable TLS termination in proxy mode |
 | `--block` | Enable blocking mode (block messages with findings) |
 | `--log <FILE>` | Log file for proxy traffic (JSONL format) |

@@ -360,7 +360,7 @@ pub struct ProxyArgs {
     #[arg(long, default_value = "8080")]
     pub port: u16,
 
-    /// Target MCP server address (numeric IPv4:port or [IPv6]:port)
+    /// Target MCP server address (numeric IPv4:port or bracketed IPv6:port)
     #[arg(long, required = true, value_name = "IP:PORT")]
     pub target: String,
 
@@ -1052,6 +1052,23 @@ mod tests {
         } else {
             panic!("Expected Proxy command");
         }
+    }
+
+    #[test]
+    fn test_proxy_documented_targets_parse_as_socket_addresses() {
+        for target in ["127.0.0.1:9000", "[::1]:9000"] {
+            let _: std::net::SocketAddr = target.parse().unwrap();
+        }
+    }
+
+    #[test]
+    fn test_proxy_help_documents_socket_addr_format() {
+        let help = Cli::command()
+            .find_subcommand_mut("proxy")
+            .unwrap()
+            .render_help()
+            .to_string();
+        assert!(help.contains("IP:PORT"));
     }
 
     // ===== Test: global verbose flag =====

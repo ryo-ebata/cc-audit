@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.25](https://github.com/ryo-ebata/cc-audit/compare/v3.22.24...v3.22.25) (2026-09-16)
+
+
+### Bug Fixes
+
+* **ci:** require successful aggregate checks ([#461](https://github.com/ryo-ebata/cc-audit/issues/461)) ([e2ca078](https://github.com/ryo-ebata/cc-audit/commit/e2ca0789b831bb5303313fe87b8565147f0f09d5))
+
 ## [3.22.24](https://github.com/ryo-ebata/cc-audit/compare/v3.22.23...v3.22.24) (2026-09-16)
 
 

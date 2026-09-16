@@ -6,6 +6,38 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tempfile::{NamedTempFile, TempDir};
 
+const REPOSITORY_GIT_ENV: &[&str] = &[
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_DIR",
+    "GIT_GRAFT_FILE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+];
+
+fn command_without_repository_git_env(program: &str) -> Command {
+    let mut command = Command::new(program);
+    for (key, _) in std::env::vars_os() {
+        let is_repository_git_env = key.to_str().is_some_and(|key| {
+            REPOSITORY_GIT_ENV.contains(&key)
+                || key.starts_with("GIT_CONFIG_KEY_")
+                || key.starts_with("GIT_CONFIG_VALUE_")
+        });
+        if is_repository_git_env {
+            command.env_remove(key);
+        }
+    }
+    command
+}
+
 static TOKEN_URL_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"https://[^@\s]+@").expect("TOKEN_URL_PATTERN is a valid regex literal")
 });
@@ -248,7 +280,7 @@ impl GitCloner {
         let askpass_script = self.create_askpass_script()?;
 
         // Build the git clone command with security measures
-        let mut cmd = Command::new("git");
+        let mut cmd = command_without_repository_git_env("git");
 
         // Disable hooks for security
         cmd.env("GIT_TEMPLATE_DIR", "");
@@ -361,7 +393,7 @@ impl GitCloner {
 
     /// Get the commit SHA of HEAD
     fn get_commit_sha(&self, path: &Path) -> Result<String, RemoteError> {
-        let output = Command::new("git")
+        let output = command_without_repository_git_env("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(path)
             .output()
@@ -410,6 +442,22 @@ pub fn parse_github_url(url: &str) -> Option<(String, String)> {
 mod tests {
     use super::*;
 
+    fn run_git(args: &[&str], current_dir: &Path) -> std::process::Output {
+        command_without_repository_git_env("git")
+            .args(args)
+            .current_dir(current_dir)
+            .output()
+            .unwrap()
+    }
+
+    fn assert_git_success(output: &std::process::Output, operation: &str) {
+        assert!(
+            output.status.success(),
+            "{operation} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     #[test]
     fn test_parse_github_url_https() {
         let result = parse_github_url("https://github.com/owner/repo");
@@ -443,6 +491,102 @@ mod tests {
         let cloner = GitCloner::new();
         assert!(cloner.validate_url("http://github.com/owner/repo").is_err());
         assert!(cloner.validate_url("ftp://github.com/owner/repo").is_err());
+    }
+
+    #[test]
+    fn test_clone_isolates_repository_git_environment() {
+        if std::env::var_os("CC_AUDIT_REMOTE_CLONE_CHILD").is_some() {
+            let bare_repo = std::env::var_os("CC_AUDIT_REMOTE_BARE_REPO").unwrap();
+            let clone_path = PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_CLONE_PATH").unwrap());
+            let expected_sha = std::env::var("CC_AUDIT_REMOTE_EXPECTED_SHA").unwrap();
+
+            let cloner = GitCloner::new();
+            cloner
+                .execute_clone(
+                    &format!("file://{}", PathBuf::from(bare_repo).display()),
+                    &clone_path,
+                    "main",
+                )
+                .unwrap();
+            assert_eq!(cloner.get_commit_sha(&clone_path).unwrap(), expected_sha);
+            return;
+        }
+
+        let source = tempfile::tempdir().unwrap();
+        let bare = tempfile::tempdir().unwrap();
+        let clone = tempfile::tempdir().unwrap();
+
+        assert_git_success(&run_git(&["init", "--quiet"], source.path()), "source init");
+        std::fs::write(source.path().join("README.md"), "first commit\n").unwrap();
+        assert_git_success(&run_git(&["add", "README.md"], source.path()), "source add");
+        assert_git_success(
+            &run_git(
+                &[
+                    "-c",
+                    "user.name=cc-audit-test",
+                    "-c",
+                    "user.email=cc-audit-test@example.invalid",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "fixture",
+                ],
+                source.path(),
+            ),
+            "source commit",
+        );
+        let expected_sha =
+            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], source.path()).stdout)
+                .trim()
+                .to_string();
+        assert_git_success(
+            &run_git(&["init", "--bare", "--quiet"], bare.path()),
+            "bare init",
+        );
+        assert_git_success(
+            &run_git(
+                &["push", bare.path().to_str().unwrap(), "HEAD:main"],
+                source.path(),
+            ),
+            "source push",
+        );
+
+        let snapshot = |path: &Path| std::fs::read(path).ok();
+        let source_config = snapshot(&source.path().join(".git/config"));
+        let source_head = snapshot(&source.path().join(".git/HEAD"));
+        let source_index = snapshot(&source.path().join(".git/index"));
+        let test_binary = std::env::current_exe().unwrap();
+
+        let status = std::process::Command::new(test_binary)
+            .args([
+                "--exact",
+                "remote::clone::tests::test_clone_isolates_repository_git_environment",
+                "--nocapture",
+            ])
+            .env("CC_AUDIT_REMOTE_CLONE_CHILD", "1")
+            .env("CC_AUDIT_REMOTE_BARE_REPO", bare.path())
+            .env("CC_AUDIT_REMOTE_CLONE_PATH", clone.path())
+            .env("CC_AUDIT_REMOTE_EXPECTED_SHA", &expected_sha)
+            .env("GIT_DIR", source.path().join(".git"))
+            .env("GIT_WORK_TREE", clone.path())
+            .env("GIT_COMMON_DIR", source.path().join(".git"))
+            .env("GIT_CONFIG", source.path().join(".git/config"))
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.bare")
+            .env("GIT_CONFIG_VALUE_0", "true")
+            .env("GIT_INDEX_FILE", source.path().join(".git/index"))
+            .status()
+            .unwrap();
+        assert!(status.success(), "isolated clone child test failed");
+
+        assert_eq!(snapshot(&source.path().join(".git/config")), source_config);
+        assert_eq!(snapshot(&source.path().join(".git/HEAD")), source_head);
+        assert_eq!(snapshot(&source.path().join(".git/index")), source_index);
+        assert!(clone.path().join(".git").is_dir());
+        assert_eq!(
+            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], clone.path()).stdout).trim(),
+            expected_sha
+        );
     }
 
     #[test]

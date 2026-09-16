@@ -645,6 +645,59 @@ mod scan_types {
             .assert()
             .success()
             .stdout(predicate::str::contains("\"findings\": []"));
+
+        let compose = dir.path().join("compose.yaml");
+        fs::write(
+            &compose,
+            "services:\n  app:\n    image: registry.example.com:5000/acme/app:latest\n",
+        )
+        .unwrap();
+        let output = check_cmd()
+            .arg("--type")
+            .arg("docker")
+            .arg("--format")
+            .arg("json")
+            .arg(&compose)
+            .assert()
+            .failure()
+            .code(1)
+            .get_output()
+            .stdout
+            .clone();
+        let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert!(
+            report["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|finding| { finding["id"] == "DK-005" })
+        );
+
+        fs::write(
+            &compose,
+            "services:\n  app:\n    image: registry.example.com:5000/acme/app:1.2\n",
+        )
+        .unwrap();
+        let output = check_cmd()
+            .arg("--type")
+            .arg("docker")
+            .arg("--format")
+            .arg("json")
+            .arg(&compose)
+            .assert()
+            .failure()
+            .code(1)
+            .get_output()
+            .stdout
+            .clone();
+        let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert!(
+            !report["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|finding| finding["id"] == "DK-005")
+        );
     }
 
     #[test]

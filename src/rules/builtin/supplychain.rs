@@ -285,10 +285,14 @@ fn sc_007() -> Rule {
         confidence: Confidence::Tentative,
         patterns: vec![
             // docker pull without @sha256
-            Regex::new(r"(?m)^\s*(?:RUN\s+)?docker\s+pull\s+[^@\s]+(?:\s|$)")
+            Regex::new(r"docker\s+pull\s+[^@]+:[a-zA-Z0-9._-]+\s*$")
+                .expect("SC-007: invalid regex"),
+            Regex::new(r"(?m)^\s*(?:RUN\s+)?docker\s+pull\s+[a-zA-Z0-9][^@\s]*(?:\s|$)")
                 .expect("SC-007: invalid regex"),
             // podman pull without @sha256
-            Regex::new(r"(?m)^\s*(?:RUN\s+)?podman\s+pull\s+[^@\s]+(?:\s|$)")
+            Regex::new(r"podman\s+pull\s+[^@]+:[a-zA-Z0-9._-]+\s*$")
+                .expect("SC-007: invalid regex"),
+            Regex::new(r"(?m)^\s*(?:RUN\s+)?podman\s+pull\s+[a-zA-Z0-9][^@\s]*(?:\s|$)")
                 .expect("SC-007: invalid regex"),
             // kubernetes image without digest
             Regex::new(r"image:\s*[^@]+:[a-zA-Z0-9._-]+\s*$").expect("SC-007: invalid regex"),
@@ -447,11 +451,16 @@ mod tests {
         let detected = [
             "docker pull alpine",
             "RUN docker pull ghcr.io/acme/worker",
+            "podman pull alpine",
             "podman pull registry.example.com:5000/acme/worker:stable",
+            "sudo docker pull alpine:3.20",
+            "echo preparing; sudo docker pull alpine:3.20",
         ];
         let safe = [
             "docker pull alpine@sha256:0123456789abcdef",
             "podman pull localhost:5000/acme/worker",
+            "docker pull --help",
+            "podman pull -h",
             "Documentation: docker pull alpine",
         ];
 

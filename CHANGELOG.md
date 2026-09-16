@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.2](https://github.com/ryo-ebata/cc-audit/compare/v3.23.1...v3.23.2) (2026-09-16)
+
+
+### Bug Fixes
+
+* dispatch remote scan modes ([#530](https://github.com/ryo-ebata/cc-audit/issues/530)) ([8a74483](https://github.com/ryo-ebata/cc-audit/commit/8a744835081b6efe9939e617537ff4d86bc1c5bc))
+
 ## [3.23.1](https://github.com/ryo-ebata/cc-audit/compare/v3.23.0...v3.23.1) (2026-09-16)
 
 

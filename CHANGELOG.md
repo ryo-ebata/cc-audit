@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.37](https://github.com/ryo-ebata/cc-audit/compare/v3.22.36...v3.22.37) (2026-09-16)
+
+
+### Bug Fixes
+
+* detect destructive rm long options ([#512](https://github.com/ryo-ebata/cc-audit/issues/512)) ([941a3e8](https://github.com/ryo-ebata/cc-audit/commit/941a3e8b61f3e0142b8bc203ab56308d1b25f584))
+
 ## [3.22.36](https://github.com/ryo-ebata/cc-audit/compare/v3.22.35...v3.22.36) (2026-09-16)
 
 

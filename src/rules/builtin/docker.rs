@@ -158,7 +158,7 @@ fn dk_005() -> Rule {
             // in the final component where a tag would be expected.
             Regex::new(r"(?m)^FROM\s+(?:[^/\s]+/)*[^:/@\s]+\s*$").expect("DK-005: invalid regex"),
             Regex::new(
-                r#"(?mi)^\s*(?:-\s*)?image:\s*(?:"[^"'#\r\n]+:latest"|'[^"'#\r\n]+:latest'|[^\s"'#]+:latest)(?:\s+#.*)?\s*$"#,
+                r#"(?m)^\s*(?:-\s*)?image:\s*(?:"[^"'#\r\n]+:latest"|'[^"'#\r\n]+:latest'|[^\s"'#]+:latest)(?:\s+#.*)?\s*$"#,
             )
             .expect("DK-005: invalid regex"),
         ],
@@ -422,9 +422,12 @@ RUN apt-get update
             ("  - image: registry.example.com:5000/acme/app:latest", true),
             ("image: \"registry.example.com:5000/acme/app:latest\"", true),
             ("image: 'registry.example.com:5000/acme/app:latest'", true),
+            ("image: acme/app:latest # pinned later", true),
             ("image: acme/app:1.2", false),
+            ("image: acme/app:LATEST", false),
             ("image: acme/app@sha256:0123456789abcdef", false),
             ("# image: acme/app:latest", false),
+            ("IMAGE: acme/app:latest", false),
             ("otherimage: acme/app:latest", false),
             ("image: \"acme/app:latest'", false),
             ("image: 'acme/app:latest\"", false),

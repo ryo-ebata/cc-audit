@@ -1034,7 +1034,7 @@ if [ "${1:-}" = clone ] && [ "$mode" != size-fd-hold ] && [ "$mode" != size-fd-r
     # success/failure cases; this case isolates size detection itself.
     mkdir -p "$clone_path/.git"
     head -c 2097152 /dev/zero > "$clone_path/.cc-audit-large"
-    sleep 1
+    exec sleep 1
     exit 0
   fi
 fi

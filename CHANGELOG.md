@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.22.33](https://github.com/ryo-ebata/cc-audit/compare/v3.22.32...v3.22.33) (2026-09-16)
+
+
+### Bug Fixes
+
+* **op004:** enforce word boundaries for fixture exclusions ([#497](https://github.com/ryo-ebata/cc-audit/issues/497)) ([69b1116](https://github.com/ryo-ebata/cc-audit/commit/69b11165f9949d483164281a7e914533dafc2c8d))
+
 ## [3.22.32](https://github.com/ryo-ebata/cc-audit/compare/v3.22.31...v3.22.32) (2026-09-16)
 
 

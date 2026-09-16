@@ -9,8 +9,12 @@ use tempfile::{NamedTempFile, TempDir};
 const REPOSITORY_GIT_ENV: &[&str] = &[
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_CONFIG",
+    "GIT_CONFIG_ENVIRONMENT",
+    "GIT_CONFIG_GLOBAL",
+    "GIT_CONFIG_NOSYSTEM",
     "GIT_CONFIG_PARAMETERS",
     "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_SYSTEM",
     "GIT_DIR",
     "GIT_GRAFT_FILE",
     "GIT_IMPLICIT_WORK_TREE",
@@ -626,9 +630,13 @@ mod tests {
             .env("GIT_WORK_TREE", clone.path())
             .env("GIT_COMMON_DIR", source.path().join(".git"))
             .env("GIT_CONFIG", source.path().join(".git/config"))
+            .env("GIT_CONFIG_ENVIRONMENT", source.path().join(".git/config"))
+            .env("GIT_CONFIG_GLOBAL", source.path().join(".git/config"))
+            .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_COUNT", "1")
             .env("GIT_CONFIG_KEY_0", "core.bare")
             .env("GIT_CONFIG_VALUE_0", "true")
+            .env("GIT_CONFIG_SYSTEM", source.path().join(".git/config"))
             .env("GIT_INDEX_FILE", source.path().join(".git/index"));
         if cfg!(windows) {
             child
@@ -636,9 +644,13 @@ mod tests {
                 .env("Git_Work_Tree", clone.path())
                 .env("Git_Common_Dir", source.path().join(".git"))
                 .env("Git_Config", source.path().join(".git/config"))
+                .env("Git_Config_Environment", source.path().join(".git/config"))
+                .env("Git_Config_Global", source.path().join(".git/config"))
+                .env("Git_Config_NoSystem", "1")
                 .env("Git_Config_Count", "1")
                 .env("Git_Config_Key_0", "core.bare")
                 .env("Git_Config_Value_0", "true")
+                .env("Git_Config_System", source.path().join(".git/config"))
                 .env("Git_Index_File", source.path().join(".git/index"));
         }
         let status = child.status().unwrap();

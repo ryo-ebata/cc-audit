@@ -124,6 +124,15 @@ fn read_remote_list<R: BufRead>(reader: R) -> Result<Vec<String>, (usize, std::i
     Ok(urls)
 }
 
+fn read_remote_list_then<R, T, F>(reader: R, on_success: F) -> Result<T, (usize, std::io::Error)>
+where
+    R: BufRead,
+    F: FnOnce(Vec<String>) -> T,
+{
+    let urls = read_remote_list(reader)?;
+    Ok(on_success(urls))
+}
+
 /// Handle --remote command: scan a single remote repository.
 pub fn handle_remote_scan(args: &CheckArgs) -> ExitCode {
     let url = match &args.remote {
@@ -189,7 +198,7 @@ pub fn handle_remote_list_scan(args: &CheckArgs) -> ExitCode {
     };
 
     let reader = BufReader::new(file);
-    let urls = match read_remote_list(reader) {
+    let urls = match read_remote_list_then(reader, |urls| urls) {
         Ok(urls) => urls,
         Err((line, error)) => {
             eprintln!(
@@ -460,21 +469,37 @@ mod tests {
     #[test]
     fn read_remote_list_rejects_invalid_utf8_at_beginning_without_partial_urls() {
         let input = b"\xffhttps://user:secret@example.com/repo\nhttps://example.com/later\n";
-        let error = read_remote_list(BufReader::new(Cursor::new(input))).unwrap_err();
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(Cursor::new(input)), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
 
         assert_eq!(error.0, 1);
         assert!(error.1.to_string().contains("valid UTF-8"));
         assert!(!error.1.to_string().contains("secret"));
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
     }
 
     #[test]
     fn read_remote_list_rejects_invalid_utf8_after_valid_url_without_partial_urls() {
         let input = b"https://example.com/first\n\xffhttps://user:secret@example.com/repo\nhttps://example.com/later\n";
-        let error = read_remote_list(BufReader::new(Cursor::new(input))).unwrap_err();
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(Cursor::new(input)), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
 
         assert_eq!(error.0, 2);
         assert!(error.1.to_string().contains("valid UTF-8"));
         assert!(!error.1.to_string().contains("secret"));
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
     }
 
     #[test]
@@ -482,7 +507,14 @@ mod tests {
         let reader = FailingReader {
             first_chunk: Some(b"https://example.com/first\n".to_vec()),
         };
-        let error = read_remote_list(BufReader::new(reader)).unwrap_err();
+        let clone_calls = Arc::new(AtomicUsize::new(0));
+        let error = read_remote_list_then(BufReader::new(reader), {
+            let clone_calls = Arc::clone(&clone_calls);
+            move |_| {
+                clone_calls.fetch_add(1, Ordering::Relaxed);
+            }
+        })
+        .unwrap_err();
 
         assert_eq!(error.0, 2);
         assert!(
@@ -491,6 +523,7 @@ mod tests {
                 .to_string()
                 .contains("injected URL list read failure")
         );
+        assert_eq!(clone_calls.load(Ordering::Relaxed), 0);
     }
 
     #[test]

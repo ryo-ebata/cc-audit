@@ -42,6 +42,13 @@ fn finding_counts(result: &crate::ScanResult) -> FindingCounts {
     }
 }
 
+fn scan_owned_repository<T, R, E, F>(repository: T, scan: F) -> Result<R, E>
+where
+    F: FnOnce(&T) -> Result<R, E>,
+{
+    scan(&repository)
+}
+
 fn run_bounded_batch<T, E, F>(items: &[String], limit: usize, operation: F) -> Vec<Result<T, E>>
 where
     T: Send,
@@ -97,8 +104,10 @@ fn scan_cloned_repository(
     let cloned = cloner
         .clone(url, git_ref)
         .map_err(|error| BatchFailure::Clone(error.to_string()))?;
-    let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], effective);
-    let result = run_scan_with_check_args(&scan_args).ok_or(BatchFailure::Scan)?;
+    let result = scan_owned_repository(cloned, |cloned| {
+        let scan_args = args.for_batch_scan(vec![cloned.path().to_path_buf()], effective);
+        run_scan_with_check_args(&scan_args).ok_or(BatchFailure::Scan)
+    })?;
     Ok(finding_counts(&result))
 }
 
@@ -386,7 +395,7 @@ pub fn handle_awesome_claude_code_scan(args: &CheckArgs) -> ExitCode {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
-    use std::time::Duration;
+    use std::sync::{Barrier, Mutex, mpsc};
 
     struct MockClone {
         dropped: Arc<AtomicUsize>,
@@ -404,52 +413,72 @@ mod tests {
         let active = Arc::new(AtomicUsize::new(0));
         let maximum = Arc::new(AtomicUsize::new(0));
         let dropped = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Barrier::new(3));
+        let start_count = Arc::new(AtomicUsize::new(0));
+        let (repo_2_done_tx, repo_2_done_rx) = mpsc::channel();
+        let (repo_1_done_tx, repo_1_done_rx) = mpsc::channel();
+        let repo_2_done_rx = Arc::new(Mutex::new(repo_2_done_rx));
+        let repo_1_done_rx = Arc::new(Mutex::new(repo_1_done_rx));
         let results = run_bounded_batch(&urls, 3, {
             let active = Arc::clone(&active);
             let maximum = Arc::clone(&maximum);
             let dropped = Arc::clone(&dropped);
-            move |_| {
+            let started = Arc::clone(&started);
+            let start_count = Arc::clone(&start_count);
+            let repo_2_done_rx = Arc::clone(&repo_2_done_rx);
+            let repo_1_done_rx = Arc::clone(&repo_1_done_rx);
+            move |url| {
                 let clone = MockClone {
                     dropped: Arc::clone(&dropped),
                 };
                 let current = active.fetch_add(1, Ordering::Relaxed) + 1;
                 maximum.fetch_max(current, Ordering::Relaxed);
-                thread::sleep(Duration::from_millis(10));
+                if start_count.fetch_add(1, Ordering::Relaxed) < 3 {
+                    started.wait();
+                }
+                match url {
+                    "repo-2" => repo_2_done_tx.send(()).unwrap(),
+                    "repo-1" => {
+                        repo_2_done_rx.lock().unwrap().recv().unwrap();
+                        repo_1_done_tx.send(()).unwrap();
+                    }
+                    "repo-0" => repo_1_done_rx.lock().unwrap().recv().unwrap(),
+                    _ => {}
+                }
                 active.fetch_sub(1, Ordering::Relaxed);
-                drop(clone);
-                Ok::<_, ()>(())
+                scan_owned_repository(clone, |_| Ok::<_, ()>(url.to_owned()))
             }
         });
 
         assert_eq!(results.len(), urls.len());
-        assert!(maximum.load(Ordering::Relaxed) > 1);
-        assert!(maximum.load(Ordering::Relaxed) <= 3);
+        assert_eq!(maximum.load(Ordering::Relaxed), 3);
         assert_eq!(dropped.load(Ordering::Relaxed), urls.len());
+        assert_eq!(results[0].as_ref().unwrap(), "repo-0");
+        assert_eq!(results[1].as_ref().unwrap(), "repo-1");
+        assert_eq!(results[2].as_ref().unwrap(), "repo-2");
     }
 
     #[test]
     fn bounded_batch_handles_zero_limit_and_partial_failures() {
         let urls: Vec<String> = (0..4).map(|index| format!("repo-{index}")).collect();
-        let active = Arc::new(AtomicUsize::new(0));
-        let maximum = Arc::new(AtomicUsize::new(0));
+        let dropped = Arc::new(AtomicUsize::new(0));
         let results = run_bounded_batch(&urls, 0, {
-            let active = Arc::clone(&active);
-            let maximum = Arc::clone(&maximum);
+            let dropped = Arc::clone(&dropped);
             move |url| {
-                let current = active.fetch_add(1, Ordering::Relaxed) + 1;
-                maximum.fetch_max(current, Ordering::Relaxed);
-                thread::sleep(Duration::from_millis(2));
-                active.fetch_sub(1, Ordering::Relaxed);
+                let clone = MockClone {
+                    dropped: Arc::clone(&dropped),
+                };
                 if url == "repo-2" {
-                    Err::<(), _>("clone failed")
+                    scan_owned_repository(clone, |_| Err::<usize, _>("scan failed"))
                 } else {
-                    Ok(())
+                    scan_owned_repository(clone, |_| Ok::<_, &str>(url.len()))
                 }
             }
         });
 
         assert_eq!(results.len(), urls.len());
-        assert_eq!(maximum.load(Ordering::Relaxed), 1);
         assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert_eq!(results[0].as_ref().unwrap(), &6);
+        assert_eq!(dropped.load(Ordering::Relaxed), urls.len());
     }
 }

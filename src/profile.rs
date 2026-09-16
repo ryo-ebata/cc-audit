@@ -215,6 +215,19 @@ impl Profile {
     }
 
     fn get_profiles_dir() -> Result<PathBuf> {
+        // An explicit process-local override can select an alternate profile
+        // store for isolated CLI processes. The normal production path remains
+        // unchanged when this opt-in variable is absent.
+        if let Some(path) = std::env::var_os("CC_AUDIT_PROFILE_DIR") {
+            let path = PathBuf::from(path);
+            if path.as_os_str().is_empty() || !path.is_absolute() {
+                return Err(AuditError::FileNotFound(
+                    "CC_AUDIT_PROFILE_DIR must be a non-empty absolute path".to_string(),
+                ));
+            }
+            return Ok(path);
+        }
+
         let home = dirs::home_dir().ok_or_else(|| {
             AuditError::FileNotFound("Could not determine home directory".to_string())
         })?;

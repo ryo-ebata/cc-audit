@@ -34,12 +34,8 @@ jobs:
 
       - name: Find Terraform directories
         id: find
-        if: steps.filter.outputs.infra == 'true'
         run: |
-          # Find all directories containing .tf files
-          DIRS=$(find infra -name "*.tf" -type f -exec dirname {} \; | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "directories=$DIRS" >> $GITHUB_OUTPUT
-          echo "Found Terraform directories: $DIRS"
+          bash .github/scripts/check-aggregate-workflow-results.sh terraform-discover infra
 
       - name: Validate Terraform change outputs
         id: validate

@@ -40,8 +40,10 @@ run_case 1 semver pull_request success empty true success success
 run_case 1 semver pull_request failure false false success skipped
 run_case 1 semver pull_request success false empty success skipped
 
-run_case 0 terraform success false '[]' cancelled skipped failure
-run_case 1 terraform success true '[]' skipped skipped skipped skipped
+run_case 0 terraform success false '[]' skipped skipped skipped skipped
+run_case 1 terraform success false '[]' cancelled skipped skipped skipped
+run_case 0 terraform success true '[]' skipped skipped skipped skipped
+run_case 1 terraform success true '[]' skipped success skipped skipped
 run_case 0 terraform success true '["infra/a"]' success success success success
 run_case 1 terraform success true '["infra/a"]' success cancelled success success
 run_case 1 terraform success true '' success success success success
@@ -127,6 +129,21 @@ if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results
   echo "non-string Terraform directory must fail"
   exit 1
 fi
+
+fixture_dir="$(mktemp -d)"
+trap 'rm -f "$output_file"; rm -rf "$fixture_dir"' EXIT
+mkdir "$fixture_dir/empty"
+mkdir "$fixture_dir/with-tf"
+touch "$fixture_dir/with-tf/main.tf"
+reset_output
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-discover "$fixture_dir/empty"
+grep -Fq 'directories=[]' "$output_file"
+reset_output
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-discover "$fixture_dir/missing"
+grep -Fq 'directories=[]' "$output_file"
+reset_output
+GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-discover "$fixture_dir"
+grep -Fq "directories=[\"$fixture_dir/with-tf\"]" "$output_file"
 if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter invalid ""; then
   echo "invalid Terraform infra output must fail"
   exit 1

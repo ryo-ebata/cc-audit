@@ -41,13 +41,17 @@ run_case 1 semver pull_request failure false false success skipped
 run_case 1 semver pull_request success false empty success skipped
 
 run_case 0 terraform success false '[]' cancelled skipped failure
-run_case 0 terraform success true '[]' cancelled skipped failure
+run_case 1 terraform success true '[]' skipped skipped skipped skipped
 run_case 0 terraform success true '["infra/a"]' success success success success
 run_case 1 terraform success true '["infra/a"]' success cancelled success success
 run_case 1 terraform success true '' success success success success
 run_case 1 terraform success true '{}' success success success success
 run_case 1 terraform failure false '[]' success success success success
 run_case 1 terraform success false '["infra/a"]' success success success success
+run_case 1 terraform success false '' success success success success
+run_case 1 terraform success true ' ' success success success success
+run_case 1 terraform success true '[] []' success success success success
+run_case 1 terraform success true '[1]' success success success success
 
 run_case 0 unconditional success
 run_case 1 unconditional cancelled
@@ -84,27 +88,45 @@ grep -Fq 'needs.release-tag-resolution.result' .github/workflows/ci.yml
 
 output_file="$(mktemp)"
 trap 'rm -f "$output_file"' EXIT
+reset_output() { : > "$output_file"; }
+reset_output
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter true false
 grep -Fq 'rust=true' "$output_file"
+reset_output
 if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter "" false; then
   echo "empty filter output must fail"
   exit 1
 fi
+reset_output
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh filter empty true
 grep -Fq 'rust=false' "$output_file"
 
+reset_output
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter false ""
 grep -Fq 'infra=false' "$output_file"
 grep -Fq 'directories=[]' "$output_file"
+reset_output
 if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true ""; then
   echo "missing Terraform directories must fail"
   exit 1
 fi
+reset_output
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '[]'
 grep -Fq 'infra=true' "$output_file"
 grep -Fq 'directories=[]' "$output_file"
+reset_output
 GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '["infra/a"]'
 grep -Fq 'directories=["infra/a"]' "$output_file"
+reset_output
+if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '[] []'; then
+  echo "multiple Terraform JSON documents must fail"
+  exit 1
+fi
+reset_output
+if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter true '[1]'; then
+  echo "non-string Terraform directory must fail"
+  exit 1
+fi
 if GITHUB_OUTPUT="$output_file" .github/scripts/check-aggregate-workflow-results.sh terraform-filter invalid ""; then
   echo "invalid Terraform infra output must fail"
   exit 1

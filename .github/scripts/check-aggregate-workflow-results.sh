@@ -64,10 +64,10 @@ check_terraform() {
   shift 3
   [[ "$changes_result" == "success" ]] || return 1
   require_boolean "$infra_output" || return 1
-  jq -e 'type == "array" and all(.[]; type == "string")' <<<"$directories" >/dev/null || return 1
+  jq -e -s 'length == 1 and (.[0] | type == "array" and all(.[]; type == "string"))' <<<"$directories" >/dev/null || return 1
   [[ "$infra_output" == "false" && "$directories" == "[]" ]] && return 0
   [[ "$infra_output" == "true" ]] || return 1
-  [[ "$directories" != "[]" ]] || return 0
+  [[ "$directories" != "[]" ]] || return 1
   local child_result
   for child_result in "$@"; do
     [[ "$child_result" == "success" ]] || return 1
@@ -115,9 +115,9 @@ case "${1:-}" in
       echo "directories=[]" >> "$GITHUB_OUTPUT"
       exit 0
     fi
-    jq -e 'type == "array" and all(.[]; type == "string")' <<<"$directories" >/dev/null || exit 1
+    jq -e -s 'length == 1 and (.[0] | type == "array" and all(.[]; type == "string"))' <<<"$directories" >/dev/null || exit 1
     echo "infra=true" >> "$GITHUB_OUTPUT"
-    echo "directories=$(jq -c . <<<"$directories")" >> "$GITHUB_OUTPUT"
+    echo "directories=$(jq -c -s '.[0]' <<<"$directories")" >> "$GITHUB_OUTPUT"
     ;;
   *)
     echo "usage: $0 {ci|conditional|security|semver|terraform|unconditional|filter|terraform-filter} ..." >&2

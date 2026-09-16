@@ -6,7 +6,7 @@ use crate::{
     setup_watch_mode, watch_iteration,
 };
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use tracing::{debug, info, warn};
 
@@ -20,8 +20,10 @@ use super::{
 /// Prevents symlink attacks and path traversal issues.
 fn validate_output_path(path: &Path) -> Result<(), String> {
     // Check for path traversal attempts
-    let path_str = path.to_string_lossy();
-    if path_str.contains("..") {
+    if path
+        .components()
+        .any(|component| component == Component::ParentDir)
+    {
         return Err("Path contains parent directory reference (..)".to_string());
     }
 
@@ -478,6 +480,16 @@ mod tests {
     fn test_validate_output_path_valid() {
         let temp_dir = TempDir::new().unwrap();
         let output_path = temp_dir.path().join("output.json");
+
+        assert!(validate_output_path(&output_path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_output_path_allows_dotted_names() {
+        let temp_dir = TempDir::new().unwrap();
+        let dotted_dir = temp_dir.path().join("dir..name");
+        fs::create_dir(&dotted_dir).unwrap();
+        let output_path = dotted_dir.join("report..json");
 
         assert!(validate_output_path(&output_path).is_ok());
     }

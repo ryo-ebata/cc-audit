@@ -11,9 +11,10 @@ use std::process::ExitCode;
 use tracing::{debug, info, warn};
 
 use super::{
-    filter_against_baseline, handle_baseline, handle_check_drift, handle_compare, handle_fix,
-    handle_hook_mode, handle_pin, handle_pin_verify, handle_remote_list_scan, handle_report_fp,
-    handle_save_baseline, handle_save_profile, handle_sbom, handle_show_profile, require_config,
+    filter_against_baseline, handle_awesome_claude_code_scan, handle_baseline, handle_check_drift,
+    handle_compare, handle_fix, handle_hook_mode, handle_pin, handle_pin_verify,
+    handle_remote_list_scan, handle_remote_scan, handle_report_fp, handle_save_baseline,
+    handle_save_profile, handle_sbom, handle_show_profile, require_config,
 };
 
 /// Validate that a path is safe to write to.
@@ -79,8 +80,14 @@ fn validate_input_path(path: &Path) -> Result<(), String> {
 pub fn handle_check(args: &CheckArgs, verbose: bool) -> ExitCode {
     info!(paths = ?args.paths, "Starting check command");
 
+    if args.remote.is_some() {
+        return handle_remote_scan(args);
+    }
     if args.remote_list.is_some() {
         return handle_remote_list_scan(args);
+    }
+    if args.awesome_claude_code {
+        return handle_awesome_claude_code_scan(args);
     }
 
     // Determine project root for config lookup

@@ -40,6 +40,27 @@ fn remote_list_invalid_utf8_fails_before_starting_clone_batch() {
     assert!(!stdout.contains("Scanning:"));
 }
 
+#[test]
+fn remote_cli_dispatch_rejects_non_https_url_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    create_test_config(dir.path());
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(dir.path().join(".cc-audit.yaml"))
+        .arg("--remote")
+        .arg("http://example.invalid/repo")
+        .arg("--git-ref")
+        .arg("test-ref")
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Cloning repository"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("Collecting files to scan"));
+}
+
 fn cmd() -> assert_cmd::Command {
     cargo_bin_cmd!("cc-audit")
 }

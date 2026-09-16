@@ -403,6 +403,29 @@ mod output_formats {
     }
 
     #[test]
+    fn test_output_file_creation_allows_dotted_names() {
+        let dir = TempDir::new().unwrap();
+        create_config(dir.path());
+        let dotted_dir = dir.path().join("dir..name");
+        fs::create_dir(&dotted_dir).unwrap();
+        let output_path = dotted_dir.join("report..json");
+
+        let skill_md = dir.path().join("SKILL.md");
+        fs::write(&skill_md, "# Safe content\n").unwrap();
+
+        check_cmd()
+            .arg("--format")
+            .arg("json")
+            .arg("--output")
+            .arg(&output_path)
+            .arg(dir.path())
+            .assert()
+            .success();
+
+        assert!(output_path.exists());
+    }
+
+    #[test]
     fn test_markdown_and_sarif_output_file_creation() {
         for (format, extension) in [("markdown", "md"), ("sarif", "sarif")] {
             let dir = TempDir::new().unwrap();

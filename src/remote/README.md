@@ -41,27 +41,27 @@ pub const AWESOME_CLAUDE_CODE_URL: &str = "https://github.com/anthropics/awesome
 
 ### GitCloner
 
-```rust
-pub struct GitCloner {
-    auth_token: Option<AuthToken>,
-    timeout: Duration,
-}
+```text
+pub struct GitCloner; // Configuration fields are private.
 
 impl GitCloner {
     pub fn new() -> Self;
-    pub fn with_token(token: AuthToken) -> Self;
-    pub fn clone(&self, url: &str) -> Result<ClonedRepo, RemoteError>;
-    pub fn clone_with_ref(&self, url: &str, git_ref: &GitRef) -> Result<ClonedRepo, RemoteError>;
+    pub fn with_auth_token(self, token: Option<String>) -> Self;
+    pub fn with_timeout(self, secs: u64) -> Self;
+    pub fn with_max_size(self, mb: u64) -> Self;
+    pub fn clone(&self, url: &str, git_ref: &str) -> Result<ClonedRepo, RemoteError>;
 }
 ```
 
 ### ClonedRepo
 
-```rust
-pub struct ClonedRepo {
-    path: PathBuf,
-    temp_dir: TempDir,  // Auto-cleanup on drop
-}
+```text
+pub struct ClonedRepo; // Public fields are shown below; cleanup state is private.
+
+pub path: PathBuf;
+pub url: String;
+pub git_ref: String;
+pub commit_sha: Option<String>;
 
 impl ClonedRepo {
     pub fn path(&self) -> &Path;
@@ -70,69 +70,79 @@ impl ClonedRepo {
 
 ### RemoteError
 
-```rust
+```text
 pub enum RemoteError {
     CloneFailed { url: String, message: String },
-    Timeout { url: String },
-    AuthenticationFailed { url: String },
-    RateLimited { url: String, retry_after: Option<Duration> },
     InvalidUrl(String),
-    IoError(std::io::Error),
+    NotFound(String),
+    AuthRequired(String),
+    RateLimitExceeded { reset_at: String },
+    Network(std::io::Error),
+    Http { status: u16, message: String },
+    ParseError(String),
+    TempDir(String),
+    GitNotFound,
+    CloneTimeout { url: String, timeout_secs: u64 },
+    RepositoryTooLarge { url: String, size_mb: u64, limit_mb: u64 },
 }
 ```
 
 ### URL Parsing
 
-```rust
+```text
 pub fn parse_github_url(url: &str) -> Option<(String, String)>;
 // Returns (owner, repo) tuple
 ```
 
 ## Usage Example
 
-```rust
-use cc_audit::remote::{GitCloner, ClonedRepo, RemoteError};
+```rust,no_run
+use cc_audit::remote::{ClonedRepo, GitCloner, RemoteError};
 
+fn example() -> Result<(), RemoteError> {
 // Basic clone
 let cloner = GitCloner::new();
-let repo = cloner.clone("https://github.com/user/repo")?;
-let result = scan(repo.path());
+let repo: ClonedRepo = cloner.clone("https://github.com/user/repo", "HEAD")?;
+let _path = repo.path();
 
 // With authentication
-let cloner = GitCloner::with_token(AuthToken::new("ghp_xxx"));
-let repo = cloner.clone("https://github.com/org/private-repo")?;
+let cloner = GitCloner::new().with_auth_token(Some("ghp_xxx".to_string()));
+let repo = cloner.clone("https://github.com/org/private-repo", "HEAD")?;
 
 // Clone specific ref
-let repo = cloner.clone_with_ref(
-    "https://github.com/user/repo",
-    &GitRef::tag("v1.0.0")
-)?;
+let repo = cloner.clone("https://github.com/user/repo", "v1.0.0")?;
+Ok(())
+}
 ```
+
+`ClonedRepo::commit_sha` contains the checked-out commit SHA when the follow-up
+lookup succeeds. A successful clone does not guarantee that lookup succeeds;
+lookup failures are represented as `None`.
 
 ## CLI Usage
 
 ```bash
 # Scan remote repository
-cc-audit --remote https://github.com/user/repo
+cc-audit check --remote https://github.com/user/repo
 
 # With specific branch
-cc-audit --remote https://github.com/user/repo --git-ref feature-branch
+cc-audit check --remote https://github.com/user/repo --git-ref feature-branch
 
 # With authentication
-cc-audit --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
+cc-audit check --remote https://github.com/org/private-repo --remote-auth $GITHUB_TOKEN
 
 # Parallel scanning
-cc-audit --remote-list repos.txt --parallel-clones 8
+cc-audit check --remote-list repos.txt --parallel-clones 8
 ```
 
 ## Batch Scanning
 
 ```bash
 # Scan list of repositories
-cc-audit --remote-list repositories.txt
+cc-audit check --remote-list repositories.txt
 
 # Scan awesome-claude-code repositories
-cc-audit --awesome-claude-code
+cc-audit check --awesome-claude-code
 ```
 
 ## Security Considerations

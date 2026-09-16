@@ -177,7 +177,11 @@ mod tests {
         let target = TempDir::new().unwrap();
         init_test_git_repo(parent.path());
 
-        let snapshot = |path: &Path| fs::read(path).ok();
+        let snapshot = |path: &Path| match fs::read(path) {
+            Ok(contents) => Some(contents),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to snapshot {}: {error}", path.display()),
+        };
         let config = snapshot(&parent.path().join(".git/config"));
         let head = snapshot(&parent.path().join(".git/HEAD"));
         let index = snapshot(&parent.path().join(".git/index"));
@@ -207,10 +211,6 @@ mod tests {
         assert_eq!(snapshot(&parent.path().join(".git/HEAD")), head);
         assert_eq!(snapshot(&parent.path().join(".git/index")), index);
         assert!(target.path().join(".git").is_dir());
-        assert_eq!(
-            target.path().canonicalize().unwrap(),
-            target.path().join(".").canonicalize().unwrap()
-        );
     }
 
     #[test]

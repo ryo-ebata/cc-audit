@@ -41,7 +41,7 @@ cc-audit check [OPTIONS] <PATHS>...
 
 | Argument | Description |
 |----------|-------------|
-| `<PATHS>...` | Paths to scan (files or directories). Required unless using `--remote`, `--remote-list`, `--awesome-claude-code`, `--all-clients`, or `--client` |
+| `<PATHS>...` | Paths to scan (files or directories). Required unless using `--remote`, `--remote-list`, `--awesome-claude-code`, `--all-clients`, `--client`, or `--compare` |
 
 ### Output Options
 
@@ -264,7 +264,7 @@ For complete MCP integration guide, see [MCP Integration Documentation](./MCP.md
 Run as MCP proxy for runtime monitoring.
 
 ```
-cc-audit proxy [OPTIONS] --target <HOST:PORT>
+cc-audit proxy [OPTIONS] --target <IP:PORT>
 ```
 
 ### Options
@@ -272,7 +272,7 @@ cc-audit proxy [OPTIONS] --target <HOST:PORT>
 | Option | Description |
 |--------|-------------|
 | `--port <PORT>` | Proxy listen port (default: 8080) |
-| `--target <HOST:PORT>` | Target MCP server address (required) |
+| `--target <IP:PORT>` | Target MCP server address as numeric IPv4 (`127.0.0.1:9000`) or bracketed IPv6 (`[::1]:9000`) (required). A numeric IPv4 address without a port defaults to `3000`; hostnames such as `localhost` are not supported. |
 | `--tls` | Enable TLS termination in proxy mode |
 | `--block` | Enable blocking mode (block messages with findings) |
 | `--log <FILE>` | Log file for proxy traffic (JSONL format) |
@@ -425,6 +425,6 @@ cc-audit hook remove
 cc-audit serve
 
 # Run as proxy for runtime monitoring
-cc-audit proxy --target localhost:9000
-cc-audit proxy --target localhost:9000 --port 3000 --tls --block
+cc-audit proxy --target 127.0.0.1:9000
+cc-audit proxy --target 127.0.0.1:9000 --port 3000 --tls --block
 ```

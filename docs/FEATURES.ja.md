@@ -312,19 +312,19 @@ cc-audit check ./skill/ --sbom --sbom-npm --sbom-cargo
 
 ```bash
 # プロキシを起動
-cc-audit proxy --target localhost:9000
+cc-audit proxy --target 127.0.0.1:9000
 
 # カスタムポート
-cc-audit proxy --target localhost:9000 --port 8080
+cc-audit proxy --target 127.0.0.1:9000 --port 8080
 
 # TLS終端付き
-cc-audit proxy --target localhost:9000 --port 8443 --tls
+cc-audit proxy --target 127.0.0.1:9000 --port 8443 --tls
 
 # ブロックモード（検出結果のあるメッセージを停止）
-cc-audit proxy --target localhost:9000 --block
+cc-audit proxy --target 127.0.0.1:9000 --block
 
 # 全トラフィックをログ
-cc-audit proxy --target localhost:9000 --log traffic.jsonl
+cc-audit proxy --target 127.0.0.1:9000 --log traffic.jsonl
 ```
 
 ---

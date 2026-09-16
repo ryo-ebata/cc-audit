@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.1](https://github.com/ryo-ebata/cc-audit/compare/v3.23.0...v3.23.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* reject remote list read errors ([#527](https://github.com/ryo-ebata/cc-audit/issues/527)) ([4171213](https://github.com/ryo-ebata/cc-audit/commit/4171213a6d474a6799faf7877ea099b91209a26d))
+
 ## [3.23.0](https://github.com/ryo-ebata/cc-audit/compare/v3.22.38...v3.23.0) (2026-09-16)
 
 

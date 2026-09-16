@@ -74,7 +74,7 @@ cc-audit check [OPTIONS] <PATHS>...
 
 | Option | Description |
 |--------|-------------|
-| `-c, --config <FILE>` | Path to configuration file |
+| `-c, --config <FILE>` | Path to configuration file (`.yaml`, `.yml`, `.json`, or `.toml`) |
 
 ### Fix Options
 

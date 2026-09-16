@@ -165,11 +165,11 @@ impl Config {
     /// [`Config::try_load`] when the error must be handled programmatically.
     ///
     /// Search order:
-    /// 1. `.cc-audit.yaml` in project root
-    /// 2. `.cc-audit.json` in project root
-    /// 3. `.cc-audit.toml` in project root
-    /// 4. `~/.config/cc-audit/config.yaml`
-    /// 5. Default configuration
+    /// 1. Starting at the project root and walking through its ancestors, check
+    ///    `.cc-audit.yaml`, `.cc-audit.yml`, `.cc-audit.json`, then `.cc-audit.toml`
+    ///    in each directory.
+    /// 2. `~/.config/cc-audit/config.yaml`
+    /// 3. Default configuration
     pub fn load(project_root: Option<&Path>) -> Self {
         let result = Self::try_load(project_root);
         if let Some(error) = &result.error {

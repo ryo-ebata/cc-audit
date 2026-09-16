@@ -19,6 +19,7 @@ fn remote_list_invalid_utf8_fails_before_starting_clone_batch() {
     .unwrap();
 
     let output = check_cmd()
+        .current_dir(dir.path())
         .arg("--config")
         .arg(dir.path().join(".cc-audit.yaml"))
         .arg("--remote-list")
@@ -33,7 +34,10 @@ fn remote_list_invalid_utf8_fails_before_starting_clone_batch() {
     assert!(stderr.contains(list_path.to_str().unwrap()));
     assert!(stderr.contains("line 1"));
     assert!(!stderr.contains("secret"));
-    assert!(!stdout.contains("Found 2 repositories to scan"));
+    assert!(!stdout.contains("secret"));
+    assert!(!stdout.contains("Found "));
+    assert!(!stdout.contains("Cloning:"));
+    assert!(!stdout.contains("Scanning:"));
 }
 
 fn cmd() -> assert_cmd::Command {

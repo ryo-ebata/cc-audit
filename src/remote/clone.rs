@@ -520,6 +520,7 @@ mod tests {
             let bare_repo = std::env::var_os("CC_AUDIT_REMOTE_BARE_REPO").unwrap();
             let clone_path = PathBuf::from(std::env::var_os("CC_AUDIT_REMOTE_CLONE_PATH").unwrap());
             let expected_sha = std::env::var("CC_AUDIT_REMOTE_EXPECTED_SHA").unwrap();
+            let config_mode = std::env::var("CC_AUDIT_REMOTE_CONFIG_MODE").unwrap();
 
             let cloner = GitCloner::new();
             cloner
@@ -530,12 +531,45 @@ mod tests {
                 )
                 .unwrap();
             assert_eq!(cloner.get_commit_sha(&clone_path).unwrap(), expected_sha);
+            let global = command_without_repository_git_env("git")
+                .args(["config", "--global", "--get", "cc-audit.test-global"])
+                .current_dir(&clone_path)
+                .output()
+                .unwrap();
+            assert_git_success(&global, "global config lookup");
+            assert_eq!(
+                String::from_utf8_lossy(&global.stdout).trim(),
+                "global-value"
+            );
+            let system = command_without_repository_git_env("git")
+                .args(["config", "--get", "cc-audit.test-system"])
+                .current_dir(&clone_path)
+                .output()
+                .unwrap();
+            if config_mode == "nosystem" {
+                assert!(
+                    !system.status.success(),
+                    "GIT_CONFIG_NOSYSTEM was not preserved"
+                );
+            } else {
+                assert_git_success(&system, "system config lookup");
+                assert_eq!(
+                    String::from_utf8_lossy(&system.stdout).trim(),
+                    "system-value"
+                );
+            }
             return;
         }
 
         let source = tempfile::tempdir().unwrap();
         let bare = tempfile::tempdir().unwrap();
         let clone = tempfile::tempdir().unwrap();
+        let clone_without_system = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        let global_config = config.path().join("global");
+        let system_config = config.path().join("system");
+        std::fs::write(&global_config, "[cc-audit]\n\ttest-global = global-value\n").unwrap();
+        std::fs::write(&system_config, "[cc-audit]\n\ttest-system = system-value\n").unwrap();
 
         assert_git_success(&run_git(&["init", "--quiet"], source.path()), "source init");
         std::fs::write(source.path().join("README.md"), "first commit\n").unwrap();
@@ -611,49 +645,59 @@ mod tests {
         let source_index = snapshot(&source.path().join(".git/index"));
         let test_binary = std::env::current_exe().unwrap();
 
-        let mut child = std::process::Command::new(test_binary);
-        child
-            .args([
-                "--exact",
-                "remote::clone::tests::test_clone_isolates_repository_git_environment",
-                "--nocapture",
-            ])
-            .env("CC_AUDIT_REMOTE_CLONE_CHILD", "1")
-            .env("CC_AUDIT_REMOTE_BARE_REPO", bare.path())
-            .env("CC_AUDIT_REMOTE_CLONE_PATH", clone.path())
-            .env("CC_AUDIT_REMOTE_EXPECTED_SHA", &expected_sha)
-            .env("GIT_DIR", source.path().join(".git"))
-            .env("GIT_WORK_TREE", clone.path())
-            .env("GIT_COMMON_DIR", source.path().join(".git"))
-            .env("GIT_CONFIG", source.path().join(".git/config"))
-            .env("GIT_CONFIG_COUNT", "1")
-            .env("GIT_CONFIG_KEY_0", "core.bare")
-            .env("GIT_CONFIG_VALUE_0", "true")
-            .env("GIT_CONFIG_GLOBAL", source.path().join(".git/config"))
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_SYSTEM", source.path().join(".git/config"))
-            .env("GIT_INDEX_FILE", source.path().join(".git/index"));
-        if cfg!(windows) {
+        let run_child = |clone_path: &Path, mode: &str, nosystem: bool| {
+            let mut child = std::process::Command::new(&test_binary);
             child
-                .env("Git_Dir", source.path().join(".git"))
-                .env("Git_Work_Tree", clone.path())
-                .env("Git_Common_Dir", source.path().join(".git"))
-                .env("Git_Config", source.path().join(".git/config"))
-                .env("Git_Config_Global", source.path().join(".git/config"))
-                .env("Git_Config_NoSystem", "1")
-                .env("Git_Config_Count", "1")
-                .env("Git_Config_Key_0", "core.bare")
-                .env("Git_Config_Value_0", "true")
-                .env("Git_Config_System", source.path().join(".git/config"))
-                .env("Git_Index_File", source.path().join(".git/index"));
-        }
-        let status = child.status().unwrap();
-        assert!(status.success(), "isolated clone child test failed");
+                .args([
+                    "--exact",
+                    "remote::clone::tests::test_clone_isolates_repository_git_environment",
+                    "--nocapture",
+                ])
+                .env("CC_AUDIT_REMOTE_CLONE_CHILD", "1")
+                .env("CC_AUDIT_REMOTE_CONFIG_MODE", mode)
+                .env("CC_AUDIT_REMOTE_BARE_REPO", bare.path())
+                .env("CC_AUDIT_REMOTE_CLONE_PATH", clone_path)
+                .env("CC_AUDIT_REMOTE_EXPECTED_SHA", &expected_sha)
+                .env("GIT_DIR", source.path().join(".git"))
+                .env("GIT_WORK_TREE", clone_path)
+                .env("GIT_COMMON_DIR", source.path().join(".git"))
+                .env("GIT_CONFIG", source.path().join(".git/config"))
+                .env("GIT_CONFIG_COUNT", "1")
+                .env("GIT_CONFIG_KEY_0", "core.bare")
+                .env("GIT_CONFIG_VALUE_0", "true")
+                .env("GIT_CONFIG_GLOBAL", &global_config)
+                .env("GIT_CONFIG_SYSTEM", &system_config)
+                .env("GIT_INDEX_FILE", source.path().join(".git/index"));
+            if nosystem {
+                child.env("GIT_CONFIG_NOSYSTEM", "1");
+            }
+            if cfg!(windows) {
+                child
+                    .env("Git_Dir", source.path().join(".git"))
+                    .env("Git_Work_Tree", clone_path)
+                    .env("Git_Common_Dir", source.path().join(".git"))
+                    .env("Git_Config", source.path().join(".git/config"))
+                    .env("Git_Config_Global", &global_config)
+                    .env("Git_Config_Count", "1")
+                    .env("Git_Config_Key_0", "core.bare")
+                    .env("Git_Config_Value_0", "true")
+                    .env("Git_Config_System", &system_config)
+                    .env("Git_Index_File", source.path().join(".git/index"));
+                if nosystem {
+                    child.env("Git_Config_NoSystem", "1");
+                }
+            }
+            let status = child.status().unwrap();
+            assert!(status.success(), "isolated clone child test failed");
+        };
+        run_child(clone.path(), "config", false);
+        run_child(clone_without_system.path(), "nosystem", true);
 
         assert_eq!(snapshot(&source.path().join(".git/config")), source_config);
         assert_eq!(snapshot(&source.path().join(".git/HEAD")), source_head);
         assert_eq!(snapshot(&source.path().join(".git/index")), source_index);
         assert!(clone.path().join(".git").is_dir());
+        assert!(clone_without_system.path().join(".git").is_dir());
         assert_eq!(
             git_stdout(&["rev-parse", "HEAD"], clone.path(), "clone rev-parse"),
             expected_sha

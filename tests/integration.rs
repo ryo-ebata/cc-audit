@@ -134,6 +134,47 @@ fn remote_cli_dispatch_propagates_ref_and_auth_without_network() {
     assert!(git_log.contains("--branch test-ref"));
     assert!(git_log.contains("AUTH_OK"));
     assert!(!git_log.contains("secret-token"));
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("secret-token"));
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("secret-token"));
+}
+
+#[cfg(unix)]
+#[test]
+fn remote_cli_dispatch_propagates_config_ref_and_auth_without_network() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config = dir.path().join(".cc-audit.yaml");
+    fs::write(
+        &config,
+        "scan:\n  git_ref: config-ref\n  remote_auth: config-token\n",
+    )
+    .unwrap();
+    let log = dir.path().join("git.log");
+    let fake_bin = create_fake_git(dir.path(), "# safe fixture\n");
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = check_cmd()
+        .current_dir(dir.path())
+        .arg("--config")
+        .arg(&config)
+        .arg("--remote")
+        .arg("https://example.com/repo")
+        .env("PATH", path)
+        .env("FAKE_GIT_LOG", &log)
+        .env("EXPECTED_AUTH_TOKEN", "config-token")
+        .env("HOME", dir.path())
+        .env("GIT_CONFIG_GLOBAL", dir.path().join("gitconfig"))
+        .timeout(std::time::Duration::from_secs(5))
+        .output()
+        .unwrap();
+    let git_log = fs::read_to_string(&log).unwrap();
+
+    assert!(output.status.success());
+    assert!(git_log.contains("--branch config-ref"));
+    assert!(git_log.contains("AUTH_OK"));
+    assert!(!git_log.contains("config-token"));
 }
 
 #[cfg(unix)]

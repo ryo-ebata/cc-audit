@@ -27,9 +27,14 @@ fn command_without_repository_git_env(program: &str) -> Command {
     let mut command = Command::new(program);
     for (key, _) in std::env::vars_os() {
         let is_repository_git_env = key.to_str().is_some_and(|key| {
-            REPOSITORY_GIT_ENV.contains(&key)
-                || key.starts_with("GIT_CONFIG_KEY_")
-                || key.starts_with("GIT_CONFIG_VALUE_")
+            let normalized = if cfg!(windows) {
+                key.to_ascii_uppercase()
+            } else {
+                key.to_string()
+            };
+            REPOSITORY_GIT_ENV.contains(&normalized.as_str())
+                || normalized.starts_with("GIT_CONFIG_KEY_")
+                || normalized.starts_with("GIT_CONFIG_VALUE_")
         });
         if is_repository_git_env {
             command.env_remove(key);
@@ -443,7 +448,12 @@ mod tests {
     use super::*;
 
     fn run_git(args: &[&str], current_dir: &Path) -> std::process::Output {
-        command_without_repository_git_env("git")
+        let mut command = Command::new("git");
+        command
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("GIT_CONFIG_NOSYSTEM", "1");
+        command
             .args(args)
             .current_dir(current_dir)
             .output()
@@ -551,7 +561,40 @@ mod tests {
             "source push",
         );
 
-        let snapshot = |path: &Path| std::fs::read(path).ok();
+        std::fs::write(source.path().join("second.md"), "second commit\n").unwrap();
+        assert_git_success(
+            &run_git(&["add", "second.md"], source.path()),
+            "source add second",
+        );
+        assert_git_success(
+            &run_git(
+                &[
+                    "-c",
+                    "user.name=cc-audit-test",
+                    "-c",
+                    "user.email=cc-audit-test@example.invalid",
+                    "-c",
+                    "commit.gpgSign=false",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    "second fixture",
+                ],
+                source.path(),
+            ),
+            "source commit second",
+        );
+        let source_current_sha =
+            String::from_utf8_lossy(&run_git(&["rev-parse", "HEAD"], source.path()).stdout)
+                .trim()
+                .to_string();
+        assert_ne!(source_current_sha, expected_sha);
+
+        let snapshot = |path: &Path| match std::fs::read(path) {
+            Ok(contents) => Some(contents),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("failed to snapshot {}: {error}", path.display()),
+        };
         let source_config = snapshot(&source.path().join(".git/config"));
         let source_head = snapshot(&source.path().join(".git/HEAD"));
         let source_index = snapshot(&source.path().join(".git/index"));

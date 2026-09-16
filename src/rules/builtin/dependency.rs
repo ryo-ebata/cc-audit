@@ -280,9 +280,11 @@ fn dep_010() -> Rule {
             // ^0.x.x allows breaking changes
             Regex::new(r#":\s*"\^0\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
             // >= without upper bound
-            Regex::new(r#":\s*">=\d+\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
+            Regex::new(r#":\s*">\s*=\s*(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}""#)
+                .expect("DEP-010: invalid regex"),
             // > without upper bound
-            Regex::new(r#":\s*">\d+\.\d+\.\d+""#).expect("DEP-010: invalid regex"),
+            Regex::new(r#":\s*">\s*(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}""#)
+                .expect("DEP-010: invalid regex"),
         ],
         exclusions: vec![],
         message: "Unpinned version range detected. May allow unexpected major version upgrades.",
@@ -340,6 +342,37 @@ mod tests {
             !dep_002.patterns[0].is_match(r#": "^1.2.3""#),
             "semver range should not match the git-shorthand pattern"
         );
+    }
+
+    #[test]
+    fn test_dep_010_detects_partial_lower_comparators() {
+        let rule = dep_010();
+        let detected = [
+            r#""dep": ">=1""#,
+            r#""dep": ">= 1.2""#,
+            r#""dep": "> 1.2.3""#,
+        ];
+        let safe = [
+            r#""dep": ">=1 <2.0.0""#,
+            r#""dep": "1.2.3""#,
+            r#""dep": "~1.2.3""#,
+            r#""dep": "^1.2.3""#,
+            r#""dep": ">=01""#,
+            r#""dep": ">=1.2.3.4""#,
+        ];
+
+        for input in detected {
+            assert!(
+                rule.patterns.iter().any(|p| p.is_match(input)),
+                "Should detect unbounded lower comparator: {input}"
+            );
+        }
+        for input in safe {
+            assert!(
+                !rule.patterns.iter().any(|p| p.is_match(input)),
+                "Should not detect bounded or invalid range: {input}"
+            );
+        }
     }
 
     #[test]

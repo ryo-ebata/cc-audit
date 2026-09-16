@@ -714,6 +714,40 @@ mod scan_types {
             .failure()
             .stdout(predicate::str::contains("DEP-002"));
     }
+
+    #[test]
+    fn test_scan_dependency_detects_partial_lower_comparator() {
+        let dir = TempDir::new().unwrap();
+        create_test_config(dir.path());
+        let package_json = dir.path().join("package.json");
+
+        fs::write(&package_json, r#"{"dependencies": {"example": ">= 1.2"}}"#).unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("dependency")
+            .arg("--format")
+            .arg("json")
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(1)
+            .stdout(predicate::str::contains("DEP-010"));
+
+        fs::write(
+            &package_json,
+            r#"{"dependencies": {"example": ">=1 <2.0.0"}}"#,
+        )
+        .unwrap();
+        check_cmd()
+            .arg("--type")
+            .arg("dependency")
+            .arg("--format")
+            .arg("json")
+            .arg(dir.path())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("\"findings\": []"));
+    }
 }
 
 mod malware_scan {

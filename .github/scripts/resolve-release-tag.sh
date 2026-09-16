@@ -9,10 +9,15 @@ repository_url=${2:?repository URL is required}
 git ls-remote --tags "$repository_url" |
   awk -v sha="$head_sha" '
     $1 == sha && $2 ~ /^refs\/tags\/v/ {
-      tag = $2
-      sub(/^refs\/tags\//, "", tag)
-      sub(/\^\{\}$/, "", tag)
-      print tag
-      exit
+      if (tag == "") {
+        tag = $2
+        sub(/^refs\/tags\//, "", tag)
+        sub(/\^\{\}$/, "", tag)
+      }
+    }
+    END {
+      if (tag != "") {
+        print tag
+      }
     }
   '

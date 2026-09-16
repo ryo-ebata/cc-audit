@@ -15,7 +15,7 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
+      rust: ${{ steps.validate.outputs.rust }}
       should_run: ${{ github.event_name == 'push' || steps.filter.outputs.rust == 'true' }}
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +29,13 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'CHANGELOG.md'
+      - name: Validate Rust filter output
+        id: validate
+        env:
+          RAW_RUST: ${{ steps.filter.outputs.rust }}
+          FILTER_SKIPPED: ${{ github.event_name == 'push' }}
+        run: |
+          bash .github/scripts/check-aggregate-workflow-results.sh filter "$RAW_RUST" "$FILTER_SKIPPED"
 
   semver-check:
     name: API Compatibility
@@ -97,13 +104,8 @@ jobs:
     steps:
       - name: Check results
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping semver checks"
-            exit 0
-          fi
-          if [[ "${{ needs.semver-check.result }}" == "failure" || \
-                "${{ needs.changelog-check.result }}" == "failure" ]]; then
-            echo "Semver check failed"
-            exit 1
-          fi
-          echo "Semver checks passed"
+          bash .github/scripts/check-aggregate-workflow-results.sh semver \
+            "${{ github.event_name }}" \
+            "${{ needs.changes.result }}" "${{ needs.changes.outputs.should_run }}" \
+            "${{ needs.changes.outputs.rust }}" \
+            "${{ needs.semver-check.result }}" "${{ needs.changelog-check.result }}"

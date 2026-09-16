@@ -22,7 +22,7 @@ jobs:
     name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
-      rust: ${{ steps.filter.outputs.rust }}
+      rust: ${{ steps.validate.outputs.rust }}
       should_run: ${{ github.event_name == 'schedule' || steps.filter.outputs.rust == 'true' }}
     steps:
       - uses: actions/checkout@v7
@@ -37,6 +37,13 @@ jobs:
               - 'Cargo.lock'
               - 'deny.toml'
               - 'supply-chain/**'
+      - name: Validate Rust filter output
+        id: validate
+        env:
+          RAW_RUST: ${{ steps.filter.outputs.rust }}
+          FILTER_SKIPPED: ${{ github.event_name == 'schedule' }}
+        run: |
+          bash .github/scripts/check-aggregate-workflow-results.sh filter "$RAW_RUST" "$FILTER_SKIPPED"
 
   audit:
     name: Security Audit
@@ -123,16 +130,9 @@ jobs:
     steps:
       - name: Check results
         run: |
-          if [[ "${{ needs.changes.outputs.should_run }}" != "true" ]]; then
-            echo "No relevant changes detected, skipping security checks"
-            exit 0
-          fi
-          if [[ "${{ needs.audit.result }}" == "failure" || \
-                "${{ needs.deny.result }}" == "failure" || \
-                "${{ needs.supply-chain.result }}" == "failure" || \
-                "${{ needs.advisory-db.result }}" == "failure" || \
-                "${{ needs.outdated.result }}" == "failure" ]]; then
-            echo "One or more security jobs failed"
-            exit 1
-          fi
-          echo "All security checks passed"
+          bash .github/scripts/check-aggregate-workflow-results.sh security \
+            "${{ github.event_name }}" \
+            "${{ needs.changes.result }}" "${{ needs.changes.outputs.should_run }}" \
+            "${{ needs.changes.outputs.rust }}" \
+            "${{ needs.audit.result }}" "${{ needs.deny.result }}" \
+            "${{ needs.supply-chain.result }}" "${{ needs.advisory-db.result }}" "${{ needs.outdated.result }}"

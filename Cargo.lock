@@ -2359,7 +2359,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "3.23.18"
+version = "3.23.19"
 dependencies = [
  "anyhow",
  "clap",

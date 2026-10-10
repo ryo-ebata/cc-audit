@@ -247,7 +247,7 @@ dependencies = [
 
 [[package]]
 name = "cc-audit"
-version = "3.23.27"
+version = "3.23.28"
 dependencies = [
  "assert_cmd",
  "base64",

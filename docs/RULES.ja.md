@@ -102,6 +102,7 @@ PI-001、PI-007、PI-008は、英語、日本語、簡体字中国語、スペ�
 | SC-001 | curlパイプシェル | Critical | `curl ... \| bash`を検出 |
 | SC-002 | wgetパイプシェル | Critical | `wget ... \| bash`を検出 |
 | SC-003 | 信頼できないパッケージソース | High | 危険なpip/npmソースを検出 |
+| SC-BYTECODE-001 | コンパイル済みPythonバイトコードの同梱 | High | スキル内の`.pyc`/`.pyo`を報告（`__pycache__/`など無視パス配下も対象） |
 
 ## シークレット漏洩 (SL)
 

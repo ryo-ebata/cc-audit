@@ -102,6 +102,7 @@ instruction verbs and targets together where practical to reduce benign matches.
 | SC-001 | curl pipe to shell | Critical | Detects `curl ... \| bash` |
 | SC-002 | wget pipe to shell | Critical | Detects `wget ... \| bash` |
 | SC-003 | Untrusted package source | High | Detects insecure pip/npm sources |
+| SC-BYTECODE-001 | Compiled Python bytecode shipped | High | Reports `.pyc`/`.pyo` files in skills, even under ignored paths such as `__pycache__/` |
 
 ## Secret Leak (SL)
 

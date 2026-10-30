@@ -6,7 +6,9 @@ pub use frontmatter::FrontmatterParser;
 
 use super::walker::{DirectoryWalker, WalkConfig};
 use crate::config::TextFilesConfig;
-use crate::engine::scanner::{Scanner, ScannerConfig};
+use crate::engine::scanner::{
+    Scanner, ScannerConfig, compiled_bytecode_finding, is_compiled_python_bytecode,
+};
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
@@ -97,6 +99,9 @@ impl Scanner for SkillScanner {
 
         if path.is_file() {
             trace!(path = %path.display(), "Scanning as file");
+            if is_compiled_python_bytecode(path) {
+                return Ok(vec![compiled_bytecode_finding(&path.display().to_string())]);
+            }
             let findings = self.scan_file(path)?;
             // Report progress for single file scan
             self.config.report_progress();
@@ -185,17 +190,28 @@ impl Scanner for SkillScanner {
         // Collect all files that might contain code. This single walk includes
         // scripts/; walking scripts/ separately would duplicate directory
         // traversal and canonicalization/probing work.
-        let mut walker = DirectoryWalker::new(walk_config);
-        // Apply ignore filter to match count_files_to_scan() behavior
-        if let Some(ignore_filter) = self.config.ignore_filter() {
-            walker = walker.with_ignore_filter(ignore_filter.clone());
-        }
+        // The ignore filter is applied per file below rather than by the walker
+        // so compiled bytecode is still reported under ignored paths such as
+        // the default `**/__pycache__/**` pattern (#611).
+        let walker = DirectoryWalker::new(walk_config);
         for path in walker.walk_single(dir) {
             if !Self::is_within_scan_depth(dir, &path, max_depth) {
                 continue;
             }
+            if is_compiled_python_bytecode(&path) {
+                debug!(path = %path.display(), "Compiled Python bytecode found");
+                findings.push(compiled_bytecode_finding(&path.display().to_string()));
+                continue;
+            }
+            // Apply ignore filter to match count_files_to_scan() behavior
+            if self
+                .config
+                .ignore_filter()
+                .is_some_and(|filter| filter.is_ignored(&path))
+            {
+                continue;
+            }
             // Only process text files (matching count_files_to_scan behavior)
-            // Note: ignore filter is already applied by DirectoryWalker
             if is_text_file_with_config(&path, self.config.text_files_config()) {
                 let canonical = path.canonicalize().unwrap_or(path.clone());
                 if !scanned_files.contains(&canonical) {
@@ -809,6 +825,91 @@ cat ~/.ssh/id_rsa
             findings.iter().any(|f| f.id == "PE-005"),
             "Should detect SSH access from CLAUDE.md"
         );
+    }
+
+    fn create_skill_with_bytecode() -> TempDir {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("SKILL.md"), "---\nname: test\n---\n# Test").unwrap();
+        fs::write(
+            dir.path().join("output.py"),
+            "def fmt(x):\n    return str(x)\n",
+        )
+        .unwrap();
+        let pycache = dir.path().join("__pycache__");
+        fs::create_dir(&pycache).unwrap();
+        // Header of an unchecked-hash .pyc followed by marshalled code bytes.
+        fs::write(
+            pycache.join("output.cpython-311.pyc"),
+            b"\xa7\x0d\x0d\x0a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xe3\x00",
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn test_compiled_bytecode_is_reported() {
+        // Regression for #611: a skill shipping a .pyc must not get a clean scan.
+        let dir = create_skill_with_bytecode();
+        let findings = SkillScanner::new().scan_path(dir.path()).unwrap();
+        let bytecode: Vec<_> = findings
+            .iter()
+            .filter(|f| f.id == "SC-BYTECODE-001")
+            .collect();
+        assert_eq!(bytecode.len(), 1, "the .pyc must be reported exactly once");
+        assert!(
+            bytecode[0]
+                .location
+                .file
+                .ends_with("output.cpython-311.pyc")
+        );
+        assert_eq!(bytecode[0].severity, crate::rules::Severity::High);
+    }
+
+    #[test]
+    fn test_compiled_bytecode_is_reported_under_ignored_pycache() {
+        // The `cc-audit init` template ignores `**/__pycache__/**`; that pattern
+        // must not hide executable bytecode, while still hiding text files.
+        let dir = create_skill_with_bytecode();
+        fs::write(
+            dir.path().join("__pycache__").join("notes.sh"),
+            "sudo rm -rf /\n",
+        )
+        .unwrap();
+        let config = crate::config::IgnoreConfig {
+            patterns: vec!["**/__pycache__/**".to_string()],
+        };
+        let scanner = SkillScanner::new()
+            .with_ignore_filter(crate::ignore::IgnoreFilter::from_config(&config));
+        let findings = scanner.scan_path(dir.path()).unwrap();
+        assert!(
+            findings.iter().any(|f| f.id == "SC-BYTECODE-001"),
+            "bytecode under an ignored __pycache__ must still be reported"
+        );
+        assert!(
+            !findings.iter().any(|f| f.id == "PE-001"),
+            "text files under an ignored path must stay ignored"
+        );
+    }
+
+    #[test]
+    fn test_compiled_bytecode_single_file_is_reported() {
+        let dir = create_skill_with_bytecode();
+        let pyc = dir
+            .path()
+            .join("__pycache__")
+            .join("output.cpython-311.pyc");
+        let findings = SkillScanner::new().scan_path(&pyc).unwrap();
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].id, "SC-BYTECODE-001");
+    }
+
+    #[test]
+    fn test_is_compiled_python_bytecode() {
+        assert!(is_compiled_python_bytecode(Path::new("a.pyc")));
+        assert!(is_compiled_python_bytecode(Path::new("a.PYC")));
+        assert!(is_compiled_python_bytecode(Path::new("a.pyo")));
+        assert!(!is_compiled_python_bytecode(Path::new("a.py")));
+        assert!(!is_compiled_python_bytecode(Path::new("pyc")));
     }
 
     #[test]

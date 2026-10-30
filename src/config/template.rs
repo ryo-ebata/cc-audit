@@ -263,7 +263,7 @@ ignore:
     - "**/temp/**"                # Temporary files
 
     # Python
-    - "**/__pycache__/**"         # Python bytecode cache
+    - "**/__pycache__/**"         # Python bytecode cache (.pyc files are still reported)
     - "**/.pytest_cache/**"       # pytest cache
     - "**/.mypy_cache/**"         # mypy type checker cache
     - "**/.ruff_cache/**"         # Ruff linter cache

@@ -101,6 +101,50 @@ pub fn oversize_file_finding(file: &str, size: u64, limit: u64) -> Finding {
     }
 }
 
+/// Returns true when `path` is compiled Python bytecode (`.pyc`/`.pyo`).
+pub fn is_compiled_python_bytecode(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pyc") || ext.eq_ignore_ascii_case("pyo"))
+}
+
+/// Builds a fail-loud finding for shipped compiled Python bytecode.
+///
+/// A `.pyc` compiled with PEP 552 `UNCHECKED_HASH` is loaded at import time
+/// without being checked against its `.py` source, so a skill can pair clean
+/// decoy sources with arbitrary code in `__pycache__/`. The text rules cannot
+/// see into marshalled bytecode, so silently skipping it would fake a clean
+/// scan (issue #611). The artifact itself is reported instead.
+pub fn compiled_bytecode_finding(file: &str) -> Finding {
+    Finding {
+        id: "SC-BYTECODE-001".to_string(),
+        severity: crate::rules::Severity::High,
+        category: crate::rules::Category::SupplyChain,
+        confidence: crate::rules::Confidence::Certain,
+        name: "Compiled Python bytecode shipped".to_string(),
+        location: crate::rules::Location {
+            file: file.to_string(),
+            line: 0,
+            column: None,
+        },
+        code: String::new(),
+        message: "Compiled Python bytecode cannot be analyzed and may differ from the \
+             shipped source. Python can load it at import time without checking it \
+             against the `.py` file (PEP 552 unchecked-hash), so it can execute \
+             arbitrary code that the source does not show."
+            .to_string(),
+        recommendation: "Delete the bytecode and distribute source only; Python \
+             regenerates `__pycache__` locally. Do not install a third-party skill \
+             that ships `.pyc` files you did not build yourself."
+            .to_string(),
+        fix_hint: None,
+        cwe_ids: vec!["CWE-506".to_string(), "CWE-345".to_string()],
+        rule_severity: None,
+        client: None,
+        context: None,
+    }
+}
+
 /// Builds a fail-loud diagnostic finding for a manifest (JSON/TOML/…) that
 /// could not be parsed.
 ///

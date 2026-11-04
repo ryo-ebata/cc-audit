@@ -16,6 +16,7 @@ use crate::rules::Finding;
 use crate::run::is_text_file_with_config;
 use rayon::prelude::*;
 use std::collections::HashSet;
+use std::io;
 use std::path::{Path, PathBuf};
 use tracing::debug;
 
@@ -32,6 +33,28 @@ fn has_known_executable_extension(path: &Path) -> bool {
                 "so" | "pyd" | "dylib" | "dll" | "node" | "wasm" | "class"
             )
         })
+}
+
+fn probe_executable_artifact(
+    path: &Path,
+    is_ignored: bool,
+    probe: io::Result<bool>,
+) -> Result<Option<Finding>> {
+    match probe {
+        Ok(true) => Ok(Some(executable_artifact_finding(
+            &path.display().to_string(),
+        ))),
+        Ok(false) => Ok(None),
+        Err(source) if !is_ignored || has_known_executable_extension(path) => {
+            Err(AuditError::ReadError {
+                path: path.display().to_string(),
+                source,
+            })
+        }
+        // Preserve explicit-ignore behavior for unknown files, while known
+        // executable extensions above remain fail-loud.
+        Err(_) => Ok(None),
+    }
 }
 
 impl_scanner_builder!(SkillScanner);
@@ -114,19 +137,10 @@ impl Scanner for SkillScanner {
             if is_compiled_python_bytecode(path) {
                 return Ok(vec![compiled_bytecode_finding(&path.display().to_string())]);
             }
-            match is_unanalyzable_executable(path) {
-                Ok(true) => {
-                    return Ok(vec![executable_artifact_finding(
-                        &path.display().to_string(),
-                    )]);
-                }
-                Ok(false) => {}
-                Err(source) => {
-                    return Err(AuditError::ReadError {
-                        path: path.display().to_string(),
-                        source,
-                    });
-                }
+            if let Some(finding) =
+                probe_executable_artifact(path, false, is_unanalyzable_executable(path))?
+            {
+                return Ok(vec![finding]);
             }
             let findings = self.scan_file(path)?;
             // Report progress for single file scan
@@ -235,22 +249,12 @@ impl Scanner for SkillScanner {
                 .ignore_filter()
                 .is_some_and(|filter| filter.is_ignored(&path));
 
-            match is_unanalyzable_executable(&path) {
-                Ok(true) => {
-                    debug!(path = %path.display(), "Unanalyzable executable artifact found");
-                    findings.push(executable_artifact_finding(&path.display().to_string()));
-                    continue;
-                }
-                Ok(false) => {}
-                Err(source) if !is_ignored || has_known_executable_extension(&path) => {
-                    return Err(AuditError::ReadError {
-                        path: path.display().to_string(),
-                        source,
-                    });
-                }
-                // Preserve explicit-ignore behavior for unknown files, while
-                // known executable extensions above remain fail-loud.
-                Err(_) => continue,
+            if let Some(finding) =
+                probe_executable_artifact(&path, is_ignored, is_unanalyzable_executable(&path))?
+            {
+                debug!(path = %path.display(), "Unanalyzable executable artifact found");
+                findings.push(finding);
+                continue;
             }
 
             if is_ignored {
@@ -967,6 +971,37 @@ cat ~/.ssh/id_rsa
                     .file
                     .ends_with("output.cpython-311-x86_64-linux-gnu.so")
         }));
+    }
+
+    #[test]
+    fn test_executable_probe_read_error_policy_is_fail_loud_by_context() {
+        let dir = TempDir::new().unwrap();
+        let unknown = dir.path().join("notes.txt");
+        let native = dir.path().join("module.so");
+        let error = || io::Error::new(io::ErrorKind::PermissionDenied, "mock read failure");
+
+        assert!(matches!(
+            probe_executable_artifact(&unknown, false, Err(error())),
+            Err(AuditError::ReadError { .. })
+        ));
+        assert!(matches!(
+            probe_executable_artifact(&native, true, Err(error())),
+            Err(AuditError::ReadError { .. })
+        ));
+        assert!(
+            probe_executable_artifact(&unknown, true, Err(error()))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_executable_probe_finding_is_preserved_for_ignored_artifact() {
+        let path = Path::new("site-packages/module.so");
+        let finding = probe_executable_artifact(path, true, Ok(true))
+            .unwrap()
+            .expect("executable artifacts bypass ordinary ignores");
+        assert_eq!(finding.id, "SC-BINARY-001");
     }
 
     #[test]

@@ -3,6 +3,7 @@ use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::parser::DockerfileParser;
 use crate::rules::Finding;
+use std::fs;
 use std::io;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -52,6 +53,37 @@ fn traversal_error(base: &Path, error: walkdir::Error) -> AuditError {
     }
 }
 
+impl DockerScanner {
+    fn scan_walk_entries<I>(
+        &self,
+        dir: &Path,
+        entries: I,
+        dockerfile_names: &[&str],
+        findings: &mut Vec<Finding>,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = std::result::Result<walkdir::DirEntry, walkdir::Error>>,
+    {
+        for entry in entries {
+            let entry = entry.map_err(|error| traversal_error(dir, error))?;
+            let path = entry.path();
+            if path.is_file() && Self::is_dockerfile(path) && !self.config.is_ignored(path) {
+                // Avoid scanning the same file twice
+                let is_common_name = dockerfile_names.iter().any(|n| {
+                    path.file_name()
+                        .and_then(|f| f.to_str())
+                        .is_some_and(|f| f == *n)
+                });
+
+                if !is_common_name || path.parent() != Some(dir) {
+                    findings.extend(self.scan_file(path)?);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Scanner for DockerScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
         let content = self.config.read_file(path)?;
@@ -77,28 +109,31 @@ impl Scanner for DockerScanner {
 
         for name in &dockerfile_names {
             let docker_file = dir.join(name);
-            if docker_file.exists() && !self.config.is_ignored(&docker_file) {
-                findings.extend(self.scan_file(&docker_file)?);
+            if self.config.is_ignored(&docker_file) {
+                continue;
+            }
+            match fs::metadata(&docker_file) {
+                Ok(metadata) if metadata.is_file() => {
+                    findings.extend(self.scan_file(&docker_file)?);
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(source) => {
+                    return Err(AuditError::ReadError {
+                        path: docker_file.display().to_string(),
+                        source,
+                    });
+                }
             }
         }
 
         // Scan for any .dockerfile files in the directory
-        for entry in WalkDir::new(dir).max_depth(3) {
-            let entry = entry.map_err(|error| traversal_error(dir, error))?;
-            let path = entry.path();
-            if path.is_file() && Self::is_dockerfile(path) && !self.config.is_ignored(path) {
-                // Avoid scanning the same file twice
-                let is_common_name = dockerfile_names.iter().any(|n| {
-                    path.file_name()
-                        .and_then(|f| f.to_str())
-                        .is_some_and(|f| f == *n)
-                });
-
-                if !is_common_name || path.parent() != Some(dir) {
-                    findings.extend(self.scan_file(path)?);
-                }
-            }
-        }
+        self.scan_walk_entries(
+            dir,
+            WalkDir::new(dir).max_depth(3),
+            &dockerfile_names,
+            &mut findings,
+        )?;
 
         Ok(findings)
     }
@@ -465,6 +500,35 @@ RUN docker run --privileged nginx
         assert!(
             matches!(mapped, AuditError::ReadError { ref path, .. } if path.ends_with("missing"))
         );
+    }
+
+    #[test]
+    fn test_scan_walk_entries_propagates_injected_traversal_error() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("vendor").join("missing");
+        let traversal = WalkDir::new(&missing).into_iter();
+        let mut findings = Vec::new();
+
+        let result = DockerScanner::new().scan_walk_entries(
+            dir.path(),
+            traversal,
+            &["Dockerfile"],
+            &mut findings,
+        );
+
+        assert!(matches!(
+            result,
+            Err(AuditError::ReadError { ref path, .. }) if path.ends_with("missing")
+        ));
+    }
+
+    #[test]
+    fn test_common_dockerfile_directory_is_not_read_as_file() {
+        let dir = TempDir::new().unwrap();
+        fs::create_dir(dir.path().join("Dockerfile")).unwrap();
+
+        let findings = DockerScanner::new().scan_path(dir.path()).unwrap();
+        assert!(findings.is_empty());
     }
 
     #[test]

@@ -178,7 +178,8 @@ fn test_docker_directory_read_error_exits_with_diagnostic() {
         .assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains("File too large to scan"));
+        .stderr(predicate::str::contains("File too large to scan"))
+        .stderr(predicate::str::contains(dockerfile.display().to_string()));
 }
 
 #[test]

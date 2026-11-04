@@ -8,7 +8,7 @@
 use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
-use std::fs;
+use std::fs::{self, File};
 use std::io::{self, Read};
 use std::path::Path;
 use tracing::{debug, trace};
@@ -29,31 +29,78 @@ pub const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 /// Reads a file into a `String`, refusing to allocate for files larger than
 /// `limit` bytes.
 ///
-/// The size is checked via `fs::metadata` **before** the file is read, so an
-/// oversized file never drives a large allocation. Returns
+/// The size is checked on the opened file descriptor and the actual read is
+/// bounded to at most `limit + 1` bytes, so a file that grows after the size
+/// check cannot drive an unbounded allocation. Returns
 /// [`AuditError::FileTooLarge`] for oversized files and [`AuditError::ReadError`]
 /// for genuine I/O errors. Bytes are lossy-decoded (invalid UTF-8 → replacement
 /// char) so a partially-binary file is still scanned rather than skipped (issue
-/// #129).
+/// #129). The input-byte bound is not an exact heap-usage guarantee because the
+/// byte buffer and lossy UTF-8 conversion may add overhead.
 pub fn read_to_string_capped_with_limit(path: &Path, limit: u64) -> Result<String> {
-    let metadata = fs::metadata(path).map_err(|e| AuditError::ReadError {
+    let file = File::open(path).map_err(|e| AuditError::ReadError {
         path: path.display().to_string(),
         source: e,
     })?;
+    let size = file
+        .metadata()
+        .map_err(|e| AuditError::ReadError {
+            path: path.display().to_string(),
+            source: e,
+        })?
+        .len();
+    read_to_string_capped_from_reader(file, path, size, limit)
+}
 
-    let size = metadata.len();
-    if size > limit {
+fn read_to_string_capped_from_reader<R: Read>(
+    mut reader: R,
+    path: &Path,
+    reported_size: u64,
+    limit: u64,
+) -> Result<String> {
+    if reported_size > limit {
         return Err(AuditError::FileTooLarge {
             path: path.display().to_string(),
-            size,
+            size: reported_size,
             limit,
         });
     }
 
-    let bytes = fs::read(path).map_err(|e| AuditError::ReadError {
-        path: path.display().to_string(),
-        source: e,
-    })?;
+    // Read one byte beyond the limit so growth after the initial metadata
+    // observation is rejected without ever buffering more than limit + 1
+    // input bytes. There is no representable limit + 1 for u64::MAX; in that
+    // unreachable real-file case, the limit itself is the safe bound.
+    let read_limit = limit.checked_add(1).unwrap_or(limit);
+    let mut bytes = Vec::new();
+    let mut buffer = [0u8; 8192];
+
+    while (bytes.len() as u64) < read_limit {
+        let remaining = read_limit - bytes.len() as u64;
+        let chunk_len = remaining.min(buffer.len() as u64) as usize;
+        let count = match reader.read(&mut buffer[..chunk_len]) {
+            Ok(count) => count,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => {
+                return Err(AuditError::ReadError {
+                    path: path.display().to_string(),
+                    source: error,
+                });
+            }
+        };
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+    }
+
+    if bytes.len() as u64 > limit {
+        return Err(AuditError::FileTooLarge {
+            path: path.display().to_string(),
+            size: bytes.len() as u64,
+            limit,
+        });
+    }
+
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
@@ -481,8 +528,10 @@ impl ScannerConfig {
     /// Reads a file and returns its content as a string.
     ///
     /// Refuses files larger than the configured cap ([`ScannerConfig::max_file_size`])
-    /// before allocating, so an oversized untrusted artifact cannot OOM-kill the
-    /// scan (issue #143). Otherwise reads raw bytes and lossy-decodes them
+    /// before content allocation, so an oversized untrusted artifact cannot
+    /// OOM-kill the scan (issue #143). The byte cap bounds input buffering but
+    /// is not an exact heap-usage guarantee because decoding may add overhead.
+    /// Otherwise reads raw bytes and lossy-decodes them
     /// (invalid UTF-8 → replacement char) so a single non-UTF-8 byte cannot
     /// silently neutralize the scan for an entire file (issue #129). Only genuine
     /// IO errors and the size cap are propagated; a legacy-encoded or
@@ -538,6 +587,7 @@ impl Default for ScannerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
     use std::sync::Arc;
     use tempfile::TempDir;
 
@@ -627,6 +677,105 @@ mod tests {
         fs::write(&file_path, "hello").unwrap();
 
         let content = read_to_string_capped_with_limit(&file_path, 1024).unwrap();
+        assert_eq!(content, "hello");
+    }
+
+    #[test]
+    fn test_reader_accepts_exact_limit_and_rejects_limit_plus_one() {
+        let path = Path::new("fixture.txt");
+        let content = read_to_string_capped_from_reader(Cursor::new(b"hello"), path, 5, 5).unwrap();
+        assert_eq!(content, "hello");
+
+        let error =
+            read_to_string_capped_from_reader(Cursor::new(b"helloo"), path, 5, 5).unwrap_err();
+        assert!(matches!(
+            error,
+            AuditError::FileTooLarge {
+                size: 6,
+                limit: 5,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_reader_handles_short_and_interrupted_reads() {
+        struct ShortInterruptedReader {
+            bytes: Vec<u8>,
+            interrupted: bool,
+        }
+
+        impl Read for ShortInterruptedReader {
+            fn read(&mut self, target: &mut [u8]) -> io::Result<usize> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(io::Error::from(io::ErrorKind::Interrupted));
+                }
+                let count = self.bytes.len().min(1).min(target.len());
+                target[..count].copy_from_slice(&self.bytes[..count]);
+                self.bytes.drain(..count);
+                Ok(count)
+            }
+        }
+
+        let reader = ShortInterruptedReader {
+            bytes: b"short".to_vec(),
+            interrupted: false,
+        };
+        let content =
+            read_to_string_capped_from_reader(reader, Path::new("fixture.txt"), 5, 5).unwrap();
+        assert_eq!(content, "short");
+    }
+
+    #[test]
+    fn test_reader_propagates_read_errors() {
+        struct FailingReader;
+
+        impl Read for FailingReader {
+            fn read(&mut self, _target: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "mock read failure",
+                ))
+            }
+        }
+
+        let error =
+            read_to_string_capped_from_reader(FailingReader, Path::new("fixture.txt"), 0, 10)
+                .unwrap_err();
+        assert!(
+            matches!(error, AuditError::ReadError { ref path, source } if path == "fixture.txt" && source.kind() == io::ErrorKind::PermissionDenied)
+        );
+    }
+
+    #[test]
+    fn test_reader_rejects_bytes_beyond_initially_reported_size() {
+        let error = read_to_string_capped_from_reader(
+            Cursor::new(b"grown"),
+            Path::new("fixture.txt"),
+            3,
+            4,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            AuditError::FileTooLarge {
+                size: 5,
+                limit: 4,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn test_reader_handles_limit_addition_overflow() {
+        let content = read_to_string_capped_from_reader(
+            Cursor::new(b"hello"),
+            Path::new("fixture.txt"),
+            5,
+            u64::MAX,
+        )
+        .unwrap();
         assert_eq!(content, "hello");
     }
 

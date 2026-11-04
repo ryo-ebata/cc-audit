@@ -99,19 +99,117 @@ static EX001_URL_PATTERN: LazyLock<Regex> =
 /// hostname mentioned in a comment, path, query, userinfo, or lookalike host
 /// must not suppress an otherwise untrusted destination.
 pub(crate) fn ex001_line_uses_only_trusted_destinations(line: &str) -> bool {
-    let command = line.split_once('#').map_or(line, |(command, _)| command);
+    let Some(command) = ex001_uncommented_command(line) else {
+        return false;
+    };
+    if ex001_has_ambiguous_shell_syntax(command) {
+        return false;
+    }
+
     let urls: Vec<_> = EX001_URL_PATTERN
-        .find_iter(line)
-        .map(|m| m.as_str())
-        .collect();
-    let command_urls: Vec<_> = EX001_URL_PATTERN
         .find_iter(command)
         .map(|m| m.as_str())
         .collect();
     !urls.is_empty()
-        && !command_urls.is_empty()
-        && urls.len() == command_urls.len()
-        && command_urls.iter().all(|url| ex001_trusted_host(url))
+        && urls.len() == 1
+        && ex001_has_no_dynamic_destination(command)
+        && urls.iter().all(|url| ex001_trusted_host(url))
+}
+
+/// Return the command portion only when `#` is a shell comment marker.
+/// Quoted `#` is data, not a comment, so a simple `split_once('#')` is unsafe.
+fn ex001_uncommented_command(line: &str) -> Option<&str> {
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        match (quote, character) {
+            (None, '\'' | '"') => quote = Some(character),
+            (Some(current), character) if current == character => quote = None,
+            (None, '#') => return Some(&line[..index]),
+            _ => {}
+        }
+    }
+    quote.map_or(Some(line), |_| None)
+}
+
+/// Shell separators and substitutions make a line contain more than one
+/// request, or make its destination impossible to prove from this scanner.
+fn ex001_has_ambiguous_shell_syntax(command: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    for character in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        match (quote, character) {
+            (None, '\'' | '"') => quote = Some(character),
+            (Some(current), character) if current == character => quote = None,
+            (None, ';' | '|' | '&' | '`') => return true,
+            _ => {}
+        }
+    }
+    quote.is_some() || command.contains("$(")
+}
+
+/// Dynamic URL arguments are never treated as trusted. For shell commands,
+/// data/header arguments may legitimately contain variables; every other
+/// variable-bearing argument is an unresolved destination. For source-code
+/// snippets, URL-shaped variable names are conservatively unresolved.
+fn ex001_has_no_dynamic_destination(command: &str) -> bool {
+    let words = command.split_whitespace().collect::<Vec<_>>();
+    let command_name = words
+        .iter()
+        .find(|word| !word.starts_with('-'))
+        .map(|word| word.trim_matches(['"', '\'']))
+        .unwrap_or_default();
+    let shell_client = command_name == "curl" || command_name == "wget";
+    let mut value_option = false;
+
+    for word in words {
+        let word = word.trim_matches(['"', '\'']);
+        if value_option {
+            value_option = false;
+            continue;
+        }
+        if word.starts_with('-') {
+            value_option = matches!(
+                word,
+                "-d" | "--data"
+                    | "--data-raw"
+                    | "--data-binary"
+                    | "--data-urlencode"
+                    | "-F"
+                    | "--form"
+                    | "-H"
+                    | "--header"
+                    | "-u"
+                    | "--user"
+                    | "--post-data"
+                    | "--post-file"
+            );
+            continue;
+        }
+        if word.contains('$') {
+            if !shell_client {
+                return false;
+            }
+            return false;
+        }
+    }
+    true
 }
 
 fn ex001_trusted_host(url: &str) -> bool {

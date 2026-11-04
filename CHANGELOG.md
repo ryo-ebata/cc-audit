@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.32](https://github.com/ryo-ebata/cc-audit/compare/v3.23.31...v3.23.32) (2026-11-04)
+
+
+### Bug Fixes
+
+* **security:** report compiled Python bytecode in skills (rebased) ([#622](https://github.com/ryo-ebata/cc-audit/issues/622)) ([989fd82](https://github.com/ryo-ebata/cc-audit/commit/989fd825288fd12ffcebfbb0fa8ae968a3e68112))
+
 ## [3.23.31](https://github.com/ryo-ebata/cc-audit/compare/v3.23.30...v3.23.31) (2026-11-04)
 
 

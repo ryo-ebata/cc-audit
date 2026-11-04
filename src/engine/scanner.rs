@@ -9,6 +9,7 @@ use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
 use std::fs;
+use std::io::{self, Read};
 use std::path::Path;
 use tracing::{debug, trace};
 
@@ -139,6 +140,81 @@ pub fn compiled_bytecode_finding(file: &str) -> Finding {
             .to_string(),
         fix_hint: None,
         cwe_ids: vec!["CWE-506".to_string(), "CWE-345".to_string()],
+        rule_severity: None,
+        client: None,
+        context: None,
+    }
+}
+
+/// Returns true when `path` has a known native/loadable executable header.
+///
+/// This intentionally checks magic bytes instead of relying on a filename
+/// extension: a native Python extension can be renamed to evade an
+/// extension-only rule. The check is limited to formats that can contain
+/// executable code, rather than treating every non-UTF-8 file as suspicious.
+pub fn is_unanalyzable_executable(path: &Path) -> io::Result<bool> {
+    let mut file = fs::File::open(path)?;
+    let Some(magic) = read_executable_magic(&mut file)? else {
+        return Ok(false);
+    };
+
+    // ELF, Mach-O (32/64-bit, both byte orders), PE, WebAssembly, and Java
+    // class files are executable/loadable formats relevant to skill bundles.
+    Ok(magic == [0x7f, b'E', b'L', b'F']
+        || matches!(
+            magic,
+            [0xfe, 0xed, 0xfa, 0xce]
+                | [0xce, 0xfa, 0xed, 0xfe]
+                | [0xfe, 0xed, 0xfa, 0xcf]
+                | [0xcf, 0xfa, 0xed, 0xfe]
+        )
+        || magic[0..2] == [b'M', b'Z']
+        || magic == [0x00, 0x61, 0x73, 0x6d]
+        || magic == [0xca, 0xfe, 0xba, 0xbe])
+}
+
+/// Read a four-byte magic header, treating a short file as non-executable and
+/// retrying transient interrupted reads. Other I/O errors are propagated so a
+/// scan cannot silently pass an unreadable candidate.
+fn read_executable_magic(reader: &mut impl Read) -> io::Result<Option<[u8; 4]>> {
+    let mut magic = [0u8; 4];
+    let mut offset = 0;
+    while offset < magic.len() {
+        match reader.read(&mut magic[offset..]) {
+            Ok(0) => return Ok(None),
+            Ok(read) => offset += read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(Some(magic))
+}
+
+/// Builds a fail-loud finding for a native or otherwise executable artifact.
+pub fn executable_artifact_finding(file: &str) -> Finding {
+    Finding {
+        id: "SC-BINARY-001".to_string(),
+        severity: crate::rules::Severity::High,
+        category: crate::rules::Category::SupplyChain,
+        confidence: crate::rules::Confidence::Certain,
+        name: "Unanalyzable executable artifact shipped".to_string(),
+        location: crate::rules::Location {
+            file: file.to_string(),
+            line: 0,
+            column: None,
+        },
+        code: String::new(),
+        message: "This skill ships a native or executable artifact whose code \
+                  cannot be audited by the text scanner. It may execute when \
+                  imported, loaded, or run even if the accompanying source is \
+                  benign."
+            .to_string(),
+        recommendation: "Remove native and executable artifacts from the skill \
+             and distribute auditable source only. If the artifact is required, \
+             review and build it from trusted source outside the skill bundle."
+            .to_string(),
+        fix_hint: None,
+        cwe_ids: vec!["CWE-506".to_string()],
         rule_severity: None,
         client: None,
         context: None,
@@ -575,6 +651,69 @@ mod tests {
         assert_eq!(finding.id, "SC-SIZE-001");
         assert_eq!(finding.category, crate::rules::Category::SupplyChain);
         assert_eq!(finding.location.file, "evil/big.md");
+    }
+
+    #[test]
+    fn test_unanalyzable_executable_checks_magic_bytes() {
+        let dir = TempDir::new().unwrap();
+        let elf = dir.path().join("renamed-source.txt");
+        fs::write(&elf, [0x7f, b'E', b'L', b'F', 0x02]).unwrap();
+        assert!(is_unanalyzable_executable(&elf).unwrap());
+
+        let text = dir.path().join("notes.txt");
+        fs::write(&text, "ELF is a format, not an executable here").unwrap();
+        assert!(!is_unanalyzable_executable(&text).unwrap());
+    }
+
+    #[test]
+    fn test_executable_magic_reader_handles_short_and_interrupted_reads() {
+        let mut short = std::io::Cursor::new(vec![0x7f, b'E']);
+        assert!(read_executable_magic(&mut short).unwrap().is_none());
+
+        struct InterruptedOnce {
+            interrupted: bool,
+            bytes: Vec<u8>,
+        }
+
+        impl Read for InterruptedOnce {
+            fn read(&mut self, target: &mut [u8]) -> io::Result<usize> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(io::Error::from(io::ErrorKind::Interrupted));
+                }
+                let count = self.bytes.len().min(target.len());
+                target[..count].copy_from_slice(&self.bytes[..count]);
+                self.bytes.drain(..count);
+                Ok(count)
+            }
+        }
+
+        let mut interrupted = InterruptedOnce {
+            interrupted: false,
+            bytes: vec![0x7f, b'E', b'L', b'F'],
+        };
+        assert_eq!(
+            read_executable_magic(&mut interrupted).unwrap(),
+            Some([0x7f, b'E', b'L', b'F'])
+        );
+    }
+
+    #[test]
+    fn test_executable_magic_reader_propagates_read_errors() {
+        struct FailingReader;
+
+        impl Read for FailingReader {
+            fn read(&mut self, _target: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "mock read failure",
+                ))
+            }
+        }
+
+        let mut reader = FailingReader;
+        let error = read_executable_magic(&mut reader).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
     }
 
     #[test]

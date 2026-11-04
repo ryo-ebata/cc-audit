@@ -14,6 +14,8 @@ use tracing::warn;
 pub struct IgnoreFilter {
     /// Compiled glob patterns for ignoring paths.
     globset: Option<GlobSet>,
+    /// Compiled glob patterns that cover whole directory subtrees.
+    directory_globset: Option<GlobSet>,
     /// Original valid patterns, retained so add_pattern can rebuild cumulatively.
     patterns: Vec<String>,
 }
@@ -29,6 +31,7 @@ impl IgnoreFilter {
     pub fn new() -> Self {
         Self {
             globset: None,
+            directory_globset: None,
             patterns: Vec::new(),
         }
     }
@@ -61,7 +64,12 @@ impl IgnoreFilter {
             }
         };
 
-        Self { globset, patterns }
+        let directory_globset = build_directory_globset(&patterns);
+        Self {
+            globset,
+            directory_globset,
+            patterns,
+        }
     }
 
     /// Add a glob pattern to the filter.
@@ -77,7 +85,9 @@ impl IgnoreFilter {
         }
 
         let globset = builder.build()?;
+        let directory_globset = build_directory_globset(&patterns);
         self.globset = Some(globset);
+        self.directory_globset = directory_globset;
         self.patterns = patterns;
 
         Ok(())
@@ -96,6 +106,35 @@ impl IgnoreFilter {
             false
         }
     }
+
+    /// Returns whether a directory and its descendants are covered by an
+    /// ignore pattern. Patterns such as `**/vendor/**` match files below the
+    /// directory, but not necessarily the directory entry itself; callers can
+    /// use this to prune traversal without changing file-level semantics.
+    pub fn is_ignored_directory(&self, path: &Path) -> bool {
+        let Some(directory_globset) = &self.directory_globset else {
+            return false;
+        };
+        path.ancestors().any(|ancestor| {
+            let normalized = ancestor.to_string_lossy().replace('\\', "/");
+            directory_globset.is_match(Path::new(&normalized))
+        })
+    }
+}
+
+fn build_directory_globset(patterns: &[String]) -> Option<GlobSet> {
+    let mut builder = GlobSetBuilder::new();
+    let mut has_patterns = false;
+    for pattern in patterns {
+        let Some(prefix) = pattern.strip_suffix("/**") else {
+            continue;
+        };
+        if let Ok(glob) = Glob::new(prefix) {
+            builder.add(glob);
+            has_patterns = true;
+        }
+    }
+    has_patterns.then(|| builder.build().ok()).flatten()
 }
 
 #[cfg(test)]
@@ -118,6 +157,30 @@ mod tests {
         assert!(filter.is_ignored(Path::new("/project/node_modules/pkg/index.js")));
         assert!(filter.is_ignored(Path::new("/project/sub/node_modules/pkg/index.js")));
         assert!(!filter.is_ignored(Path::new("/project/src/main.rs")));
+    }
+
+    #[test]
+    fn test_directory_pattern_can_prune_descendants() {
+        let config = IgnoreConfig {
+            patterns: vec!["**/vendor/**".to_string()],
+        };
+        let filter = IgnoreFilter::from_config(&config);
+
+        assert!(filter.is_ignored_directory(Path::new("/project/vendor")));
+        assert!(filter.is_ignored_directory(Path::new("/project/vendor/pkg")));
+        assert!(filter.is_ignored_directory(Path::new("project/vendor")));
+        assert!(!filter.is_ignored_directory(Path::new("/project/src")));
+    }
+
+    #[test]
+    fn test_file_pattern_does_not_prune_matching_directory() {
+        let config = IgnoreConfig {
+            patterns: vec!["**/*.dockerfile".to_string()],
+        };
+        let filter = IgnoreFilter::from_config(&config);
+
+        assert!(!filter.is_ignored_directory(Path::new("/project/foo.dockerfile")));
+        assert!(!filter.is_ignored_directory(Path::new("project/foo.dockerfile")));
     }
 
     #[test]

@@ -67,9 +67,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Isolate cargo-deny from project toolchain
+        run: mv rust-toolchain.toml .rust-toolchain.cargo-deny
+
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check all
+          rust-version: "1.85.0"
+
+      - name: Restore project toolchain
+        if: always()
+        run: mv .rust-toolchain.cargo-deny rust-toolchain.toml
 
   supply-chain:
     name: Supply Chain Security

@@ -10,7 +10,7 @@ use crate::engine::scanner::{
     Scanner, ScannerConfig, compiled_bytecode_finding, executable_artifact_finding,
     is_compiled_python_bytecode, is_unanalyzable_executable,
 };
-use crate::error::Result;
+use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::Finding;
 use crate::run::is_text_file_with_config;
@@ -21,6 +21,17 @@ use tracing::debug;
 
 pub struct SkillScanner {
     config: ScannerConfig,
+}
+
+fn has_known_executable_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "so" | "pyd" | "dylib" | "dll" | "node" | "wasm" | "class"
+            )
+        })
 }
 
 impl_scanner_builder!(SkillScanner);
@@ -103,10 +114,19 @@ impl Scanner for SkillScanner {
             if is_compiled_python_bytecode(path) {
                 return Ok(vec![compiled_bytecode_finding(&path.display().to_string())]);
             }
-            if is_unanalyzable_executable(path) {
-                return Ok(vec![executable_artifact_finding(
-                    &path.display().to_string(),
-                )]);
+            match is_unanalyzable_executable(path) {
+                Ok(true) => {
+                    return Ok(vec![executable_artifact_finding(
+                        &path.display().to_string(),
+                    )]);
+                }
+                Ok(false) => {}
+                Err(source) => {
+                    return Err(AuditError::ReadError {
+                        path: path.display().to_string(),
+                        source,
+                    });
+                }
             }
             let findings = self.scan_file(path)?;
             // Report progress for single file scan
@@ -209,17 +229,31 @@ impl Scanner for SkillScanner {
                 findings.push(compiled_bytecode_finding(&path.display().to_string()));
                 continue;
             }
-            if is_unanalyzable_executable(&path) {
-                debug!(path = %path.display(), "Unanalyzable executable artifact found");
-                findings.push(executable_artifact_finding(&path.display().to_string()));
-                continue;
-            }
             // Apply ignore filter to match count_files_to_scan() behavior
-            if self
+            let is_ignored = self
                 .config
                 .ignore_filter()
-                .is_some_and(|filter| filter.is_ignored(&path))
-            {
+                .is_some_and(|filter| filter.is_ignored(&path));
+
+            match is_unanalyzable_executable(&path) {
+                Ok(true) => {
+                    debug!(path = %path.display(), "Unanalyzable executable artifact found");
+                    findings.push(executable_artifact_finding(&path.display().to_string()));
+                    continue;
+                }
+                Ok(false) => {}
+                Err(source) if !is_ignored || has_known_executable_extension(&path) => {
+                    return Err(AuditError::ReadError {
+                        path: path.display().to_string(),
+                        source,
+                    });
+                }
+                // Preserve explicit-ignore behavior for unknown files, while
+                // known executable extensions above remain fail-loud.
+                Err(_) => continue,
+            }
+
+            if is_ignored {
                 continue;
             }
             // Only process text files (matching count_files_to_scan behavior)

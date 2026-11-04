@@ -9,7 +9,7 @@ use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
 use std::fs;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 use tracing::{debug, trace};
 
@@ -152,21 +152,15 @@ pub fn compiled_bytecode_finding(file: &str) -> Finding {
 /// extension: a native Python extension can be renamed to evade an
 /// extension-only rule. The check is limited to formats that can contain
 /// executable code, rather than treating every non-UTF-8 file as suspicious.
-pub fn is_unanalyzable_executable(path: &Path) -> bool {
-    let Ok(mut file) = fs::File::open(path) else {
-        return false;
+pub fn is_unanalyzable_executable(path: &Path) -> io::Result<bool> {
+    let mut file = fs::File::open(path)?;
+    let Some(magic) = read_executable_magic(&mut file)? else {
+        return Ok(false);
     };
-    let mut magic = [0u8; 4];
-    let Ok(read) = file.read(&mut magic) else {
-        return false;
-    };
-    if read < 2 {
-        return false;
-    }
 
     // ELF, Mach-O (32/64-bit, both byte orders), PE, WebAssembly, and Java
     // class files are executable/loadable formats relevant to skill bundles.
-    magic == [0x7f, b'E', b'L', b'F']
+    Ok(magic == [0x7f, b'E', b'L', b'F']
         || matches!(
             magic,
             [0xfe, 0xed, 0xfa, 0xce]
@@ -176,7 +170,24 @@ pub fn is_unanalyzable_executable(path: &Path) -> bool {
         )
         || magic[0..2] == [b'M', b'Z']
         || magic == [0x00, 0x61, 0x73, 0x6d]
-        || magic == [0xca, 0xfe, 0xba, 0xbe]
+        || magic == [0xca, 0xfe, 0xba, 0xbe])
+}
+
+/// Read a four-byte magic header, treating a short file as non-executable and
+/// retrying transient interrupted reads. Other I/O errors are propagated so a
+/// scan cannot silently pass an unreadable candidate.
+fn read_executable_magic(reader: &mut impl Read) -> io::Result<Option<[u8; 4]>> {
+    let mut magic = [0u8; 4];
+    let mut offset = 0;
+    while offset < magic.len() {
+        match reader.read(&mut magic[offset..]) {
+            Ok(0) => return Ok(None),
+            Ok(read) => offset += read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(Some(magic))
 }
 
 /// Builds a fail-loud finding for a native or otherwise executable artifact.
@@ -647,11 +658,62 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let elf = dir.path().join("renamed-source.txt");
         fs::write(&elf, [0x7f, b'E', b'L', b'F', 0x02]).unwrap();
-        assert!(is_unanalyzable_executable(&elf));
+        assert!(is_unanalyzable_executable(&elf).unwrap());
 
         let text = dir.path().join("notes.txt");
         fs::write(&text, "ELF is a format, not an executable here").unwrap();
-        assert!(!is_unanalyzable_executable(&text));
+        assert!(!is_unanalyzable_executable(&text).unwrap());
+    }
+
+    #[test]
+    fn test_executable_magic_reader_handles_short_and_interrupted_reads() {
+        let mut short = std::io::Cursor::new(vec![0x7f, b'E']);
+        assert!(read_executable_magic(&mut short).unwrap().is_none());
+
+        struct InterruptedOnce {
+            interrupted: bool,
+            bytes: Vec<u8>,
+        }
+
+        impl Read for InterruptedOnce {
+            fn read(&mut self, target: &mut [u8]) -> io::Result<usize> {
+                if !self.interrupted {
+                    self.interrupted = true;
+                    return Err(io::Error::from(io::ErrorKind::Interrupted));
+                }
+                let count = self.bytes.len().min(target.len());
+                target[..count].copy_from_slice(&self.bytes[..count]);
+                self.bytes.drain(..count);
+                Ok(count)
+            }
+        }
+
+        let mut interrupted = InterruptedOnce {
+            interrupted: false,
+            bytes: vec![0x7f, b'E', b'L', b'F'],
+        };
+        assert_eq!(
+            read_executable_magic(&mut interrupted).unwrap(),
+            Some([0x7f, b'E', b'L', b'F'])
+        );
+    }
+
+    #[test]
+    fn test_executable_magic_reader_propagates_read_errors() {
+        struct FailingReader;
+
+        impl Read for FailingReader {
+            fn read(&mut self, _target: &mut [u8]) -> io::Result<usize> {
+                Err(io::Error::new(
+                    io::ErrorKind::PermissionDenied,
+                    "mock read failure",
+                ))
+            }
+        }
+
+        let mut reader = FailingReader;
+        let error = read_executable_magic(&mut reader).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
     }
 
     #[test]

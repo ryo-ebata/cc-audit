@@ -46,16 +46,15 @@ jobs:
       - name: Install cargo-msrv
         run: cargo install cargo-msrv --version 0.19.3 --locked
 
+      - name: Test MSRV output parser
+        run: bash .github/scripts/test-msrv-output-parser.sh
+
       - name: Find MSRV
         id: msrv
         run: |
           set -euo pipefail
           cargo msrv find --min 1.75.0 2>&1 | tee msrv-output.txt
-          MSRV=$(grep -oP 'Minimum Supported Rust Version \(MSRV\): \K[0-9.]+' msrv-output.txt || true)
-          if [[ -z "$MSRV" ]]; then
-            echo "cargo msrv did not report a minimum supported Rust version" >&2
-            exit 1
-          fi
+          MSRV=$(bash .github/scripts/parse-msrv-output.sh msrv-output.txt)
           echo "msrv=$MSRV" >> $GITHUB_OUTPUT
           echo "MSRV: $MSRV"
 

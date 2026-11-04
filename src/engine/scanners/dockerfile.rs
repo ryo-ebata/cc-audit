@@ -65,7 +65,19 @@ impl DockerScanner {
         I: IntoIterator<Item = std::result::Result<walkdir::DirEntry, walkdir::Error>>,
     {
         for entry in entries {
-            let entry = entry.map_err(|error| traversal_error(dir, error))?;
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error)
+                    if error.path().is_some_and(|path| {
+                        self.config
+                            .ignore_filter()
+                            .is_some_and(|filter| filter.is_ignored_directory(path))
+                    }) =>
+                {
+                    continue;
+                }
+                Err(error) => return Err(traversal_error(dir, error)),
+            };
             let path = entry.path();
             if path.is_file() && Self::is_dockerfile(path) && !self.config.is_ignored(path) {
                 // Avoid scanning the same file twice
@@ -128,12 +140,16 @@ impl Scanner for DockerScanner {
         }
 
         // Scan for any .dockerfile files in the directory
-        self.scan_walk_entries(
-            dir,
-            WalkDir::new(dir).max_depth(3),
-            &dockerfile_names,
-            &mut findings,
-        )?;
+        let ignore_filter = self.config.ignore_filter().cloned();
+        let entries = WalkDir::new(dir)
+            .max_depth(3)
+            .into_iter()
+            .filter_entry(move |entry| {
+                !ignore_filter.as_ref().is_some_and(|filter| {
+                    entry.file_type().is_dir() && filter.is_ignored_directory(entry.path())
+                })
+            });
+        self.scan_walk_entries(dir, entries, &dockerfile_names, &mut findings)?;
 
         Ok(findings)
     }
@@ -520,6 +536,25 @@ RUN docker run --privileged nginx
             result,
             Err(AuditError::ReadError { ref path, .. }) if path.ends_with("missing")
         ));
+    }
+
+    #[test]
+    fn test_scan_walk_entries_ignores_traversal_error_in_ignored_subtree() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("vendor").join("missing");
+        let traversal = WalkDir::new(&missing).into_iter();
+        let ignore_config = crate::config::IgnoreConfig {
+            patterns: vec!["**/vendor/**".to_string()],
+        };
+        let scanner = DockerScanner::new()
+            .with_ignore_filter(crate::ignore::IgnoreFilter::from_config(&ignore_config));
+        let mut findings = Vec::new();
+
+        let result =
+            scanner.scan_walk_entries(dir.path(), traversal, &["Dockerfile"], &mut findings);
+
+        assert!(result.is_ok());
+        assert!(findings.is_empty());
     }
 
     #[test]

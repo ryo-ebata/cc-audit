@@ -96,6 +96,25 @@ impl IgnoreFilter {
             false
         }
     }
+
+    /// Returns whether a directory and its descendants are covered by an
+    /// ignore pattern. Patterns such as `**/vendor/**` match files below the
+    /// directory, but not necessarily the directory entry itself; callers can
+    /// use this to prune traversal without changing file-level semantics.
+    pub fn is_ignored_directory(&self, path: &Path) -> bool {
+        if self.is_ignored(path) {
+            return true;
+        }
+
+        let normalized = path.to_string_lossy().replace('\\', "/");
+        self.patterns.iter().any(|pattern| {
+            pattern.strip_suffix("/**").is_some_and(|prefix| {
+                Glob::new(prefix)
+                    .ok()
+                    .is_some_and(|glob| glob.compile_matcher().is_match(Path::new(&normalized)))
+            })
+        })
+    }
 }
 
 #[cfg(test)]
@@ -118,6 +137,17 @@ mod tests {
         assert!(filter.is_ignored(Path::new("/project/node_modules/pkg/index.js")));
         assert!(filter.is_ignored(Path::new("/project/sub/node_modules/pkg/index.js")));
         assert!(!filter.is_ignored(Path::new("/project/src/main.rs")));
+    }
+
+    #[test]
+    fn test_directory_pattern_can_prune_descendants() {
+        let config = IgnoreConfig {
+            patterns: vec!["**/vendor/**".to_string()],
+        };
+        let filter = IgnoreFilter::from_config(&config);
+
+        assert!(filter.is_ignored_directory(Path::new("/project/vendor")));
+        assert!(!filter.is_ignored_directory(Path::new("/project/src")));
     }
 
     #[test]

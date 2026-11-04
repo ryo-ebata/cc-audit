@@ -4,6 +4,7 @@
 //! to ensure complete coverage of the cc-audit functionality.
 
 use assert_cmd::cargo::cargo_bin_cmd;
+use cc_audit::engine::scanner::MAX_FILE_SIZE;
 use predicates::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -160,6 +161,24 @@ fn test_sc007_tagless_container_pull_cli_regression() {
         .arg(&safe_manifest)
         .assert()
         .success();
+}
+
+#[test]
+fn test_docker_directory_read_error_exits_with_diagnostic() {
+    let dir = TempDir::new().unwrap();
+    create_config(dir.path());
+    let dockerfile = dir.path().join("Dockerfile");
+    let file = fs::File::create(&dockerfile).unwrap();
+    // A sparse file exceeds the scanner cap without allocating a large fixture.
+    file.set_len(MAX_FILE_SIZE + 1).unwrap();
+
+    check_cmd()
+        .args(["--type", "docker", "--no-cve-scan", "--no-malware-scan"])
+        .arg(dir.path())
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("File too large to scan"));
 }
 
 #[test]

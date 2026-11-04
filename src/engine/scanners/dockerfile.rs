@@ -1,8 +1,9 @@
 use crate::engine::scanner::{Scanner, ScannerConfig};
-use crate::error::Result;
+use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::parser::DockerfileParser;
 use crate::rules::Finding;
+use std::io;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -41,6 +42,16 @@ impl DockerScanner {
     }
 }
 
+fn traversal_error(base: &Path, error: walkdir::Error) -> AuditError {
+    AuditError::ReadError {
+        path: error.path().map_or_else(
+            || base.display().to_string(),
+            |path| path.display().to_string(),
+        ),
+        source: io::Error::other(error.to_string()),
+    }
+}
+
 impl Scanner for DockerScanner {
     fn scan_file(&self, path: &Path) -> Result<Vec<Finding>> {
         let content = self.config.read_file(path)?;
@@ -66,20 +77,14 @@ impl Scanner for DockerScanner {
 
         for name in &dockerfile_names {
             let docker_file = dir.join(name);
-            if docker_file.exists()
-                && !self.config.is_ignored(&docker_file)
-                && let Ok(file_findings) = self.scan_file(&docker_file)
-            {
-                findings.extend(file_findings);
+            if docker_file.exists() && !self.config.is_ignored(&docker_file) {
+                findings.extend(self.scan_file(&docker_file)?);
             }
         }
 
         // Scan for any .dockerfile files in the directory
-        for entry in WalkDir::new(dir)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in WalkDir::new(dir).max_depth(3) {
+            let entry = entry.map_err(|error| traversal_error(dir, error))?;
             let path = entry.path();
             if path.is_file() && Self::is_dockerfile(path) && !self.config.is_ignored(path) {
                 // Avoid scanning the same file twice
@@ -89,10 +94,8 @@ impl Scanner for DockerScanner {
                         .is_some_and(|f| f == *n)
                 });
 
-                if (!is_common_name || path.parent() != Some(dir))
-                    && let Ok(file_findings) = self.scan_file(path)
-                {
-                    findings.extend(file_findings);
+                if !is_common_name || path.parent() != Some(dir) {
+                    findings.extend(self.scan_file(path)?);
                 }
             }
         }
@@ -392,6 +395,76 @@ RUN docker run --privileged nginx
         let scanner = DockerScanner::new();
         let result = scanner.scan_file(dir.path());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_scan_directory_propagates_root_dockerfile_size_error() {
+        let dir = TempDir::new().unwrap();
+        create_dockerfile(&dir, "Dockerfile", "FROM alpine\n");
+
+        let scanner = DockerScanner::new().with_max_file_size(1);
+        let result = scanner.scan_path(dir.path());
+
+        assert!(matches!(
+            result,
+            Err(crate::error::AuditError::FileTooLarge { ref path, .. })
+                if path.ends_with("Dockerfile")
+        ));
+    }
+
+    #[test]
+    fn test_scan_directory_propagates_nested_dockerfile_and_compose_errors() {
+        for name in ["Dockerfile", "compose.yaml"] {
+            let dir = TempDir::new().unwrap();
+            let nested = dir.path().join("services").join("api");
+            fs::create_dir_all(&nested).unwrap();
+            fs::write(nested.join(name), "FROM alpine\n").unwrap();
+
+            let scanner = DockerScanner::new().with_max_file_size(1);
+            let result = scanner.scan_path(dir.path());
+
+            assert!(matches!(
+                result,
+                Err(crate::error::AuditError::FileTooLarge { ref path, .. })
+                    if path.ends_with(name)
+            ));
+        }
+    }
+
+    #[test]
+    fn test_scan_directory_preserves_ignored_dockerfiles() {
+        let dir = TempDir::new().unwrap();
+        let ignored = dir.path().join("vendor");
+        fs::create_dir_all(&ignored).unwrap();
+        fs::write(ignored.join("Dockerfile"), "FROM alpine\nUSER root\n").unwrap();
+
+        let ignore_config = crate::config::IgnoreConfig {
+            patterns: vec!["**/vendor/**".to_string()],
+        };
+        let scanner = DockerScanner::new()
+            .with_ignore_filter(crate::ignore::IgnoreFilter::from_config(&ignore_config));
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(
+            findings.is_empty(),
+            "ignored Dockerfiles must remain ignored"
+        );
+    }
+
+    #[test]
+    fn test_traversal_error_keeps_path_context() {
+        let dir = TempDir::new().unwrap();
+        let missing = dir.path().join("missing");
+        let error = WalkDir::new(&missing)
+            .into_iter()
+            .next()
+            .expect("walk must yield an error")
+            .expect_err("missing root must produce a traversal error");
+
+        let mapped = traversal_error(dir.path(), error);
+        assert!(
+            matches!(mapped, AuditError::ReadError { ref path, .. } if path.ends_with("missing"))
+        );
     }
 
     #[test]

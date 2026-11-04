@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.36](https://github.com/ryo-ebata/cc-audit/compare/v3.23.35...v3.23.36) (2026-11-04)
+
+
+### Bug Fixes
+
+* **deep-scan:** propagate capped-reader errors ([#630](https://github.com/ryo-ebata/cc-audit/issues/630)) ([fdf90c2](https://github.com/ryo-ebata/cc-audit/commit/fdf90c2ad4c8b0bfea5b646f1edb70b072229846))
+
 ## [3.23.35](https://github.com/ryo-ebata/cc-audit/compare/v3.23.34...v3.23.35) (2026-11-04)
 
 

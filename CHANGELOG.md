@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.31](https://github.com/ryo-ebata/cc-audit/compare/v3.23.30...v3.23.31) (2026-11-04)
+
+
+### Bug Fixes
+
+* **ci:** restore MSRV tooling compatibility ([#617](https://github.com/ryo-ebata/cc-audit/issues/617)) ([1ee1c9a](https://github.com/ryo-ebata/cc-audit/commit/1ee1c9a536781d14155a08fb07a8a71f6a2c4f8e))
+* **security:** update vulnerable TLS dependencies ([#619](https://github.com/ryo-ebata/cc-audit/issues/619)) ([32fc428](https://github.com/ryo-ebata/cc-audit/commit/32fc428ae912cfe1b7c5b843d34a33618c7d4bd8))
+
 ## [3.23.30](https://github.com/ryo-ebata/cc-audit/compare/v3.23.29...v3.23.30) (2026-10-12)
 
 

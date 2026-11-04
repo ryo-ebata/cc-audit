@@ -503,6 +503,23 @@ RUN docker run --privileged nginx
     }
 
     #[test]
+    fn test_scan_directory_does_not_prune_file_glob_named_directory() {
+        let dir = TempDir::new().unwrap();
+        let nested = dir.path().join("foo.dockerfile");
+        fs::create_dir(&nested).unwrap();
+        fs::write(nested.join("Dockerfile"), "FROM alpine\nUSER root\n").unwrap();
+
+        let ignore_config = crate::config::IgnoreConfig {
+            patterns: vec!["**/*.dockerfile".to_string()],
+        };
+        let scanner = DockerScanner::new()
+            .with_ignore_filter(crate::ignore::IgnoreFilter::from_config(&ignore_config));
+        let findings = scanner.scan_path(dir.path()).unwrap();
+
+        assert!(findings.iter().any(|finding| finding.id == "DK-002"));
+    }
+
+    #[test]
     fn test_traversal_error_keeps_path_context() {
         let dir = TempDir::new().unwrap();
         let missing = dir.path().join("missing");

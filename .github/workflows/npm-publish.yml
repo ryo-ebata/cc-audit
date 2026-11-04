@@ -102,8 +102,6 @@ jobs:
         run: |
           cd npm/${{ matrix.platform }}
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-main:
     name: Publish main package
@@ -135,5 +133,3 @@ jobs:
         run: |
           cd npm/cc-audit
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

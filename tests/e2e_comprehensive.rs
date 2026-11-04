@@ -183,6 +183,47 @@ fn test_docker_directory_read_error_exits_with_diagnostic() {
 }
 
 #[test]
+fn test_deep_scan_read_error_exits_without_json_or_sarif_report() {
+    let dir = TempDir::new().unwrap();
+    create_config(dir.path());
+    let payload = dir.path().join("payload.md");
+    let file = fs::File::create(&payload).unwrap();
+    file.set_len(MAX_FILE_SIZE + 1).unwrap();
+
+    for format in ["json", "sarif"] {
+        let output = check_cmd()
+            .args([
+                "--type",
+                "docker",
+                "--deep-scan",
+                "--format",
+                format,
+                "--no-cve-scan",
+                "--no-malware-scan",
+            ])
+            .arg(dir.path())
+            .output()
+            .unwrap();
+
+        assert_eq!(output.status.code(), Some(2), "format={format}");
+        assert!(output.stdout.is_empty(), "format={format}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Error deep scanning"),
+            "format={format}: {stderr}"
+        );
+        assert!(
+            stderr.contains("File too large to scan"),
+            "format={format}: {stderr}"
+        );
+        assert!(
+            stderr.contains(&payload.display().to_string()),
+            "format={format}: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn test_ex001_httpx_environment_exfiltration_through_skill_cli() {
     let dir = TempDir::new().unwrap();
     create_config(dir.path());

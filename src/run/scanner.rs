@@ -1,5 +1,6 @@
 //! Core scanning functionality.
 
+use crate::error::Result;
 use crate::{
     CheckArgs, CommandScanner, Config, CustomRuleLoader, CveDatabase, Deobfuscator,
     DependencyScanner, DirectoryWalker, DockerScanner, DynamicRule, Finding, HookScanner,
@@ -195,12 +196,19 @@ fn run_scan_with_check_args_internal(
         // Run deep scan with deobfuscation if enabled
         if effective.deep_scan {
             let ignore_filter = create_ignore_filter(path);
-            let deep_findings = run_deep_scan_with_text_files(
+            let deep_findings = match run_deep_scan_with_text_files(
                 path,
                 &ignore_filter,
                 effective.recursive,
                 &config.text_files,
-            );
+            ) {
+                Ok(findings) => findings,
+                Err(error) => {
+                    eprintln!("Error deep scanning {}: {}", path.display(), error);
+                    progress.finish();
+                    return None;
+                }
+            };
             all_findings.extend(deep_findings);
         }
 
@@ -573,7 +581,7 @@ pub(crate) fn run_deep_scan(
     path: &Path,
     ignore_filter: &IgnoreFilter,
     recursive: bool,
-) -> Vec<Finding> {
+) -> Result<Vec<Finding>> {
     static DEFAULT_CONFIG: std::sync::LazyLock<TextFilesConfig> =
         std::sync::LazyLock::new(TextFilesConfig::default);
 
@@ -585,19 +593,33 @@ fn run_deep_scan_with_text_files(
     ignore_filter: &IgnoreFilter,
     recursive: bool,
     text_files: &TextFilesConfig,
-) -> Vec<Finding> {
+) -> Result<Vec<Finding>> {
+    run_deep_scan_with_text_files_and_limit(
+        path,
+        ignore_filter,
+        recursive,
+        text_files,
+        crate::engine::scanner::MAX_FILE_SIZE,
+    )
+}
+
+fn run_deep_scan_with_text_files_and_limit(
+    path: &Path,
+    ignore_filter: &IgnoreFilter,
+    recursive: bool,
+    text_files: &TextFilesConfig,
+    limit: u64,
+) -> Result<Vec<Finding>> {
     let mut findings = Vec::new();
     let deobfuscator = Deobfuscator::new();
 
     if path.is_file() {
         // Lossy-decode so a non-UTF-8 byte cannot silently skip the deep scan
-        // for the whole file (issue #129); only IO errors and the size cap drop
-        // the file. The read is capped so an oversized artifact cannot OOM the
-        // deep scan (issue #143).
-        if !ignore_filter.is_ignored(path)
-            && is_text_file_with_config(path, text_files)
-            && let Ok(content) = crate::engine::scanner::read_to_string_capped(path)
-        {
+        // for the whole file (issue #129). The read is capped so an oversized
+        // artifact cannot OOM the deep scan (issue #143), and failures are
+        // propagated so the scan cannot report an incomplete result.
+        if !ignore_filter.is_ignored(path) && is_text_file_with_config(path, text_files) {
+            let content = crate::engine::scanner::read_to_string_capped_with_limit(path, limit)?;
             debug!(path = %path.display(), "Running deep scan on file");
             findings.extend(deobfuscator.deep_scan(&content, &path.display().to_string()));
         }
@@ -611,14 +633,15 @@ fn run_deep_scan_with_text_files(
         for file_path in walker.walk_single(path) {
             if !ignore_filter.is_ignored(&file_path)
                 && is_text_file_with_config(&file_path, text_files)
-                && let Ok(content) = crate::engine::scanner::read_to_string_capped(&file_path)
             {
+                let content =
+                    crate::engine::scanner::read_to_string_capped_with_limit(&file_path, limit)?;
                 findings.extend(deobfuscator.deep_scan(&content, &file_path.display().to_string()));
             }
         }
     }
 
-    findings
+    Ok(findings)
 }
 
 /// Count total files to be scanned across all paths.
@@ -787,7 +810,7 @@ mod tests {
         writeln!(file, "# Normal content without obfuscation").unwrap();
 
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(&file_path, &filter, true);
+        let findings = run_deep_scan(&file_path, &filter, true).unwrap();
         assert!(findings.is_empty());
     }
 
@@ -800,7 +823,77 @@ mod tests {
         writeln!(file, "# Normal content").unwrap();
 
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(temp_dir.path(), &filter, true);
+        let findings = run_deep_scan(temp_dir.path(), &filter, true).unwrap();
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_run_deep_scan_file_propagates_read_limit_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("payload.md");
+        fs::write(&file_path, "four").unwrap();
+        let filter = IgnoreFilter::from_config(&Default::default());
+
+        let error = run_deep_scan_with_text_files_and_limit(
+            &file_path,
+            &filter,
+            true,
+            &TextFilesConfig::default(),
+            3,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            crate::error::AuditError::FileTooLarge { ref path, size: 4, limit: 3 }
+                if path.ends_with("payload.md")
+        ));
+    }
+
+    #[test]
+    fn test_run_deep_scan_directory_propagates_read_limit_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("nested/payload.md");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        fs::write(&file_path, "four").unwrap();
+        let filter = IgnoreFilter::from_config(&Default::default());
+
+        let error = run_deep_scan_with_text_files_and_limit(
+            temp_dir.path(),
+            &filter,
+            true,
+            &TextFilesConfig::default(),
+            3,
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            crate::error::AuditError::FileTooLarge { ref path, size: 4, limit: 3 }
+                if path.ends_with("payload.md")
+        ));
+    }
+
+    #[test]
+    fn test_run_deep_scan_preserves_ignore_for_read_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("ignored/payload.md");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        fs::write(&file_path, "four").unwrap();
+        let ignore_config = crate::config::IgnoreConfig {
+            patterns: vec!["**/ignored/**".to_string()],
+        };
+        let filter = IgnoreFilter::from_config(&ignore_config);
+
+        let findings = run_deep_scan_with_text_files_and_limit(
+            temp_dir.path(),
+            &filter,
+            true,
+            &TextFilesConfig::default(),
+            3,
+        )
+        .unwrap();
+
         assert!(findings.is_empty());
     }
 
@@ -993,14 +1086,14 @@ mod tests {
         .unwrap();
 
         let empty_filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(temp_dir.path(), &empty_filter, false);
+        let findings = run_deep_scan(temp_dir.path(), &empty_filter, false).unwrap();
         assert!(findings.iter().any(|finding| finding.id == "EX-015"));
 
         let ignore_config = crate::config::IgnoreConfig {
             patterns: vec!["**/root-fixture.md".to_string()],
         };
         let ignore_filter = IgnoreFilter::from_config(&ignore_config);
-        let ignored_findings = run_deep_scan(temp_dir.path(), &ignore_filter, false);
+        let ignored_findings = run_deep_scan(temp_dir.path(), &ignore_filter, false).unwrap();
         assert!(ignored_findings.is_empty());
     }
 
@@ -1675,7 +1768,7 @@ mod tests {
     #[test]
     fn test_run_deep_scan_nonexistent_path() {
         let filter = IgnoreFilter::from_config(&Default::default());
-        let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter, true);
+        let findings = run_deep_scan(Path::new("/nonexistent/path"), &filter, true).unwrap();
         assert!(findings.is_empty());
     }
 
@@ -1697,7 +1790,7 @@ mod tests {
             patterns: vec!["**/node_modules/**".to_string()],
         };
         let filter = IgnoreFilter::from_config(&config);
-        let findings = run_deep_scan(temp_dir.path(), &filter, true);
+        let findings = run_deep_scan(temp_dir.path(), &filter, true).unwrap();
 
         // Should be empty because node_modules is ignored
         assert!(findings.is_empty());

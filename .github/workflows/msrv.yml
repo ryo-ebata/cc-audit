@@ -49,6 +49,7 @@ jobs:
       - name: Find MSRV
         id: msrv
         run: |
+          set -euo pipefail
           cargo msrv find --min 1.75.0 2>&1 | tee msrv-output.txt
           MSRV=$(grep -oP 'Minimum Supported Rust Version \(MSRV\): \K[0-9.]+' msrv-output.txt || true)
           if [[ -z "$MSRV" ]]; then

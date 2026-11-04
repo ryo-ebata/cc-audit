@@ -35,7 +35,8 @@ pub const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
 /// [`AuditError::FileTooLarge`] for oversized files and [`AuditError::ReadError`]
 /// for genuine I/O errors. Bytes are lossy-decoded (invalid UTF-8 → replacement
 /// char) so a partially-binary file is still scanned rather than skipped (issue
-/// #129).
+/// #129). The input-byte bound is not an exact heap-usage guarantee because the
+/// byte buffer and lossy UTF-8 conversion may add overhead.
 pub fn read_to_string_capped_with_limit(path: &Path, limit: u64) -> Result<String> {
     let file = File::open(path).map_err(|e| AuditError::ReadError {
         path: path.display().to_string(),
@@ -527,8 +528,10 @@ impl ScannerConfig {
     /// Reads a file and returns its content as a string.
     ///
     /// Refuses files larger than the configured cap ([`ScannerConfig::max_file_size`])
-    /// before allocating, so an oversized untrusted artifact cannot OOM-kill the
-    /// scan (issue #143). Otherwise reads raw bytes and lossy-decodes them
+    /// before content allocation, so an oversized untrusted artifact cannot
+    /// OOM-kill the scan (issue #143). The byte cap bounds input buffering but
+    /// is not an exact heap-usage guarantee because decoding may add overhead.
+    /// Otherwise reads raw bytes and lossy-decodes them
     /// (invalid UTF-8 → replacement char) so a single non-UTF-8 byte cannot
     /// silently neutralize the scan for an entire file (issue #129). Only genuine
     /// IO errors and the size cap are propagated; a legacy-encoded or

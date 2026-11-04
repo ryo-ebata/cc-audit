@@ -7,7 +7,8 @@ pub use frontmatter::FrontmatterParser;
 use super::walker::{DirectoryWalker, WalkConfig};
 use crate::config::TextFilesConfig;
 use crate::engine::scanner::{
-    Scanner, ScannerConfig, compiled_bytecode_finding, is_compiled_python_bytecode,
+    Scanner, ScannerConfig, compiled_bytecode_finding, executable_artifact_finding,
+    is_compiled_python_bytecode, is_unanalyzable_executable,
 };
 use crate::error::Result;
 use crate::ignore::IgnoreFilter;
@@ -102,6 +103,11 @@ impl Scanner for SkillScanner {
             if is_compiled_python_bytecode(path) {
                 return Ok(vec![compiled_bytecode_finding(&path.display().to_string())]);
             }
+            if is_unanalyzable_executable(path) {
+                return Ok(vec![executable_artifact_finding(
+                    &path.display().to_string(),
+                )]);
+            }
             let findings = self.scan_file(path)?;
             // Report progress for single file scan
             self.config.report_progress();
@@ -191,8 +197,8 @@ impl Scanner for SkillScanner {
         // scripts/; walking scripts/ separately would duplicate directory
         // traversal and canonicalization/probing work.
         // The ignore filter is applied per file below rather than by the walker
-        // so compiled bytecode is still reported under ignored paths such as
-        // the default `**/__pycache__/**` pattern (#611).
+        // so unanalyzable executable artifacts are still reported under ignored
+        // paths such as `**/__pycache__/**` and `**/site-packages/**` (#611/#612).
         let walker = DirectoryWalker::new(walk_config);
         for path in walker.walk_single(dir) {
             if !Self::is_within_scan_depth(dir, &path, max_depth) {
@@ -201,6 +207,11 @@ impl Scanner for SkillScanner {
             if is_compiled_python_bytecode(&path) {
                 debug!(path = %path.display(), "Compiled Python bytecode found");
                 findings.push(compiled_bytecode_finding(&path.display().to_string()));
+                continue;
+            }
+            if is_unanalyzable_executable(&path) {
+                debug!(path = %path.display(), "Unanalyzable executable artifact found");
+                findings.push(executable_artifact_finding(&path.display().to_string()));
                 continue;
             }
             // Apply ignore filter to match count_files_to_scan() behavior
@@ -901,6 +912,27 @@ cat ~/.ssh/id_rsa
         let findings = SkillScanner::new().scan_path(&pyc).unwrap();
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].id, "SC-BYTECODE-001");
+    }
+
+    #[test]
+    fn test_native_extension_is_reported_by_magic_bytes() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("SKILL.md"), "---\nname: test\n---\n# Test").unwrap();
+        // ELF magic is enough to identify a native extension without loading it.
+        fs::write(
+            dir.path().join("output.cpython-311-x86_64-linux-gnu.so"),
+            [0x7f, b'E', b'L', b'F', 0x02],
+        )
+        .unwrap();
+
+        let findings = SkillScanner::new().scan_path(dir.path()).unwrap();
+        assert!(findings.iter().any(|finding| {
+            finding.id == "SC-BINARY-001"
+                && finding
+                    .location
+                    .file
+                    .ends_with("output.cpython-311-x86_64-linux-gnu.so")
+        }));
     }
 
     #[test]

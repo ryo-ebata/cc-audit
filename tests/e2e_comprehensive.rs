@@ -2692,6 +2692,44 @@ severity:
                     .is_some_and(|path| path.ends_with("payload.cpython-311.pyc"))
         }));
     }
+
+    #[test]
+    fn test_default_cli_reports_native_extension_by_magic_bytes() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join(".cc-audit.yaml"),
+            "scan:\n  recursive: false\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.path().join("output.cpython-311-x86_64-linux-gnu.so"),
+            [0x7f, b'E', b'L', b'F', 0x02],
+        )
+        .unwrap();
+
+        let output = check_cmd()
+            .args(["--format", "json", "--no-cve-scan", "--no-malware-scan"])
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(1)
+            .get_output()
+            .stdout
+            .clone();
+        let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        assert!(
+            report["findings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|finding| {
+                    finding["id"] == "SC-BINARY-001"
+                        && finding["location"]["file"]
+                            .as_str()
+                            .is_some_and(|path| path.ends_with("x86_64-linux-gnu.so"))
+                })
+        );
+    }
 }
 
 // ============================================================================

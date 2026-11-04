@@ -9,6 +9,7 @@ use crate::error::{AuditError, Result};
 use crate::ignore::IgnoreFilter;
 use crate::rules::{DynamicRule, Finding, RuleEngine};
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use tracing::{debug, trace};
 
@@ -139,6 +140,70 @@ pub fn compiled_bytecode_finding(file: &str) -> Finding {
             .to_string(),
         fix_hint: None,
         cwe_ids: vec!["CWE-506".to_string(), "CWE-345".to_string()],
+        rule_severity: None,
+        client: None,
+        context: None,
+    }
+}
+
+/// Returns true when `path` has a known native/loadable executable header.
+///
+/// This intentionally checks magic bytes instead of relying on a filename
+/// extension: a native Python extension can be renamed to evade an
+/// extension-only rule. The check is limited to formats that can contain
+/// executable code, rather than treating every non-UTF-8 file as suspicious.
+pub fn is_unanalyzable_executable(path: &Path) -> bool {
+    let Ok(mut file) = fs::File::open(path) else {
+        return false;
+    };
+    let mut magic = [0u8; 4];
+    let Ok(read) = file.read(&mut magic) else {
+        return false;
+    };
+    if read < 2 {
+        return false;
+    }
+
+    // ELF, Mach-O (32/64-bit, both byte orders), PE, WebAssembly, and Java
+    // class files are executable/loadable formats relevant to skill bundles.
+    magic == [0x7f, b'E', b'L', b'F']
+        || matches!(
+            magic,
+            [0xfe, 0xed, 0xfa, 0xce]
+                | [0xce, 0xfa, 0xed, 0xfe]
+                | [0xfe, 0xed, 0xfa, 0xcf]
+                | [0xcf, 0xfa, 0xed, 0xfe]
+        )
+        || magic[0..2] == [b'M', b'Z']
+        || magic == [0x00, 0x61, 0x73, 0x6d]
+        || magic == [0xca, 0xfe, 0xba, 0xbe]
+}
+
+/// Builds a fail-loud finding for a native or otherwise executable artifact.
+pub fn executable_artifact_finding(file: &str) -> Finding {
+    Finding {
+        id: "SC-BINARY-001".to_string(),
+        severity: crate::rules::Severity::High,
+        category: crate::rules::Category::SupplyChain,
+        confidence: crate::rules::Confidence::Certain,
+        name: "Unanalyzable executable artifact shipped".to_string(),
+        location: crate::rules::Location {
+            file: file.to_string(),
+            line: 0,
+            column: None,
+        },
+        code: String::new(),
+        message: "This skill ships a native or executable artifact whose code \
+                  cannot be audited by the text scanner. It may execute when \
+                  imported, loaded, or run even if the accompanying source is \
+                  benign."
+            .to_string(),
+        recommendation: "Remove native and executable artifacts from the skill \
+             and distribute auditable source only. If the artifact is required, \
+             review and build it from trusted source outside the skill bundle."
+            .to_string(),
+        fix_hint: None,
+        cwe_ids: vec!["CWE-506".to_string()],
         rule_severity: None,
         client: None,
         context: None,
@@ -575,6 +640,18 @@ mod tests {
         assert_eq!(finding.id, "SC-SIZE-001");
         assert_eq!(finding.category, crate::rules::Category::SupplyChain);
         assert_eq!(finding.location.file, "evil/big.md");
+    }
+
+    #[test]
+    fn test_unanalyzable_executable_checks_magic_bytes() {
+        let dir = TempDir::new().unwrap();
+        let elf = dir.path().join("renamed-source.txt");
+        fs::write(&elf, [0x7f, b'E', b'L', b'F', 0x02]).unwrap();
+        assert!(is_unanalyzable_executable(&elf));
+
+        let text = dir.path().join("notes.txt");
+        fs::write(&text, "ELF is a format, not an executable here").unwrap();
+        assert!(!is_unanalyzable_executable(&text));
     }
 
     #[test]

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.34](https://github.com/ryo-ebata/cc-audit/compare/v3.23.33...v3.23.34) (2026-11-04)
+
+
+### Bug Fixes
+
+* **docker:** propagate directory scan errors ([#626](https://github.com/ryo-ebata/cc-audit/issues/626)) ([41ce9ab](https://github.com/ryo-ebata/cc-audit/commit/41ce9ab4eeb79f01a6b98206998a84e4f1f83bee))
+
 ## [3.23.33](https://github.com/ryo-ebata/cc-audit/compare/v3.23.32...v3.23.33) (2026-11-04)
 
 

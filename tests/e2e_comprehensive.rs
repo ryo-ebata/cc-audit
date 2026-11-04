@@ -2652,6 +2652,46 @@ severity:
         // Config enables recursive
         check_cmd().arg(dir.path()).assert().failure();
     }
+
+    /// A default CLI scan must report bytecode in the conventional ignored
+    /// `__pycache__` subtree. This exercises the real command path rather than
+    /// only calling `SkillScanner` directly (#611).
+    #[test]
+    fn test_default_cli_reports_compiled_bytecode_in_pycache() {
+        let dir = TempDir::new().unwrap();
+        fs::write(
+            dir.path().join(".cc-audit.yaml"),
+            "scan:\n  recursive: false\n",
+        )
+        .unwrap();
+        let pycache = dir.path().join("__pycache__");
+        fs::create_dir_all(&pycache).unwrap();
+        fs::write(
+            pycache.join("payload.cpython-311.pyc"),
+            // The scanner only needs the compiled-bytecode extension here;
+            // the bytes are intentionally not interpreted.
+            [0x42, 0x0d, 0x0d, 0x0a, 0x00, 0x00, 0x00, 0x00],
+        )
+        .unwrap();
+
+        let output = check_cmd()
+            .args(["--format", "json", "--no-cve-scan", "--no-malware-scan"])
+            .arg(dir.path())
+            .assert()
+            .failure()
+            .code(1)
+            .get_output()
+            .stdout
+            .clone();
+        let report: serde_json::Value = serde_json::from_slice(&output).unwrap();
+        let findings = report["findings"].as_array().unwrap();
+        assert!(findings.iter().any(|finding| {
+            finding["id"] == "SC-BYTECODE-001"
+                && finding["location"]["file"]
+                    .as_str()
+                    .is_some_and(|path| path.ends_with("payload.cpython-311.pyc"))
+        }));
+    }
 }
 
 // ============================================================================

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.23.33](https://github.com/ryo-ebata/cc-audit/compare/v3.23.32...v3.23.33) (2026-11-04)
+
+
+### Bug Fixes
+
+* **security:** detect native executable skill artifacts ([#624](https://github.com/ryo-ebata/cc-audit/issues/624)) ([c81f84d](https://github.com/ryo-ebata/cc-audit/commit/c81f84d988a41ae3e2973c4e7ae90f92f947aa1d))
+
 ## [3.23.32](https://github.com/ryo-ebata/cc-audit/compare/v3.23.31...v3.23.32) (2026-11-04)
 
 

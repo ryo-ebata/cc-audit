@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish-platforms:
@@ -61,13 +62,12 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          # npm trusted publishing requires Node >=22.14 and npm >=11.5.1.
+          node-version: '22.14.0'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Verify npm publisher identity before publish
-        run: bash .github/scripts/npm-publish-preflight.sh
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Enable npm trusted publishing
+        run: npm install --global npm@11.5.1
 
       - name: Download release artifact
         run: |
@@ -102,8 +102,6 @@ jobs:
         run: |
           cd npm/${{ matrix.platform }}
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-main:
     name: Publish main package
@@ -114,13 +112,12 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          # npm trusted publishing requires Node >=22.14 and npm >=11.5.1.
+          node-version: '22.14.0'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Verify npm publisher identity before publish
-        run: bash .github/scripts/npm-publish-preflight.sh
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Enable npm trusted publishing
+        run: npm install --global npm@11.5.1
 
       - name: Update version in package.json
         run: |
@@ -136,5 +133,3 @@ jobs:
         run: |
           cd npm/cc-audit
           npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

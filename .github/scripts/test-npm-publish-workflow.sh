@@ -3,24 +3,32 @@
 set -euo pipefail
 
 workflow=".github/workflows/npm-publish.yml"
-identity_count=$(grep -c 'name: Verify npm publisher identity before publish' "${workflow}")
 publish_count=$(grep -c 'npm publish --access public' "${workflow}")
-test "${identity_count}" -eq 2
 test "${publish_count}" -eq 2
 
-identity_line=$(grep -n -m1 'name: Verify npm publisher identity before publish' "${workflow}" | cut -d: -f1)
-second_identity_line=$(grep -n 'name: Verify npm publisher identity before publish' "${workflow}" | tail -n1 | cut -d: -f1)
-publish_line=$(grep -n -m1 'npm publish --access public' "${workflow}" | cut -d: -f1)
-second_publish_line=$(grep -n 'npm publish --access public' "${workflow}" | tail -n1 | cut -d: -f1)
+# Publishing must be triggered by the completed Release workflow and use OIDC.
+grep -Fq 'workflow_run:' "${workflow}"
+grep -Fq 'workflows: ["Release"]' "${workflow}"
+grep -Fq 'types: [completed]' "${workflow}"
+grep -Fq 'id-token: write' "${workflow}"
 
-test -n "${identity_line}"
-test -n "${publish_line}"
-test "${identity_line}" -lt "${publish_line}"
-test "${publish_line}" -lt "${second_identity_line}"
-test "${second_identity_line}" -lt "${second_publish_line}"
+# Trusted Publishing must not regress to a long-lived npm token.
+if grep -Fq 'NPM_TOKEN' "${workflow}"; then
+  echo "npm publish workflow must not use NPM_TOKEN" >&2
+  exit 1
+fi
+if grep -Fq 'NODE_AUTH_TOKEN' "${workflow}"; then
+  echo "npm publish workflow must not inject NODE_AUTH_TOKEN" >&2
+  exit 1
+fi
 
-sed -n "${identity_line},${publish_line}p" "${workflow}" | grep -Fq 'bash .github/scripts/npm-publish-preflight.sh'
-sed -n "${identity_line},${publish_line}p" "${workflow}" | grep -Fq 'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}'
-sed -n "${second_identity_line},${second_publish_line}p" "${workflow}" | grep -Fq 'bash .github/scripts/npm-publish-preflight.sh'
-sed -n "${second_identity_line},${second_publish_line}p" "${workflow}" | grep -Fq 'NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}'
-echo "npm publish workflow diagnostics regression test passed"
+# npm's OIDC implementation requires the documented runtime/tool versions.
+test "$(grep -c "node-version: '22.14.0'" "${workflow}")" -eq 2
+test "$(grep -c 'npm install --global npm@11.5.1' "${workflow}")" -eq 2
+
+# Every published package must identify this repository for npm Trusted Publishing.
+for package_json in npm/*/package.json; do
+  test "$(jq -r '.repository.url // empty' "${package_json}")" = "https://github.com/ryo-ebata/cc-audit.git"
+done
+
+echo "npm publish workflow Trusted Publishing regression test passed"

@@ -1,5 +1,6 @@
 use crate::rules::types::{Category, Confidence, Rule, Severity};
 use regex::Regex;
+use std::sync::LazyLock;
 
 pub fn rules() -> Vec<Rule> {
     vec![
@@ -72,17 +73,6 @@ fn ex_001() -> Rule {
                 .expect("EX-001: invalid regex"),
         ],
         exclusions: vec![
-            // Local/internal hosts
-            Regex::new(r"localhost|127\.0\.0\.1|::1|\[::1\]").expect("EX-001: invalid regex"),
-            // Major Git hosting platforms (common in CI/CD)
-            Regex::new(r"(?i)github\.com|gitlab\.com|bitbucket\.org|api\.github\.com")
-                .expect("EX-001: invalid regex"),
-            // Container registries
-            Regex::new(r"(?i)docker\.io|gcr\.io|quay\.io|registry\.|\.azurecr\.io|\.ecr\.")
-                .expect("EX-001: invalid regex"),
-            // Package registries
-            Regex::new(r"(?i)registry\.npmjs\.org|pypi\.org|crates\.io|rubygems\.org")
-                .expect("EX-001: invalid regex"),
             // Proxy environment variables (legitimate use)
             Regex::new(r"(?i)\$HTTP_PROXY|\$HTTPS_PROXY|\$NO_PROXY|\$ALL_PROXY")
                 .expect("EX-001: invalid regex"),
@@ -90,8 +80,6 @@ fn ex_001() -> Rule {
             Regex::new(r#"-H\s*["']Authorization:"#).expect("EX-001: invalid regex"),
             // Version/tag variables (common in CI)
             Regex::new(r"(?i)\$VERSION|\$TAG|\$BRANCH|\$BUILD").expect("EX-001: invalid regex"),
-            // CI/CD service URLs
-            Regex::new(r"(?i)circleci|travis-ci|jenkins|actions/").expect("EX-001: invalid regex"),
         ],
         message: "Potential data exfiltration: network request with environment variable detected",
         recommendation: "Review the command and ensure no sensitive data is being sent externally",
@@ -100,6 +88,180 @@ fn ex_001() -> Rule {
         ),
         cwe_ids: &["CWE-200", "CWE-319"],
     }
+}
+
+static EX001_URL_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"https?://[^\s'"<>]+"#).expect("EX-001: invalid URL regex"));
+
+/// Returns true only when every URL in the line has an explicitly trusted host.
+///
+/// EX-001 exclusions are intentionally scoped to URL authorities. A trusted
+/// hostname mentioned in a comment, path, query, userinfo, or lookalike host
+/// must not suppress an otherwise untrusted destination.
+pub(crate) fn ex001_line_uses_only_trusted_destinations(line: &str) -> bool {
+    let Some(command) = ex001_uncommented_command(line) else {
+        return false;
+    };
+    if ex001_has_ambiguous_shell_syntax(command) {
+        return false;
+    }
+
+    let urls: Vec<_> = EX001_URL_PATTERN
+        .find_iter(command)
+        .map(|m| m.as_str())
+        .collect();
+    !urls.is_empty()
+        && urls.len() == 1
+        && ex001_has_no_dynamic_destination(command)
+        && urls.iter().all(|url| ex001_trusted_host(url))
+}
+
+/// Return the command portion only when `#` is a shell comment marker.
+/// Quoted `#` is data, not a comment, so a simple `split_once('#')` is unsafe.
+fn ex001_uncommented_command(line: &str) -> Option<&str> {
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in line.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        match (quote, character) {
+            (None, '\'' | '"') => quote = Some(character),
+            (Some(current), character) if current == character => quote = None,
+            (None, '#') => return Some(&line[..index]),
+            _ => {}
+        }
+    }
+    quote.map_or(Some(line), |_| None)
+}
+
+/// Shell separators and substitutions make a line contain more than one
+/// request, or make its destination impossible to prove from this scanner.
+fn ex001_has_ambiguous_shell_syntax(command: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    for character in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if character == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        match (quote, character) {
+            (None, '\'' | '"') => quote = Some(character),
+            (Some(current), character) if current == character => quote = None,
+            (None, ';' | '|' | '&' | '`') => return true,
+            _ => {}
+        }
+    }
+    quote.is_some() || command.contains("$(")
+}
+
+/// Dynamic URL arguments are never treated as trusted. For shell commands,
+/// data/header arguments may legitimately contain variables; every other
+/// variable-bearing argument is an unresolved destination. For source-code
+/// snippets, URL-shaped variable names are conservatively unresolved.
+fn ex001_has_no_dynamic_destination(command: &str) -> bool {
+    let words = command.split_whitespace().collect::<Vec<_>>();
+    let command_name = words
+        .iter()
+        .find(|word| !word.starts_with('-'))
+        .map(|word| word.trim_matches(['"', '\'']))
+        .unwrap_or_default();
+    let shell_client = command_name == "curl" || command_name == "wget";
+    let mut value_option = false;
+
+    for word in words {
+        let word = word.trim_matches(['"', '\'']);
+        if value_option {
+            value_option = false;
+            continue;
+        }
+        if word.starts_with('-') {
+            value_option = matches!(
+                word,
+                "-d" | "--data"
+                    | "--data-raw"
+                    | "--data-binary"
+                    | "--data-urlencode"
+                    | "-F"
+                    | "--form"
+                    | "-H"
+                    | "--header"
+                    | "-u"
+                    | "--user"
+                    | "--post-data"
+                    | "--post-file"
+            );
+            continue;
+        }
+        if word.contains('$') {
+            if !shell_client {
+                return false;
+            }
+            return false;
+        }
+    }
+    true
+}
+
+fn ex001_trusted_host(url: &str) -> bool {
+    let authority = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+        .unwrap_or(url);
+    let authority = authority
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(['.', ',', ';', ':', '!', '?', ')', ']', '}']);
+    let host = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
+    let host = if let Some(host) = host.strip_prefix('[') {
+        host.split(']').next().unwrap_or_default()
+    } else {
+        host.split(':').next().unwrap_or_default()
+    };
+    let host = host.to_ascii_lowercase();
+
+    if host == "localhost"
+        || host == "::1"
+        || host
+            .parse::<std::net::Ipv4Addr>()
+            .is_ok_and(|address| address.octets()[0] == 127)
+    {
+        return true;
+    }
+
+    [
+        "github.com",
+        "gitlab.com",
+        "bitbucket.org",
+        "docker.io",
+        "gcr.io",
+        "quay.io",
+        "registry.npmjs.org",
+        "pypi.org",
+        "crates.io",
+        "rubygems.org",
+        "circleci.com",
+        "travis-ci.com",
+        "jenkins.io",
+    ]
+    .iter()
+    .any(|trusted| host == *trusted || host.ends_with(&format!(".{trusted}")))
+        || host.ends_with(".azurecr.io")
+        || host.ends_with(".ecr.amazonaws.com")
+        || host == "ecr.aws"
+        || host.ends_with(".ecr.aws")
 }
 
 fn ex_002() -> Rule {
@@ -794,9 +956,7 @@ mod tests {
         ];
 
         for (input, should_match) in test_cases {
-            let matched = rule.patterns.iter().any(|p| p.is_match(input));
-            let excluded = rule.exclusions.iter().any(|e| e.is_match(input));
-            let result = matched && !excluded;
+            let result = crate::rules::engine::RuleEngine::matches_rule_line(&rule, input);
             assert_eq!(result, should_match, "Failed for input: {}", input);
         }
     }

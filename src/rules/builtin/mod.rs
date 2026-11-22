@@ -1,6 +1,6 @@
 mod dependency;
 mod docker;
-mod exfiltration;
+pub(crate) mod exfiltration;
 mod injection;
 mod obfuscation;
 mod permission;
